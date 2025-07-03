@@ -1521,6 +1521,16 @@
                 min-height: 120px !important;
             }
 
+            /* Quick Action Buttons */
+            .quick-action-btn {
+                transition: all 0.3s ease;
+            }
+
+            .quick-action-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            }
+
             /* Mobile Grid Adjustments */
             @media (max-width: 768px) {
                 div[style*="grid-template-columns: 1fr 1fr"] {
@@ -1529,6 +1539,11 @@
                 
                 div[style*="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))"] {
                     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+                }
+
+                /* Recent Activity Mobile Fix */
+                div[style*="grid-template-columns: 1fr 1fr; gap: 20px;"] {
+                    grid-template-columns: 1fr !important;
                 }
             }
         }
@@ -2119,6 +2134,13 @@
             
             // Carica dati utente
             loadUserProfile();
+            
+            // Aggiorna dashboard se è la sezione corrente
+            if (currentSection === 'home') {
+                setTimeout(() => {
+                    loadDashboard();
+                }, 500); // Piccolo delay per permettere il caricamento dei dati utente
+            }
         }
 
         // Gestione logout utente
@@ -2184,6 +2206,11 @@
                         
                         // Aggiorna badge ruolo
                         updateUserRoleBadge();
+                        
+                        // Aggiorna dashboard se è la sezione corrente
+                        if (currentSection === 'home') {
+                            loadDashboard();
+                        }
                     }
                 } catch (error) {
                     console.error('Errore caricamento profilo:', error);
@@ -2231,6 +2258,11 @@
                 document.getElementById('currentClan').textContent = userData.clan || 'Nessuno';
                 document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
                 updateUserRoleBadge();
+                
+                // Aggiorna dashboard se è la sezione corrente
+                if (currentSection === 'home') {
+                    loadDashboard();
+                }
             }
         }
 
@@ -3112,7 +3144,20 @@
         // Carica dashboard
         function loadDashboard() {
             const threadList = document.getElementById('thread-list');
-            const userName = currentUser ? (currentUser.displayName || 'Guerriero') : 'Ospite';
+            
+            // Se l'utente non è ancora loggato, mostra messaggio di caricamento
+            if (!currentUser) {
+                threadList.innerHTML = `
+                    <div style="text-align: center; padding: 60px; color: #666;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
+                        <h2 style="color: #8B4513; margin-bottom: 10px;">Caricamento Dashboard...</h2>
+                        <p>Preparazione della tua area personale</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const userName = currentUser.displayName || 'Guerriero';
             const userClan = getCurrentUserClan();
             const userRole = getCurrentUserRole();
             
@@ -3245,15 +3290,79 @@
                         </div>
                     </div>
 
-                    <!-- Recent Activity Preview -->
-                    <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
-                        <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                            <span>🔥</span> Attività Recente
+                    <!-- Quick Actions & Tips -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Quick Actions -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>⚡</span> Azioni Rapide
+                            </h3>
+                            <div style="display: grid; gap: 12px;">
+                                <button onclick="switchSection('eventi')" class="quick-action-btn" style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">📅</span>
+                                    <span>Controlla Eventi Attuali</span>
+                                </button>
+                                <button onclick="switchSection('chat-generale')" class="quick-action-btn" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">💬</span>
+                                    <span>Inizia una Conversazione</span>
+                                </button>
+                                <button onclick="showThreadCreationModal()" class="quick-action-btn" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">✍️</span>
+                                    <span>Crea Nuovo Thread</span>
+                                </button>
+                                ${userClan !== 'Nessuno' ? `
+                                    <button onclick="switchSection('clan-chat')" class="quick-action-btn" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 20px;">🏰</span>
+                                        <span>Chat del Clan</span>
+                                    </button>
+                                ` : `
+                                    <button onclick="alert('Unisciti a un clan per accedere a questa funzionalità!')" class="quick-action-btn" style="background: linear-gradient(135deg, #95a5a6, #7f8c8d); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px; opacity: 0.6;">
+                                        <span style="font-size: 20px;">🔒</span>
+                                        <span>Chat del Clan (Locked)</span>
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Daily Tips -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>🎯</span> Consiglio del Giorno
+                            </h3>
+                            <div id="daily-tip" style="padding: 20px; background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(155, 89, 182, 0.1)); border-radius: 10px; border-left: 4px solid #3498db;">
+                                <!-- Il consiglio verrà inserito qui -->
+                            </div>
+                            <div style="margin-top: 15px; text-align: center;">
+                                <button onclick="loadDailyTip()" style="background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db; color: #3498db; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.3s ease;">
+                                    🔄 Nuovo Consiglio
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Community Highlights -->
+                    <div style="background: linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(39, 174, 96, 0.1)); border-radius: 15px; padding: 25px; border: 2px solid #27ae60;">
+                        <h3 style="color: #27ae60; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                            <span>🌟</span> In Evidenza nella Community
                         </h3>
-                        <div id="recent-activity">
-                            <div style="text-align: center; color: #666; padding: 20px;">
-                                <div style="font-size: 48px; margin-bottom: 10px;">⏳</div>
-                                <p>Caricamento attività recente...</p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">🔥</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Thread Più Visto</h4>
+                                <p style="font-size: 12px; color: #666;">Guide alle Gemme Leggendarie</p>
+                                <p style="font-size: 11px; color: #999;">445 visualizzazioni</p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">👑</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Utente del Mese</h4>
+                                <p style="font-size: 12px; color: #666;">ProPlayer123</p>
+                                <p style="font-size: 11px; color: #999;">67 contributi</p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">🏆</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Clan Più Attivo</h4>
+                                <p style="font-size: 12px; color: #666;">Draghi Rossi</p>
+                                <p style="font-size: 11px; color: #999;">25 membri attivi</p>
                             </div>
                         </div>
                     </div>
@@ -3270,8 +3379,8 @@
             `;
             document.head.appendChild(style);
 
-            // Carica attività recente dopo un breve delay
-            setTimeout(loadRecentActivity, 500);
+            // Carica consigli del giorno dopo un breve delay
+            setTimeout(loadDailyTip, 300);
         }
 
         // Ottieni statistiche del forum
@@ -3324,86 +3433,81 @@
             };
         }
 
-        // Carica attività recente
-        function loadRecentActivity() {
-            const activityDiv = document.getElementById('recent-activity');
-            if (!activityDiv) return;
+        // Carica consiglio del giorno
+        function loadDailyTip() {
+            const tipContainer = document.getElementById('daily-tip');
+            if (!tipContainer) return;
 
-            try {
-                const activities = [];
-
-                // Raccogli thread recenti da tutte le sezioni
-                const sections = ['eventi', 'oggetti', 'novita'];
-                sections.forEach(section => {
-                    const storageKey = `hc_threads_${section}`;
-                    const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                    
-                    threads.forEach(thread => {
-                        if (thread.createdAt && Date.now() - thread.createdAt < 7 * 24 * 60 * 60 * 1000) { // Ultimi 7 giorni
-                            activities.push({
-                                type: 'thread',
-                                section: section,
-                                title: thread.title,
-                                author: thread.author,
-                                timestamp: thread.createdAt,
-                                icon: section === 'eventi' ? '📅' : section === 'oggetti' ? '⚔️' : '🆕'
-                            });
-                        }
-                    });
-                });
-
-                // Raccogli messaggi recenti dalla chat generale
-                const messages = JSON.parse(localStorage.getItem('hc_messages_chat-generale') || '[]');
-                messages.slice(-5).forEach(msg => {
-                    activities.push({
-                        type: 'message',
-                        section: 'chat-generale',
-                        title: msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : ''),
-                        author: msg.author,
-                        timestamp: msg.timestamp,
-                        icon: '💬'
-                    });
-                });
-
-                // Ordina per timestamp (più recenti prima)
-                activities.sort((a, b) => b.timestamp - a.timestamp);
-
-                if (activities.length === 0) {
-                    activityDiv.innerHTML = `
-                        <div style="text-align: center; color: #666; padding: 20px;">
-                            <div style="font-size: 48px; margin-bottom: 10px;">😴</div>
-                            <p>Nessuna attività recente</p>
-                            <p style="font-size: 12px; margin-top: 5px;">Sii il primo a creare un thread o inviare un messaggio!</p>
-                        </div>
-                    `;
-                    return;
+            const tips = [
+                {
+                    icon: '⚔️',
+                    title: 'Strategia di Combattimento',
+                    content: 'Bilancia sempre la tua formazione: un tank robusto, DPS equilibrati e un supporto possono fare la differenza in arena!'
+                },
+                {
+                    icon: '🏰',
+                    title: 'Gestione del Castello',
+                    content: 'Aggiorna sempre la sala del trono prima di potenziare altre stanze per massimizzare l\'efficienza delle risorse.'
+                },
+                {
+                    icon: '💎',
+                    title: 'Gemme e Equipaggiamento',
+                    content: 'Non vendere mai le gemme leggendarie! Anche se sembrano deboli ora, potrebbero essere utili per upgrade futuri.'
+                },
+                {
+                    icon: '🎯',
+                    title: 'Eventi Speciali',
+                    content: 'Partecipa sempre agli eventi temporanei: spesso offrono ricompense uniche che non puoi ottenere altrove!'
+                },
+                {
+                    icon: '👥',
+                    title: 'Vita di Clan',
+                    content: 'Coordina sempre con il tuo clan prima delle guerre. La comunicazione è la chiave per la vittoria!'
+                },
+                {
+                    icon: '📈',
+                    title: 'Progressione Intelligente',
+                    content: 'Non avere fretta di salire di Throne Room. Assicurati di avere equipaggiamento e truppe adeguate al tuo livello.'
+                },
+                {
+                    icon: '🛡️',
+                    title: 'Difesa del Castello',
+                    content: 'Posiziona strategicamente le tue difese: mescola danni fisici e magici per contrastare diversi tipi di attacco.'
+                },
+                {
+                    icon: '⏰',
+                    title: 'Gestione del Tempo',
+                    content: 'Ottimizza i tempi di training: inizia sempre con le truppe che richiedono più tempo prima di andare offline.'
+                },
+                {
+                    icon: '🏆',
+                    title: 'Arena e PvP',
+                    content: 'Studia sempre gli avversari prima di attaccare. Una strategia ben pianificata vale più della forza bruta!'
+                },
+                {
+                    icon: '💰',
+                    title: 'Economia del Gioco',
+                    content: 'Investi le gemme saggiamente: priorità a slot di barracks, mastro e velocizzazione di upgrade critici.'
                 }
+            ];
 
-                activityDiv.innerHTML = activities.slice(0, 5).map(activity => `
-                    <div style="display: flex; align-items: center; padding: 12px; background: rgba(218, 165, 32, 0.05); border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: all 0.3s ease;" onclick="switchSection('${activity.section}')">
-                        <div style="font-size: 24px; margin-right: 15px;">${activity.icon}</div>
-                        <div style="flex: 1;">
-                            <div style="font-weight: bold; color: #8B4513; font-size: 14px; margin-bottom: 4px;">
-                                ${activity.title}
-                            </div>
-                            <div style="font-size: 12px; color: #666;">
-                                da <strong>${activity.author}</strong> • ${formatTime(activity.timestamp)}
-                            </div>
-                        </div>
-                        <div style="color: #DAA520; font-size: 18px;">→</div>
-                    </div>
-                `).join('');
+            // Seleziona un consiglio basato sul giorno corrente per consistenza
+            const today = new Date().getDate();
+            const selectedTip = tips[today % tips.length];
 
-            } catch (error) {
-                console.error('Errore caricamento attività recente:', error);
-                activityDiv.innerHTML = `
-                    <div style="text-align: center; color: #999; padding: 20px;">
-                        <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-                        <p>Errore nel caricamento delle attività</p>
+            tipContainer.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 15px;">
+                    <div style="font-size: 32px; flex-shrink: 0;">${selectedTip.icon}</div>
+                    <div>
+                        <h4 style="color: #3498db; margin: 0 0 8px 0; font-size: 16px;">${selectedTip.title}</h4>
+                        <p style="color: #666; margin: 0; line-height: 1.5; font-size: 14px;">${selectedTip.content}</p>
                     </div>
-                `;
-            }
+                </div>
+            `;
         }
+
+        // Rendi la funzione globale
+        window.loadDailyTip = loadDailyTip;
 
         // Carica contenuto amministrativo
         function loadAdminContent(sectionKey) {
