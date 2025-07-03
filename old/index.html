@@ -205,92 +205,6 @@
             overflow: hidden;
         }
 
-        .banner {
-            height: 200px;
-            background: linear-gradient(135deg, #8B4513 0%, #DAA520 25%, #F4A460 50%, #DEB887 75%, #8B4513 100%);
-            background-size: 400% 400%;
-            animation: gradientShift 15s ease infinite;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .banner::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
-            animation: sparkle 8s ease-in-out infinite alternate;
-        }
-
-        @keyframes sparkle {
-            0% { opacity: 0.3; }
-            100% { opacity: 0.7; }
-        }
-
-        .banner::after {
-            content: '🏰⚔️🛡️👑💎⭐🏆🔥';
-            position: absolute;
-            top: 20px;
-            left: -50px;
-            font-size: 24px;
-            opacity: 0.2;
-            animation: floatIcons 20s linear infinite;
-            white-space: nowrap;
-        }
-
-        @keyframes floatIcons {
-            0% { transform: translateX(-100px); }
-            100% { transform: translateX(calc(100vw + 100px)); }
-        }
-
-        .banner-content {
-            text-align: center;
-            z-index: 1;
-            position: relative;
-            padding: 20px;
-            border-radius: 15px;
-            background: rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .banner-title {
-            font-size: 3rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            animation: titleGlow 2s ease-in-out infinite alternate;
-        }
-
-        @keyframes titleGlow {
-            0% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); }
-            100% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.3); }
-        }
-
-        .banner-subtitle {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            font-style: italic;
-            font-weight: 300;
-        }
-
         .header {
             padding: 20px 30px;
             background: rgba(255, 255, 255, 0.8);
@@ -481,10 +395,6 @@
             text-align: right;
         }
 
-        .thread-stats-mobile {
-            display: none;
-        }
-
         .thread-view {
             display: none;
             flex-direction: column;
@@ -614,10 +524,6 @@
             cursor: pointer;
             font-size: 16px;
             margin-right: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
         }
 
         .emoticon-btn:hover {
@@ -1300,20 +1206,6 @@
                 margin-top: 0;
                 padding-top: 80px;
             }
-
-            .banner {
-                height: 120px;
-                margin-top: 0;
-            }
-
-            .banner-title {
-                font-size: 1.8rem;
-                margin-bottom: 5px;
-            }
-
-            .banner-subtitle {
-                font-size: 0.9rem;
-            }
             
             .header {
                 padding: 15px 20px;
@@ -1322,67 +1214,26 @@
             
             .header h2 {
                 margin-left: 40px;
-                font-size: 20px;
-            }
-
-            .header p {
-                margin-left: 40px;
-                font-size: 12px;
+                font-size: 24px;
             }
             
             .content-area {
                 padding: 15px;
             }
             
-            .forum-header {
-                display: none;
+            .forum-header, .thread-item {
+                grid-template-columns: 1fr 60px 60px 80px;
+                gap: 5px;
+                padding: 10px;
+                font-size: 11px;
             }
-
-            .thread-item {
-                grid-template-columns: 1fr;
-                gap: 10px;
-                padding: 15px;
-                border-radius: 8px;
-                margin-bottom: 10px;
-                background: rgba(255, 255, 255, 0.9);
-                border: 1px solid rgba(218, 165, 32, 0.3);
-            }
-
-            .thread-main {
-                order: 1;
-            }
-
+            
             .thread-title {
-                font-size: 16px;
-                margin-bottom: 8px;
-                line-height: 1.3;
+                font-size: 14px;
             }
             
             .thread-author {
-                font-size: 12px;
-                margin-bottom: 10px;
-            }
-
-            .thread-stats-mobile {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 12px;
-                color: #8B4513;
-                background: rgba(218, 165, 32, 0.1);
-                padding: 8px 12px;
-                border-radius: 6px;
-                margin-top: 10px;
-            }
-
-            .thread-stats-mobile .stat {
-                display: flex;
-                align-items: center;
-                gap: 4px;
-            }
-
-            .thread-replies, .thread-stats, .thread-last-post {
-                display: none;
+                font-size: 10px;
             }
             
             .chat-input {
@@ -1396,7 +1247,6 @@
                 padding: 15px;
                 border-top: 1px solid rgba(218, 165, 32, 0.4);
                 z-index: 1000;
-                backdrop-filter: blur(10px);
             }
             
             .chat-input input {
@@ -1452,8 +1302,7 @@
             }
             
             .thread-header h1 {
-                font-size: 18px;
-                line-height: 1.3;
+                font-size: 20px;
             }
             
             .thread-comments {
@@ -1470,7 +1319,6 @@
                 background: rgba(255, 255, 255, 0.95);
                 border-top: 1px solid rgba(218, 165, 32, 0.4);
                 z-index: 1000;
-                backdrop-filter: blur(10px);
             }
             
             .comment-input textarea {
@@ -1488,7 +1336,6 @@
                 bottom: 65px;
                 left: 50%;
                 transform: translateX(-50%);
-                max-width: 90vw;
             }
             
             .emoticon-btn {
@@ -1503,34 +1350,107 @@
                 left: 60px;
                 z-index: 1100;
                 padding: 10px 15px;
-                border-radius: 8px;
-                background: rgba(218, 165, 32, 0.9);
-                color: white;
-                border: none;
-                font-weight: bold;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             }
+			  .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
 
-            .connection-status, .message-counter {
-                font-size: 10px;
-                padding: 4px 8px;
-            }
+        .banner {
+            height: 200px;
+            background: linear-gradient(135deg, #8B4513 0%, #DAA520 25%, #F4A460 50%, #DEB887 75%, #8B4513 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
 
-            /* Dashboard Mobile Styles */
-            .dashboard-card {
-                min-height: 120px !important;
-            }
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
 
-            /* Mobile Grid Adjustments */
-            @media (max-width: 768px) {
-                div[style*="grid-template-columns: 1fr 1fr"] {
-                    grid-template-columns: 1fr !important;
-                }
-                
-                div[style*="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))"] {
-                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
-                }
-            }
+        .banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
+            animation: sparkle 8s ease-in-out infinite alternate;
+        }
+
+        @keyframes sparkle {
+            0% { opacity: 0.3; }
+            100% { opacity: 0.7; }
+        }
+
+        .banner::after {
+            content: '🏰⚔️🛡️👑💎⭐🏆🔥';
+            position: absolute;
+            top: 20px;
+            left: -50px;
+            font-size: 24px;
+            opacity: 0.2;
+            animation: floatIcons 20s linear infinite;
+            white-space: nowrap;
+        }
+
+        @keyframes floatIcons {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(calc(100vw + 100px)); }
+        }
+
+        .banner-content {
+            text-align: center;
+            z-index: 1;
+            position: relative;
+            padding: 20px;
+            border-radius: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .banner-title {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            animation: titleGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes titleGlow {
+            0% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); }
+            100% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.3); }
+        }
+
+        .banner-subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        .header {
+            padding: 20px 30px;
+            background: rgba(255, 255, 255, 0.8);
+            border-bottom: 1px solid rgba(218, 165, 32, 0.4);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
         }
     </style>
 </head>
@@ -1634,15 +1554,8 @@
         </div>
 
         <div class="nav-section">
-            <div class="nav-title">🏠 Home</div>
-            <div class="nav-item active" data-section="home">
-                <span>🏠 Dashboard</span>
-            </div>
-        </div>
-
-        <div class="nav-section">
             <div class="nav-title">🌍 Generale</div>
-            <div class="nav-item" data-section="eventi">
+            <div class="nav-item active" data-section="eventi">
                 <span>📅 Eventi</span>
             </div>
             <div class="nav-item" data-section="oggetti">
@@ -1687,17 +1600,9 @@
     </div>
 
     <div class="main-content">
-        <!-- Banner Hero -->
-        <div class="banner">
-            <div class="banner-content">
-                <div class="banner-title">⚔️ Hustle Castle ⚔️</div>
-                <div class="banner-subtitle">Il Forum Ufficiale della Community</div>
-            </div>
-        </div>
-
         <div class="header">
-            <h2 id="section-title">🏠 Dashboard</h2>
-            <p id="section-description">Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità</p>
+            <h2 id="section-title">📅 Eventi</h2>
+            <p id="section-description">Scopri tutti gli eventi in corso e futuri di Hustle Castle</p>
         </div>
 
         <div class="content-area">
@@ -1852,7 +1757,7 @@
 
         // Variabili globali
         let currentUser = null;
-        let currentSection = 'home';
+        let currentSection = 'eventi';
         let messageListeners = {};
         let threadListeners = {};
         let messageCount = 0;
@@ -1899,7 +1804,6 @@
         window.removFromClan = removFromClan;
         window.createNewClan = createNewClan;
         window.deleteClan = deleteClan;
-        window.switchSection = switchSection;
 
         // Funzioni per la gestione dei ruoli
         function getCurrentUserRole() {
@@ -1957,11 +1861,6 @@
 
         // Configurazione sezioni - DEVE essere definito dopo USER_ROLES
         const sectionConfig = {
-            'home': {
-                title: '🏠 Dashboard',
-                description: 'Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità',
-                type: 'dashboard'
-            },
             'eventi': {
                 title: '📅 Eventi',
                 description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle',
@@ -2101,7 +2000,7 @@
 
             // Setup UI
             setupEventListeners();
-            switchSection('home');
+            switchSection('eventi');
         }
 
         // Gestione login utente
@@ -2149,9 +2048,9 @@
             updateClanSectionsAccess();
             updateAdminSectionsAccess();
             
-            // Se si è in una sezione clan o admin, torna alla home
+            // Se si è in una sezione clan o admin, torna agli eventi
             if (currentSection.startsWith('clan-') || currentSection.startsWith('admin-')) {
-                switchSection('home');
+                switchSection('eventi');
             }
             
             // Torna al forum se si è in vista thread
@@ -3064,9 +2963,6 @@
             } else if (section.type === 'clan-admin') {
                 forumContent.style.display = 'block';
                 loadClanModerationContent();
-            } else if (section.type === 'dashboard') {
-                forumContent.style.display = 'block';
-                loadDashboard();
             }
 
             // Chiudi menu mobile se aperto
@@ -3107,302 +3003,6 @@
             sidebar.classList.remove('open');
             overlay.classList.remove('show');
             document.body.style.overflow = 'auto';
-        }
-
-        // Carica dashboard
-        function loadDashboard() {
-            const threadList = document.getElementById('thread-list');
-            const userName = currentUser ? (currentUser.displayName || 'Guerriero') : 'Ospite';
-            const userClan = getCurrentUserClan();
-            const userRole = getCurrentUserRole();
-            
-            let welcomeMessage = '';
-            const currentHour = new Date().getHours();
-            if (currentHour < 12) {
-                welcomeMessage = '🌅 Buongiorno';
-            } else if (currentHour < 18) {
-                welcomeMessage = '☀️ Buon pomeriggio';
-            } else {
-                welcomeMessage = '🌙 Buonasera';
-            }
-
-            let roleDisplay = '';
-            switch (userRole) {
-                case USER_ROLES.SUPERUSER:
-                    roleDisplay = '<span class="user-role role-superuser">👑 SUPER ADMIN</span>';
-                    break;
-                case USER_ROLES.CLAN_MOD:
-                    roleDisplay = '<span class="user-role role-moderator">🛡️ MODERATORE</span>';
-                    break;
-                default:
-                    roleDisplay = '<span class="user-role role-user">⚔️ GUERRIERO</span>';
-            }
-
-            threadList.innerHTML = `
-                <div style="display: grid; gap: 25px;">
-                    <!-- Welcome Section -->
-                    <div style="background: linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(244, 164, 96, 0.1) 100%); border-radius: 15px; padding: 25px; border: 2px solid rgba(218, 165, 32, 0.3); position: relative; overflow: hidden;">
-                        <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.1;">🏰</div>
-                        <h2 style="color: #8B4513; margin-bottom: 15px; font-size: 28px;">
-                            ${welcomeMessage}, ${userName}! ${roleDisplay}
-                        </h2>
-                        <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
-                            Benvenuto nel forum ufficiale di Hustle Castle! Qui puoi discutere strategie, 
-                            condividere esperienze e rimanere aggiornato sugli ultimi eventi del gioco.
-                        </p>
-                        ${userClan !== 'Nessuno' ? `
-                            <div style="background: rgba(52, 152, 219, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #3498db;">
-                                <strong style="color: #3498db;">🏰 Clan: ${userClan}</strong>
-                                <p style="color: #666; font-size: 14px; margin-top: 5px;">Accedi alle sezioni dedicate del tuo clan dal menu laterale</p>
-                            </div>
-                        ` : `
-                            <div style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #ffc107;">
-                                <strong style="color: #e68900;">⚠️ Non hai un clan</strong>
-                                <p style="color: #666; font-size: 14px; margin-top: 5px;">Unisciti a un clan per accedere a funzionalità esclusive!</p>
-                            </div>
-                        `}
-                    </div>
-
-                    <!-- Quick Navigation -->
-                    <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
-                        <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                            <span>🧭</span> Navigazione Rapida
-                        </h3>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                            <div class="dashboard-card" onclick="switchSection('eventi')" style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
-                                <div style="font-size: 32px; margin-bottom: 10px;">📅</div>
-                                <h4 style="margin-bottom: 8px;">Eventi</h4>
-                                <p style="font-size: 12px; opacity: 0.9;">Scopri eventi in corso</p>
-                            </div>
-                            <div class="dashboard-card" onclick="switchSection('oggetti')" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
-                                <div style="font-size: 32px; margin-bottom: 10px;">⚔️</div>
-                                <h4 style="margin-bottom: 8px;">Oggetti</h4>
-                                <p style="font-size: 12px; opacity: 0.9;">Guide su armi e armature</p>
-                            </div>
-                            <div class="dashboard-card" onclick="switchSection('novita')" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
-                                <div style="font-size: 32px; margin-bottom: 10px;">🆕</div>
-                                <h4 style="margin-bottom: 8px;">Novità</h4>
-                                <p style="font-size: 12px; opacity: 0.9;">Ultimi aggiornamenti</p>
-                            </div>
-                            <div class="dashboard-card" onclick="switchSection('chat-generale')" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
-                                <div style="font-size: 32px; margin-bottom: 10px;">💬</div>
-                                <h4 style="margin-bottom: 8px;">Chat</h4>
-                                <p style="font-size: 12px; opacity: 0.9;">Chiacchiera con la community</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Stats and Tips Grid -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <!-- Forum Stats -->
-                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
-                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                                <span>📊</span> Statistiche Forum
-                            </h3>
-                            <div style="display: grid; gap: 15px;">
-                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
-                                    <span style="color: #666;">📝 Thread Totali</span>
-                                    <strong style="color: #8B4513;">${getForumStats().totalThreads}</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
-                                    <span style="color: #666;">💬 Messaggi Chat</span>
-                                    <strong style="color: #8B4513;">${getForumStats().totalMessages}</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
-                                    <span style="color: #666;">👥 Utenti Registrati</span>
-                                    <strong style="color: #8B4513;">${getForumStats().totalUsers}</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
-                                    <span style="color: #666;">🏰 Clan Attivi</span>
-                                    <strong style="color: #8B4513;">${getForumStats().totalClans}</strong>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Quick Tips -->
-                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
-                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                                <span>💡</span> Suggerimenti Rapidi
-                            </h3>
-                            <div style="display: grid; gap: 12px;">
-                                <div style="padding: 12px; background: rgba(46, 204, 113, 0.1); border-radius: 8px; border-left: 4px solid #2ecc71;">
-                                    <strong style="color: #27ae60; font-size: 14px;">🎯 Partecipa alle Discussioni</strong>
-                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Condividi le tue strategie nella sezione Eventi</p>
-                                </div>
-                                <div style="padding: 12px; background: rgba(52, 152, 219, 0.1); border-radius: 8px; border-left: 4px solid #3498db;">
-                                    <strong style="color: #2980b9; font-size: 14px;">🏰 Unisciti a un Clan</strong>
-                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Accedi a chat e funzionalità esclusive</p>
-                                </div>
-                                <div style="padding: 12px; background: rgba(155, 89, 182, 0.1); border-radius: 8px; border-left: 4px solid #9b59b6;">
-                                    <strong style="color: #8e44ad; font-size: 14px;">⚔️ Condividi Equipaggiamenti</strong>
-                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Mostra le tue armi leggendarie!</p>
-                                </div>
-                                <div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
-                                    <strong style="color: #d68910; font-size: 14px;">📢 Rimani Aggiornato</strong>
-                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Controlla regolarmente le Novità</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activity Preview -->
-                    <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
-                        <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                            <span>🔥</span> Attività Recente
-                        </h3>
-                        <div id="recent-activity">
-                            <div style="text-align: center; color: #666; padding: 20px;">
-                                <div style="font-size: 48px; margin-bottom: 10px;">⏳</div>
-                                <p>Caricamento attività recente...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Aggiungi stili hover per le dashboard cards
-            const style = document.createElement('style');
-            style.textContent = `
-                .dashboard-card:hover {
-                    transform: translateY(-5px) scale(1.02);
-                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-                }
-            `;
-            document.head.appendChild(style);
-
-            // Carica attività recente dopo un breve delay
-            setTimeout(loadRecentActivity, 500);
-        }
-
-        // Ottieni statistiche del forum
-        function getForumStats() {
-            let totalThreads = 0;
-            let totalMessages = 0;
-            let totalUsers = 0;
-            let totalClans = 0;
-
-            try {
-                if (window.useFirebase) {
-                    // In modalità Firebase, restituisci valori placeholder
-                    return {
-                        totalThreads: '50+',
-                        totalMessages: '200+', 
-                        totalUsers: '15+',
-                        totalClans: '5+'
-                    };
-                } else {
-                    // Modalità locale - conta i dati reali
-                    const sections = ['eventi', 'oggetti', 'novita'];
-                    sections.forEach(section => {
-                        const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
-                        totalThreads += threads.length;
-                    });
-
-                    const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
-                    totalMessages += messages.length;
-
-                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    totalUsers = Object.keys(users).length;
-
-                    const clanSet = new Set();
-                    Object.values(users).forEach(user => {
-                        if (user.clan && user.clan !== 'Nessuno') {
-                            clanSet.add(user.clan);
-                        }
-                    });
-                    totalClans = clanSet.size;
-                }
-            } catch (error) {
-                console.error('Errore calcolo statistiche:', error);
-            }
-
-            return {
-                totalThreads: totalThreads || 0,
-                totalMessages: totalMessages || 0,
-                totalUsers: totalUsers || 0,
-                totalClans: totalClans || 0
-            };
-        }
-
-        // Carica attività recente
-        function loadRecentActivity() {
-            const activityDiv = document.getElementById('recent-activity');
-            if (!activityDiv) return;
-
-            try {
-                const activities = [];
-
-                // Raccogli thread recenti da tutte le sezioni
-                const sections = ['eventi', 'oggetti', 'novita'];
-                sections.forEach(section => {
-                    const storageKey = `hc_threads_${section}`;
-                    const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                    
-                    threads.forEach(thread => {
-                        if (thread.createdAt && Date.now() - thread.createdAt < 7 * 24 * 60 * 60 * 1000) { // Ultimi 7 giorni
-                            activities.push({
-                                type: 'thread',
-                                section: section,
-                                title: thread.title,
-                                author: thread.author,
-                                timestamp: thread.createdAt,
-                                icon: section === 'eventi' ? '📅' : section === 'oggetti' ? '⚔️' : '🆕'
-                            });
-                        }
-                    });
-                });
-
-                // Raccogli messaggi recenti dalla chat generale
-                const messages = JSON.parse(localStorage.getItem('hc_messages_chat-generale') || '[]');
-                messages.slice(-5).forEach(msg => {
-                    activities.push({
-                        type: 'message',
-                        section: 'chat-generale',
-                        title: msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : ''),
-                        author: msg.author,
-                        timestamp: msg.timestamp,
-                        icon: '💬'
-                    });
-                });
-
-                // Ordina per timestamp (più recenti prima)
-                activities.sort((a, b) => b.timestamp - a.timestamp);
-
-                if (activities.length === 0) {
-                    activityDiv.innerHTML = `
-                        <div style="text-align: center; color: #666; padding: 20px;">
-                            <div style="font-size: 48px; margin-bottom: 10px;">😴</div>
-                            <p>Nessuna attività recente</p>
-                            <p style="font-size: 12px; margin-top: 5px;">Sii il primo a creare un thread o inviare un messaggio!</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                activityDiv.innerHTML = activities.slice(0, 5).map(activity => `
-                    <div style="display: flex; align-items: center; padding: 12px; background: rgba(218, 165, 32, 0.05); border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: all 0.3s ease;" onclick="switchSection('${activity.section}')">
-                        <div style="font-size: 24px; margin-right: 15px;">${activity.icon}</div>
-                        <div style="flex: 1;">
-                            <div style="font-weight: bold; color: #8B4513; font-size: 14px; margin-bottom: 4px;">
-                                ${activity.title}
-                            </div>
-                            <div style="font-size: 12px; color: #666;">
-                                da <strong>${activity.author}</strong> • ${formatTime(activity.timestamp)}
-                            </div>
-                        </div>
-                        <div style="color: #DAA520; font-size: 18px;">→</div>
-                    </div>
-                `).join('');
-
-            } catch (error) {
-                console.error('Errore caricamento attività recente:', error);
-                activityDiv.innerHTML = `
-                    <div style="text-align: center; color: #999; padding: 20px;">
-                        <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-                        <p>Errore nel caricamento delle attività</p>
-                    </div>
-                `;
-            }
         }
 
         // Carica contenuto amministrativo
@@ -4069,20 +3669,6 @@
                                 ${statusIndicator}
                             </div>
                             <div class="thread-author">da ${thread.author}</div>
-                            <div class="thread-stats-mobile">
-                                <div class="stat">
-                                    <span>💬</span>
-                                    <span>${thread.replies || 0}</span>
-                                </div>
-                                <div class="stat">
-                                    <span>👁️</span>
-                                    <span>${thread.views || 0}</span>
-                                </div>
-                                <div class="stat">
-                                    <span>🕐</span>
-                                    <span>${formatTime(thread.createdAt)}</span>
-                                </div>
-                            </div>
                             ${thread.status === 'pending' && canModerateSection(currentSection) ? `
                                 <div class="moderation-actions">
                                     <button class="approve-btn" onclick="approveThread('${thread.id}', '${currentSection}')">
@@ -4250,14 +3836,9 @@
             currentThreadId = null;
             currentThreadSection = null;
             
-            // Ricarica contenuto se necessario
-            if (currentSection && sectionConfig[currentSection]) {
-                const section = sectionConfig[currentSection];
-                if (section.type === 'forum') {
-                    loadThreads(currentSection);
-                } else if (section.type === 'dashboard') {
-                    loadDashboard();
-                }
+            // Ricarica thread se necessario
+            if (currentSection && sectionConfig[currentSection]?.type === 'forum') {
+                loadThreads(currentSection);
             }
         }
 
