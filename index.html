@@ -2820,7 +2820,51 @@
                 createBtn.disabled = false;
                 createBtn.textContent = 'Crea Thread';
             }
+			  loadThreads(currentSection); 
+			
         }
+		
+		async function handleGoogleLogin() {
+    if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
+        alert("⚠️ Login con Google non disponibile in modalità demo");
+        return;
+    }
+
+    try {
+        const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
+        const user = result.user;
+
+        console.log("👤 Login Google OK:", user);
+
+        // dopo login, salva (se nuovo utente)
+        const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+
+        if (!snapshot.exists()) {
+            // chiedi extra info se vuoi, per esempio clan
+            const username = user.displayName || prompt("Inserisci un username:");
+            const clan = prompt("Inserisci il tuo clan (opzionale):") || "Nessuno";
+
+            await set(userRef, {
+                username: username,
+                email: user.email,
+                clan: clan,
+                role: "user",
+                createdAt: serverTimestamp(),
+                lastSeen: serverTimestamp(),
+                provider: "google"
+            });
+        }
+
+        alert("✅ Login con Google completato!");
+        hideError();
+        showSuccess("Login effettuato!");
+    } catch (error) {
+        console.error("Errore login con Google:", error);
+        alert(error.message || "Errore login con Google");
+    }
+}
+
 
         // Apri thread per visualizzazione
         async function openThread(threadId, section) {
