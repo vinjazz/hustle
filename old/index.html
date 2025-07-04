@@ -4,24 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hustle Castle Forum</title>
-    
+     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <!-- Firebase SDK v9 -->
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+		import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+
+const app = initializeApp({
+  // Your firebase configuration object
+});
+
+// Pass your reCAPTCHA v3 site key (public key) to activate(). Make sure this
+// key is the counterpart to the secret key you set in the Firebase console.
+const appCheck = initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+
+  // Optional argument. If true, the SDK automatically refreshes App Check
+  // tokens as needed.
+  isTokenAutoRefreshEnabled: true
+});
+
+	
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
         import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
         
         // 🔥 CONFIGURAZIONE FIREBASE CORRETTA
-        const firebaseConfig = {
-            apiKey: "AIzaSyBBIZREPP0O7v9HtsJN8GLLQtJLJJ78HHU",
-            authDomain: "hustle-castle-forum.firebaseapp.com",
-            databaseURL: "https://hustle-castle-forum-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "hustle-castle-forum",
-            storageBucket: "hustle-castle-forum.firebasestorage.app",
-            messagingSenderId: "565750889095",
-            appId: "1:565750889095:web:b729664dbdf9f8665d5622",
-            measurementId: "G-YEVKWHH4QX"
-        };
+       
+		const firebaseConfig = {
+		  apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
+		  authDomain: "hustlecastlecouncil.firebaseapp.com",
+		  projectId: "hustlecastlecouncil",
+		  storageBucket: "hustlecastlecouncil.firebasestorage.app",
+		  messagingSenderId: "778970862600",
+		  appId: "1:778970862600:web:ba81f607bb6792362eadbd",
+		  measurementId: "G-N6XQ6W4PN7"
+		};
+  
         
         // Inizializza Firebase
         let useFirebase = true;
@@ -67,1392 +85,7 @@
         window.googleProvider = googleProvider;
     </script>
     
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #f8f6f0 0%, #fff8e1 100%);
-            color: #2d2d2d;
-            height: 100vh;
-            display: flex;
-        }
-
-        .sidebar {
-            width: 280px;
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border-right: 1px solid rgba(218, 165, 32, 0.4);
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .logo {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(218, 165, 32, 0.4);
-            background: linear-gradient(45deg, #F4A460, #DEB887);
-            margin-bottom: 10px;
-        }
-
-        .logo h1 {
-            color: #8B4513;
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 1px 1px 2px rgba(255,255,255,0.5);
-        }
-
-        .user-info {
-            padding: 15px 20px;
-            border-bottom: 1px solid rgba(218, 165, 32, 0.4);
-            background: rgba(244, 164, 96, 0.2);
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(45deg, #DAA520, #B8860B);
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
-
-        .user-name {
-            color: #8B4513;
-            font-weight: bold;
-            font-size: 16px;
-        }
-
-        .user-clan {
-            color: #666;
-            font-size: 12px;
-            margin-top: 2px;
-        }
-
-        .logout-btn {
-            background: rgba(218, 165, 32, 0.2);
-            border: none;
-            color: #8B4513;
-            padding: 5px 10px;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 11px;
-            margin-top: 5px;
-        }
-
-        .nav-section {
-            margin: 15px 0;
-        }
-
-        .nav-title {
-            padding: 10px 20px;
-            color: #8B4513;
-            font-weight: bold;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .nav-item {
-            padding: 12px 20px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            border-left: 3px solid transparent;
-            color: #4a4a4a;
-        }
-
-        .nav-item:hover {
-            background: rgba(218, 165, 32, 0.15);
-            border-left-color: #DAA520;
-            color: #8B4513;
-        }
-
-        .nav-item.active {
-            background: rgba(218, 165, 32, 0.25);
-            border-left-color: #DAA520;
-            color: #8B4513;
-            font-weight: bold;
-        }
-
-        .nav-item.clan-only {
-            background: rgba(244, 164, 96, 0.15);
-        }
-
-        .nav-item.clan-only.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            background: rgba(200, 200, 200, 0.1);
-        }
-
-        .nav-item.clan-only.disabled::before {
-            content: "🔒";
-            margin-right: 8px;
-        }
-
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .header {
-            padding: 20px 30px;
-            background: rgba(255, 255, 255, 0.8);
-            border-bottom: 1px solid rgba(218, 165, 32, 0.4);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .header h2 {
-            color: #8B4513;
-            font-size: 28px;
-            margin-bottom: 5px;
-        }
-
-        .header p {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .content-area {
-            flex: 1;
-            padding: 30px;
-            overflow-y: auto;
-            background: rgba(248, 246, 240, 0.5);
-        }
-
-        .forum-layout {
-            display: grid;
-            gap: 20px;
-        }
-
-        .chat-mode {
-            display: none;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.6);
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(218, 165, 32, 0.3);
-        }
-
-        .message {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 8px;
-            background: rgba(255, 248, 225, 0.8);
-            border-left: 3px solid #DAA520;
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message-author {
-            color: #8B4513;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .message-time {
-            color: #999;
-            font-size: 12px;
-            float: right;
-        }
-
-        .chat-input {
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }
-
-        .chat-input input {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 25px;
-            background: rgba(255, 255, 255, 0.9);
-            color: #2d2d2d;
-            font-size: 14px;
-        }
-
-        .chat-input button {
-            padding: 12px 20px;
-            background: linear-gradient(45deg, #DAA520, #B8860B);
-            border: none;
-            border-radius: 25px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .chat-input button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .thread-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-        }
-
-        .forum-header {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 8px 8px 0 0;
-            padding: 15px 20px;
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-bottom: 2px solid #DAA520;
-            display: grid;
-            grid-template-columns: 1fr 120px 120px 150px;
-            gap: 15px;
-            font-weight: bold;
-            color: #8B4513;
-            font-size: 14px;
-        }
-
-        .thread-item {
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 0;
-            padding: 15px 20px;
-            border-left: 1px solid rgba(218, 165, 32, 0.4);
-            border-right: 1px solid rgba(218, 165, 32, 0.4);
-            border-bottom: 1px solid rgba(218, 165, 32, 0.4);
-            transition: all 0.3s ease;
-            cursor: pointer;
-            display: grid;
-            grid-template-columns: 1fr 120px 120px 150px;
-            gap: 15px;
-            align-items: center;
-        }
-
-        .thread-item:last-child {
-            border-radius: 0 0 8px 8px;
-        }
-
-        .thread-item:hover {
-            background: rgba(255, 255, 255, 0.95);
-            box-shadow: inset 0 0 10px rgba(218, 165, 32, 0.2);
-        }
-
-        .thread-main {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .thread-title {
-            color: #8B4513;
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            cursor: pointer;
-        }
-
-        .thread-title:hover {
-            color: #DAA520;
-            text-decoration: underline;
-        }
-
-        .thread-author {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .thread-stats {
-            text-align: center;
-            font-size: 14px;
-            color: #8B4513;
-        }
-
-        .thread-replies {
-            text-align: center;
-            font-size: 14px;
-            color: #8B4513;
-        }
-
-        .thread-last-post {
-            font-size: 12px;
-            color: #666;
-            text-align: right;
-        }
-
-        .thread-view {
-            display: none;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        .thread-header {
-            background: rgba(255, 255, 255, 0.9);
-            padding: 20px;
-            border-bottom: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 8px 8px 0 0;
-        }
-
-        .thread-header h1 {
-            color: #8B4513;
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
-
-        .thread-meta {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 15px;
-        }
-
-        .thread-content {
-            background: rgba(255, 248, 225, 0.8);
-            padding: 20px;
-            border-radius: 8px;
-            white-space: pre-wrap;
-            line-height: 1.6;
-        }
-
-        .thread-comments {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.6);
-            border-radius: 0 0 8px 8px;
-        }
-
-        .comment {
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-left: 3px solid #DAA520;
-        }
-
-        .comment-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .comment-author {
-            font-weight: bold;
-            color: #8B4513;
-        }
-
-        .comment-time {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .comment-content {
-            white-space: pre-wrap;
-            line-height: 1.5;
-        }
-
-        .comment-input {
-            background: rgba(255, 255, 255, 0.9);
-            border-top: 1px solid rgba(218, 165, 32, 0.4);
-            padding: 20px;
-            border-radius: 0 0 8px 8px;
-        }
-
-        .comment-input textarea {
-            width: 100%;
-            min-height: 80px;
-            padding: 12px;
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 8px;
-            resize: vertical;
-            font-family: inherit;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
-        .comment-input button {
-            padding: 10px 20px;
-            background: linear-gradient(45deg, #DAA520, #B8860B);
-            border: none;
-            border-radius: 6px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .back-btn {
-            background: rgba(218, 165, 32, 0.2);
-            border: none;
-            color: #8B4513;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-
-        .back-btn:hover {
-            background: rgba(218, 165, 32, 0.3);
-        }
-
-        .emoticon-picker {
-            position: relative;
-            display: inline-block;
-        }
-
-        .emoticon-btn {
-            background: rgba(218, 165, 32, 0.2);
-            border: none;
-            border-radius: 50%;
-            width: 35px;
-            height: 35px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-right: 5px;
-        }
-
-        .emoticon-btn:hover {
-            background: rgba(218, 165, 32, 0.3);
-        }
-
-        .emoticon-panel {
-            position: absolute;
-            bottom: 45px;
-            left: 0;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 8px;
-            padding: 10px;
-            display: none;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            min-width: 200px;
-        }
-
-        .emoticon-panel.show {
-            display: block;
-        }
-
-        .emoticon-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 5px;
-        }
-
-        .emoticon-item {
-            padding: 8px;
-            border: none;
-            background: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: background 0.2s;
-        }
-
-        .emoticon-item:hover {
-            background: rgba(218, 165, 32, 0.2);
-        }
-
-        .thread-creation-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-
-        .thread-creation-form {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .thread-creation-form h3 {
-            color: #8B4513;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .thread-creation-form input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 15px;
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 8px;
-            font-size: 14px;
-        }
-
-        .thread-creation-form textarea {
-            width: 100%;
-            min-height: 150px;
-            padding: 12px;
-            margin-bottom: 15px;
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 8px;
-            font-size: 14px;
-            resize: vertical;
-            font-family: inherit;
-        }
-
-        .thread-creation-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-        }
-
-        .thread-creation-buttons button {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .btn-create-thread {
-            background: linear-gradient(45deg, #DAA520, #B8860B);
-            color: white;
-        }
-
-        .btn-cancel-thread {
-            background: rgba(218, 165, 32, 0.2);
-            color: #8B4513;
-        }
-
-        .new-thread-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            padding: 15px 25px;
-            background: linear-gradient(45deg, #DAA520, #B8860B);
-            border: none;
-            border-radius: 50px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(218, 165, 32, 0.4);
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .new-thread-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 25px rgba(218, 165, 32, 0.6);
-        }
-
-        .new-thread-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .login-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-
-        .login-form {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            max-width: 400px;
-            width: 90%;
-        }
-
-        .login-form h2 {
-            color: #8B4513;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #8B4513;
-            font-weight: bold;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.9);
-        }
-
-        .form-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        .form-buttons button {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .form-buttons button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-primary {
-            background: linear-gradient(45deg, #DAA520, #B8860B);
-            color: white;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-            color: #8B4513;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .error {
-            background: rgba(255, 0, 0, 0.1);
-            color: #cc0000;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            display: none;
-        }
-
-        .error.show {
-            display: block;
-        }
-
-        .success {
-            background: rgba(0, 255, 0, 0.1);
-            color: #008800;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            display: none;
-        }
-
-        .success.show {
-            display: block;
-        }
-
-        .online-indicator {
-            width: 8px;
-            height: 8px;
-            background: #32CD32;
-            border-radius: 50%;
-            display: inline-block;
-            margin-left: 5px;
-        }
-
-        .offline-indicator {
-            width: 8px;
-            height: 8px;
-            background: #999;
-            border-radius: 50%;
-            display: inline-block;
-            margin-left: 5px;
-        }
-
-        .connection-status {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            z-index: 1000;
-        }
-
-        .connection-status.online {
-            background: rgba(0, 255, 0, 0.1);
-            color: #008800;
-        }
-
-        .connection-status.offline {
-            background: rgba(255, 0, 0, 0.1);
-            color: #cc0000;
-        }
-
-        .typing-indicator {
-            font-style: italic;
-            color: #999;
-            font-size: 12px;
-            margin-top: 5px;
-        }
-
-        .message-counter {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background: rgba(218, 165, 32, 0.2);
-            color: #8B4513;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            z-index: 1000;
-        }
-
-        .login-tabs {
-            display: flex;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid rgba(218, 165, 32, 0.4);
-        }
-
-        .login-tab {
-            flex: 1;
-            padding: 12px;
-            background: rgba(218, 165, 32, 0.1);
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-            color: #8B4513;
-            transition: all 0.3s ease;
-        }
-
-        .login-tab.active {
-            background: linear-gradient(45deg, #DAA520, #B8860B);
-            color: white;
-        }
-
-        .login-tab:hover:not(.active) {
-            background: rgba(218, 165, 32, 0.2);
-        }
-
-        .google-login-btn {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #dadce0;
-            border-radius: 8px;
-            background: white;
-            color: #3c4043;
-            font-weight: 500;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-        }
-
-        .google-login-btn:hover {
-            box-shadow: 0 1px 2px 0 rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15);
-        }
-
-        .google-login-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .divider {
-            text-align: center;
-            margin: 20px 0;
-            color: #666;
-            position: relative;
-        }
-
-        .divider::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: rgba(218, 165, 32, 0.3);
-            z-index: 1;
-        }
-
-        .divider span {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 0 15px;
-            position: relative;
-            z-index: 2;
-            font-size: 12px;
-        }
-
-        .registration-fields {
-            display: none;
-        }
-
-        .registration-fields.show {
-            display: block;
-        }
-
-        .user-role {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 10px;
-            margin-left: 5px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .role-superuser {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            color: white;
-        }
-
-        .role-moderator {
-            background: linear-gradient(45deg, #4834d4, #686de0);
-            color: white;
-        }
-
-        .role-user {
-            background: rgba(218, 165, 32, 0.2);
-            color: #8B4513;
-        }
-
-        .admin-panel {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 2px solid #ff6b6b;
-        }
-
-        .admin-panel h3 {
-            color: #ff6b6b;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .users-grid {
-            display: grid;
-            gap: 15px;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        }
-
-        .user-card {
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid rgba(218, 165, 32, 0.4);
-            border-radius: 8px;
-            padding: 15px;
-            transition: all 0.3s ease;
-        }
-
-        .user-card:hover {
-            box-shadow: 0 4px 12px rgba(218, 165, 32, 0.3);
-            transform: translateY(-2px);
-        }
-
-        .user-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .user-card-name {
-            font-weight: bold;
-            color: #8B4513;
-        }
-
-        .user-card-info {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-
-        .user-card-actions {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-        }
-
-        .admin-btn {
-            padding: 5px 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: bold;
-            transition: all 0.2s ease;
-        }
-
-        .admin-btn:hover {
-            transform: scale(1.05);
-        }
-
-        .btn-assign-clan {
-            background: #3498db;
-            color: white;
-        }
-
-        .btn-change-role {
-            background: #9b59b6;
-            color: white;
-        }
-
-        .btn-remove-clan {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .clan-management {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 2px solid #3498db;
-        }
-
-        .clan-list {
-            display: grid;
-            gap: 10px;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        }
-
-        .clan-card {
-            background: rgba(52, 152, 219, 0.1);
-            border: 1px solid #3498db;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-        }
-
-        .clan-card h4 {
-            color: #3498db;
-            margin-bottom: 10px;
-        }
-
-        .clan-members {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .create-clan-btn {
-            background: linear-gradient(45deg, #3498db, #2980b9);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-
-        .nav-section.admin-section {
-            border-top: 2px solid #ff6b6b;
-            padding-top: 10px;
-        }
-
-        .nav-section.admin-section .nav-title {
-            color: #ff6b6b;
-        }
-
-        .pending-indicator {
-            background: rgba(255, 165, 0, 0.2);
-            color: #ff8800;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 10px;
-            margin-left: 5px;
-            font-weight: bold;
-        }
-
-        .thread-pending {
-            opacity: 0.7;
-            border-left: 3px solid #ff8800;
-        }
-
-        .thread-rejected {
-            opacity: 0.5;
-            border-left: 3px solid #e74c3c;
-            text-decoration: line-through;
-        }
-
-        .moderation-actions {
-            display: flex;
-            gap: 5px;
-            margin-top: 10px;
-        }
-
-        .approve-btn {
-            background: #27ae60;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-
-        .reject-btn {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-
-        .mobile-menu-toggle {
-            display: none;
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 2100;
-            background: rgba(218, 165, 32, 0.9);
-            border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            color: white;
-            font-size: 20px;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-        }
-
-        .mobile-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1500;
-        }
-
-        .mobile-overlay.show {
-            display: block;
-        }
-
-        .btn-secondary {
-            background: rgba(218, 165, 32, 0.2);
-            color: #8B4513;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 768px) {
-            body {
-                flex-direction: column;
-                height: 100vh;
-            }
-            
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: fixed;
-                top: 0;
-                left: 0;
-                z-index: 2000;
-                transform: translateY(-100%);
-                transition: transform 0.3s ease;
-                max-height: 70vh;
-                overflow-y: auto;
-            }
-            
-            .sidebar.open {
-                transform: translateY(0);
-            }
-            
-            .main-content {
-                margin-top: 0;
-                padding-top: 80px;
-            }
-            
-            .header {
-                padding: 15px 20px;
-                position: relative;
-            }
-            
-            .header h2 {
-                margin-left: 40px;
-                font-size: 24px;
-            }
-            
-            .content-area {
-                padding: 15px;
-            }
-            
-            .forum-header, .thread-item {
-                grid-template-columns: 1fr 60px 60px 80px;
-                gap: 5px;
-                padding: 10px;
-                font-size: 11px;
-            }
-            
-            .thread-title {
-                font-size: 14px;
-            }
-            
-            .thread-author {
-                font-size: 10px;
-            }
-            
-            .chat-input {
-                flex-direction: column;
-                gap: 10px;
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: rgba(255, 255, 255, 0.95);
-                padding: 15px;
-                border-top: 1px solid rgba(218, 165, 32, 0.4);
-                z-index: 1000;
-            }
-            
-            .chat-input input {
-                border-radius: 20px;
-                padding: 15px;
-                font-size: 16px;
-            }
-            
-            .chat-input button {
-                border-radius: 20px;
-                padding: 15px;
-                font-size: 16px;
-            }
-            
-            .chat-messages {
-                padding-bottom: 100px;
-            }
-            
-            .mobile-menu-toggle {
-                display: block;
-            }
-            
-            .thread-creation-form {
-                margin: 10px;
-                padding: 20px;
-                max-width: none;
-                width: auto;
-                max-height: 90vh;
-            }
-            
-            .thread-creation-form input,
-            .thread-creation-form textarea {
-                padding: 15px;
-                font-size: 16px;
-            }
-            
-            .thread-creation-buttons {
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            .thread-creation-buttons button {
-                padding: 15px;
-                font-size: 16px;
-            }
-            
-            .thread-view {
-                display: flex;
-            }
-            
-            .thread-header {
-                padding: 15px;
-            }
-            
-            .thread-header h1 {
-                font-size: 20px;
-            }
-            
-            .thread-comments {
-                padding: 15px;
-                padding-bottom: 120px;
-            }
-            
-            .comment-input {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                padding: 15px;
-                background: rgba(255, 255, 255, 0.95);
-                border-top: 1px solid rgba(218, 165, 32, 0.4);
-                z-index: 1000;
-            }
-            
-            .comment-input textarea {
-                padding: 15px;
-                font-size: 16px;
-                min-height: 60px;
-            }
-            
-            .comment-input button {
-                padding: 15px 25px;
-                font-size: 16px;
-            }
-            
-            .emoticon-panel {
-                bottom: 65px;
-                left: 50%;
-                transform: translateX(-50%);
-            }
-            
-            .emoticon-btn {
-                width: 40px;
-                height: 40px;
-                font-size: 18px;
-            }
-            
-            .back-btn {
-                position: fixed;
-                top: 20px;
-                left: 60px;
-                z-index: 1100;
-                padding: 10px 15px;
-            }
-			  .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .banner {
-            height: 200px;
-            background: linear-gradient(135deg, #8B4513 0%, #DAA520 25%, #F4A460 50%, #DEB887 75%, #8B4513 100%);
-            background-size: 400% 400%;
-            animation: gradientShift 15s ease infinite;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .banner::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
-            animation: sparkle 8s ease-in-out infinite alternate;
-        }
-
-        @keyframes sparkle {
-            0% { opacity: 0.3; }
-            100% { opacity: 0.7; }
-        }
-
-        .banner::after {
-            content: '🏰⚔️🛡️👑💎⭐🏆🔥';
-            position: absolute;
-            top: 20px;
-            left: -50px;
-            font-size: 24px;
-            opacity: 0.2;
-            animation: floatIcons 20s linear infinite;
-            white-space: nowrap;
-        }
-
-        @keyframes floatIcons {
-            0% { transform: translateX(-100px); }
-            100% { transform: translateX(calc(100vw + 100px)); }
-        }
-
-        .banner-content {
-            text-align: center;
-            z-index: 1;
-            position: relative;
-            padding: 20px;
-            border-radius: 15px;
-            background: rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .banner-title {
-            font-size: 3rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            animation: titleGlow 2s ease-in-out infinite alternate;
-        }
-
-        @keyframes titleGlow {
-            0% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); }
-            100% { text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.3); }
-        }
-
-        .banner-subtitle {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            font-style: italic;
-            font-weight: 300;
-        }
-
-        .header {
-            padding: 20px 30px;
-            background: rgba(255, 255, 255, 0.8);
-            border-bottom: 1px solid rgba(218, 165, 32, 0.4);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        }
-    </style>
+    <link href="style.css" rel="stylesheet">
 </head>
 <body>
     <!-- Mobile Menu Toggle -->
@@ -1506,10 +139,10 @@
                     <label for="username">Username *</label>
                     <input type="text" id="username" placeholder="Scegli il tuo username">
                 </div>
-                <div class="form-group">
+               <!-- <div class="form-group">
                     <label for="clan">Clan (opzionale)</label>
                     <input type="text" id="clan" placeholder="Nome del tuo clan">
-                </div>
+                </div>-->
             </div>
             
             <!-- Campi comuni -->
@@ -1521,10 +154,15 @@
                 <label for="password">Password *</label>
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
-            
+			
+			 
+			<div class="g-recaptcha" data-sitekey="6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw"></div>
+			  
+					
             <div class="form-buttons">
                 <button id="submitBtn" class="btn-primary" onclick="handleSubmit()">Accedi</button>
             </div>
+			 
             
             <div id="loading" class="loading">
                 <div>🔄 Connessione in corso...</div>
@@ -1554,8 +192,15 @@
         </div>
 
         <div class="nav-section">
+            <div class="nav-title">🏠 Home</div>
+            <div class="nav-item active" data-section="home">
+                <span>🏠 Dashboard</span>
+            </div>
+        </div>
+
+        <div class="nav-section">
             <div class="nav-title">🌍 Generale</div>
-            <div class="nav-item active" data-section="eventi">
+            <div class="nav-item" data-section="eventi">
                 <span>📅 Eventi</span>
             </div>
             <div class="nav-item" data-section="oggetti">
@@ -1596,13 +241,24 @@
             <div class="nav-item clan-only" data-section="clan-consigli">
                 <span>💡 Consigli</span>
             </div>
+			<div class="nav-item clan-only" data-section="clan-bacheca">
+                <span>🏰 Bacheca</span>
+            </div>
         </div>
     </div>
 
     <div class="main-content">
+        <!-- Banner Hero -->
+        <div class="banner">
+            <div class="banner-content">
+                <div class="banner-title">⚔️ Hustle Castle ⚔️</div>
+                <div class="banner-subtitle">Il Forum Ufficiale della Community</div>
+            </div>
+        </div>
+
         <div class="header">
-            <h2 id="section-title">📅 Eventi</h2>
-            <p id="section-description">Scopri tutti gli eventi in corso e futuri di Hustle Castle</p>
+            <h2 id="section-title">🏠 Dashboard</h2>
+            <p id="section-description">Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità</p>
         </div>
 
         <div class="content-area">
@@ -1737,6 +393,25 @@
     </div>
 
     <script>
+	
+	 // Aggiungi animazioni al caricamento
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+
+            // Effetto hover per i nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        });
+	
+	
         // Aspetta che Firebase sia caricato
         window.addEventListener('load', async () => {
             // Attendi che i moduli Firebase siano pronti
@@ -1757,7 +432,7 @@
 
         // Variabili globali
         let currentUser = null;
-        let currentSection = 'eventi';
+        let currentSection = 'home';
         let messageListeners = {};
         let threadListeners = {};
         let messageCount = 0;
@@ -1804,6 +479,7 @@
         window.removFromClan = removFromClan;
         window.createNewClan = createNewClan;
         window.deleteClan = deleteClan;
+        window.switchSection = switchSection;
 
         // Funzioni per la gestione dei ruoli
         function getCurrentUserRole() {
@@ -1861,6 +537,11 @@
 
         // Configurazione sezioni - DEVE essere definito dopo USER_ROLES
         const sectionConfig = {
+            'home': {
+                title: '🏠 Dashboard',
+                description: 'Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità',
+                type: 'dashboard'
+            },
             'eventi': {
                 title: '📅 Eventi',
                 description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle',
@@ -1916,6 +597,11 @@
             'clan-consigli': {
                 title: '💡 Consigli Clan',
                 description: 'Suggerimenti e guide per i membri del clan',
+                type: 'forum'
+            },
+			'clan-bacheca': {
+                title: '🏰 Bacheca Clan',
+                description: 'Messaggi importati per i membri del clan',
                 type: 'forum'
             }
         };
@@ -2000,7 +686,7 @@
 
             // Setup UI
             setupEventListeners();
-            switchSection('eventi');
+            switchSection('home');
         }
 
         // Gestione login utente
@@ -2018,6 +704,13 @@
             
             // Carica dati utente
             loadUserProfile();
+            
+            // Aggiorna dashboard se è la sezione corrente
+            if (currentSection === 'home') {
+                setTimeout(() => {
+                    loadDashboard();
+                }, 500); // Piccolo delay per permettere il caricamento dei dati utente
+            }
         }
 
         // Gestione logout utente
@@ -2048,9 +741,9 @@
             updateClanSectionsAccess();
             updateAdminSectionsAccess();
             
-            // Se si è in una sezione clan o admin, torna agli eventi
+            // Se si è in una sezione clan o admin, torna alla home
             if (currentSection.startsWith('clan-') || currentSection.startsWith('admin-')) {
-                switchSection('eventi');
+                switchSection('home');
             }
             
             // Torna al forum se si è in vista thread
@@ -2083,6 +776,11 @@
                         
                         // Aggiorna badge ruolo
                         updateUserRoleBadge();
+                        
+                        // Aggiorna dashboard se è la sezione corrente
+                        if (currentSection === 'home') {
+                            loadDashboard();
+                        }
                     }
                 } catch (error) {
                     console.error('Errore caricamento profilo:', error);
@@ -2130,6 +828,11 @@
                 document.getElementById('currentClan').textContent = userData.clan || 'Nessuno';
                 document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
                 updateUserRoleBadge();
+                
+                // Aggiorna dashboard se è la sezione corrente
+                if (currentSection === 'home') {
+                    loadDashboard();
+                }
             }
         }
 
@@ -2322,7 +1025,7 @@
                 if (!snapshot.exists()) {
                     // Nuovo utente Google - chiedi dati aggiuntivi
                     const username = user.displayName || prompt('Inserisci il tuo username:');
-                    const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
+                    //const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
                     
                     if (!username) {
                         throw new Error('Username richiesto');
@@ -2332,7 +1035,7 @@
                     await set(userRef, {
                         username: username,
                         email: user.email,
-                        clan: clan,
+                        //clan: clan,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
                         provider: 'google'
@@ -2391,7 +1094,7 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const username = document.getElementById('username').value;
-            const clan = document.getElementById('clan').value;
+            //const clan = document.getElementById('clan').value;
 
             if (!email || !password || !username) {
                 showError('Inserisci email, password e username');
@@ -2415,7 +1118,7 @@
                     await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
                         username: username,
                         email: email,
-                        clan: clan || 'Nessuno',
+                        //clan:  'Nessuno',
                         role: userRole,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
@@ -2423,7 +1126,7 @@
                     });
                 } else {
                     // Registrazione locale (demo)
-                    await simulateRegister(email, password, username, clan, userRole);
+                    await simulateRegister(email, password, username, userRole);
                 }
                 
                 const roleMessage = userRole === USER_ROLES.SUPERUSER ? 
@@ -2655,7 +1358,7 @@
                 const safeClanName = clan.replace(/[.#$[\]]/g, '_');
                 
                 // Thread clan (alcuni pending per testare moderazione)
-                const clanSections = ['clan-war', 'clan-premi', 'clan-consigli'];
+                const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
                 clanSections.forEach(section => {
                     const storageKey = `hc_threads_clan_${safeClanName}_${section}`;
                     const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -2677,51 +1380,9 @@
 
         function getExampleThreads(section) {
             const examples = {
-                'eventi': [
-                    {
-                        id: 'evt1',
-                        title: 'Evento Arena Portal - Ricompense Doppie!',
-                        content: 'Cari guerrieri di Hustle Castle!\n\nÈ iniziato l\'evento Arena Portal con ricompense doppie! Ecco tutti i dettagli:\n\n🏆 Ricompense doppie per tutti i livelli dell\'arena\n⚔️ Nuove skin esclusive disponibili\n💎 Bonus gemme per i primi 100 classificati\n⏰ L\'evento durerà fino al 15 di questo mese\n\nNon perdete questa occasione unica! Buona fortuna a tutti!',
-                        author: 'GameMaster',
-                        createdAt: Date.now() - 2*60*60*1000,
-                        replies: 45,
-                        views: 234,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'evt2', 
-                        title: 'Torneo dei Clan - Iscrizioni Aperte',
-                        content: 'Attenzione tutti i clan leader!\n\nSono aperte le iscrizioni per il Grande Torneo dei Clan di questa stagione.\n\n📅 Data: Dal 20 al 27 di questo mese\n🏰 Modalità: Eliminazione diretta\n🎖️ Premi: Corone clan, risorse speciali e titoli esclusivi\n📝 Iscrizioni: Fino al 18 di questo mese\n\nPer iscriversi, il clan deve avere almeno 20 membri attivi.\nMaggiori dettagli nel forum ufficiale!',
-                        author: 'ClanLeader99',
-                        createdAt: Date.now() - 5*60*60*1000,
-                        replies: 23,
-                        views: 156,
-                        status: 'approved'
-                    }
-                ],
-                'oggetti': [
-                    {
-                        id: 'obj1',
-                        title: 'Guida alle Gemme Leggendarie',
-                        content: 'Guida completa alle gemme leggendarie e come ottenerle!\n\n💎 TIPI DI GEMME LEGGENDARIE:\n\n🔴 Rubino del Potere\n- Aumenta l\'attacco del 15%\n- Si ottiene: Arena Champion, eventi speciali\n\n🔵 Zaffiro della Difesa\n- Aumenta HP del 20%\n- Si ottiene: Dungeon Master, ricompense clan\n\n🟢 Smeraldo della Velocità\n- Aumenta velocità attacco del 10%\n- Si ottiene: Gara settimanale, shop premium\n\n⚡ CONSIGLI PER L\'UPGRADE:\n1. Upgrada sempre una gemma alla volta\n2. Usa gemme minori per potenziare\n3. Non vendere mai gemme leggendarie!\n\nBuona caccia alle gemme! 💪',
-                        author: 'ProPlayer123',
-                        createdAt: Date.now() - 24*60*60*1000,
-                        replies: 67,
-                        views: 445,
-                        status: 'approved'
-                    }
+                'eventi': [   
                 ],
                 'novita': [
-                    {
-                        id: 'nov1',
-                        title: 'Update 1.45.2 - Nuove Funzionalità!',
-                        content: '🎉 NOVITÀ MAJOR UPDATE 1.45.2!\n\n✨ NUOVE FUNZIONALITÀ:\n\n🏰 Nuova Stanza: Sala del Trono\n- Aumenta il morale di tutto il castello\n- Sbloccabile al livello TR9\n- Nuove decorazioni esclusive\n\n⚔️ Nuove Armi Leggendarie:\n- Spada dell\'Alba Eterna\n- Arco delle Tempeste\n- Bastone del Mago Supremo\n\n🛡️ Sistema di Artigianato Migliorato:\n- Interfaccia più intuitiva\n- Tempi di creazione ridotti del 25%\n- Nuove ricette segrete\n\n🔧 CORREZIONI:\n- Risolto bug delle notifiche\n- Migliorata la stabilità in PvP\n- Ottimizzate le prestazioni\n\nL\'update è già disponibile! Aggiornate subito!',
-                        author: 'DevTeam',
-                        createdAt: Date.now() - 60*60*1000,
-                        replies: 89,
-                        views: 567,
-                        status: 'approved'
-                    }
                 ]
             };
             return examples[section] || [];
@@ -2730,80 +1391,15 @@
         function getExampleClanThreads(section, clanName) {
             const examples = {
                 'clan-war': [
-                    {
-                        id: 'war1',
-                        title: `Strategia vs Clan "Nemici Giurati"`,
-                        content: `Compagni del clan ${clanName}!\n\nAbbiamo la guerra contro i "Nemici Giurati" questo weekend. Ecco la strategia:\n\n⚔️ FORMAZIONE CONSIGLIATA:\n- Tank: Livello 70+\n- DPS: Arciere + Mago\n- Support: Resurrezione\n\n🎯 OBIETTIVI PRIORITARI:\n1. Attaccare sempre i castelli più deboli prima\n2. Coordinarsi in chat prima di ogni attacco\n3. Salvare gli attacchi migliori per la fine\n\n📊 STATISTICHE NEMICI:\n- Potenza media: 450K\n- Punti deboli: Difese magiche\n- Attenzione ai loro top 3 giocatori\n\nSiamo pronti per la vittoria! 🏆`,
-                        author: `Leader${clanName.replace(' ', '')}`,
-                        createdAt: Date.now() - 30*60*1000,
-                        replies: 12,
-                        views: 78,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'war2',
-                        title: 'Preparazione per la Guerra di Domenica',
-                        content: `Guerra importante domenica!\n\nTutti devono essere pronti:\n\n✅ CHECKLIST PRE-GUERRA:\n- Truppe al massimo livello\n- Equipaggiamento riparato\n- Risorse sufficienti per revive\n- Controllare formazione ottimale\n\n🕐 ORARI ATTACCO:\n- Fase 1: 14:00-16:00\n- Fase 2: 18:00-20:00\n- Fase finale: 21:00-22:00\n\nChi non può partecipare deve avvisare in chat!`,
-                        author: 'StrategiaMaster',
-                        createdAt: Date.now() - 2*60*60*1000,
-                        replies: 8,
-                        views: 45,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'war3',
-                        title: 'Nuova Tattica di Attacco - Serve Approvazione',
-                        content: `Ho sviluppato una nuova tattica che potrebbe funzionare:\n\n💡 IDEA:\nUsare tutti tank nella prima ondata per assorbire danni, poi attaccare con DPS puri nella seconda ondata quando le loro difese sono in cooldown.\n\n🤔 COSA NE PENSATE?\n- Pro: Massimo danno nella seconda fase\n- Contro: Richiede coordinazione perfetta\n\nVorrei testarlo nella prossima guerra minore. Moderatori, cosa ne dite?`,
-                        author: 'NewWarrior',
-                        createdAt: Date.now() - 15*60*1000,
-                        replies: 0,
-                        views: 2,
-                        status: 'pending'
-                    }
                 ],
                 'clan-premi': [
-                    {
-                        id: 'prize1',
-                        title: 'Distribuzione Ricompense Settimanali',
-                        content: `🏆 RICOMPENSE SETTIMANALI DISTRIBUITE!\n\n📊 RISULTATI QUESTA SETTIMANA:\n- Posizione clan: 15°\n- Punti totali: 125,840\n- Partecipazione: 85%\n\n🎁 PREMI ASSEGNATI:\n- 1° posto attività: 500 gemme\n- 2° posto attività: 300 gemme  \n- 3° posto attività: 200 gemme\n- Tutti i partecipanti: 50 gemme\n\n⭐ TOP PERFORMERS:\n1. WarriorKing - 15,200 punti\n2. MagicMaster - 12,800 punti\n3. DefenderPro - 11,500 punti\n\nComplimenti a tutti! La settimana prossima puntiamo al top 10! 💪`,
-                        author: `Leader${clanName.replace(' ', '')}`,
-                        createdAt: Date.now() - 24*60*60*1000,
-                        replies: 15,
-                        views: 89,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'prize2',
-                        title: 'Proposta: Torneo Interno del Clan',
-                        content: `Ciao a tutti!\n\nPropongo di organizzare un torneo interno al clan per animare un po' le cose:\n\n🎯 FORMATO PROPOSTO:\n- Eliminazione diretta\n- Bracket da 16 giocatori\n- Match settimanali\n- Finale con spettatori\n\n🏆 PREMI PROPOSTI:\n- 1° posto: 1000 gemme + titolo\n- 2° posto: 500 gemme\n- 3° posto: 250 gemme\n- Partecipazione: 50 gemme\n\n💰 COSTI:\nPotremmo usare parte del tesoro del clan o fare una piccola quota di iscrizione.\n\nChe ne dite? Chi sarebbe interessato?`,
-                        author: 'TournamentFan',
-                        createdAt: Date.now() - 45*60*1000,
-                        replies: 0,
-                        views: 5,
-                        status: 'pending'
-                    }
+                   
                 ],
                 'clan-consigli': [
-                    {
-                        id: 'tip1',
-                        title: 'Guida: Migliori Formazioni per TR8',
-                        content: `📚 GUIDA COMPLETA FORMAZIONI TR8\n\n🏰 SETUP CASTLE:\n- Throne Room: Livello 8\n- Caserma: 6 slot truppe\n- Equipaggiamento: Tier 8\n\n⚔️ FORMAZIONE PVP:\n1. Tank: Spadaccino pesante (100K+ HP)\n2. DPS: Arciere critico (80K+ attacco)\n3. DPS: Mago elementale (70K+ spell power)\n4. Support: Resurrezione + Heal\n5. DPS: Assassino (velocità max)\n6. Tank: Paladino (difesa magica)\n\n🎯 ARTEFATTI CONSIGLIATI:\n- Spada: +15% attacco\n- Armatura: +20% HP\n- Amuleto: +10% velocità\n\n💡 TRUCCHI:\n- Aggiorna sempre le gemme\n- Bilancia attacco e difesa\n- Non trascurare la velocità\n\nTr8 è un livello cruciale, fate attenzione agli upgrade!`,
-                        author: 'VeteranWarrior',
-                        createdAt: Date.now() - 12*60*60*1000,
-                        replies: 24,
-                        views: 156,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'tip2',
-                        title: 'Consigli per Principianti - Da Verificare',
-                        content: `Salve! Sono nuovo del clan e volevo condividere alcuni consigli che ho imparato:\n\n📝 CONSIGLI BASE:\n1. Aggiornate sempre la cucina prima di tutto\n2. Non spendete gemme per accelerare\n3. Fate sempre la quest giornaliera\n4. Salvate le risorse per gli upgrade importanti\n\n🤔 DOMANDE:\n- È meglio concentrarsi su un tipo di truppa o diversificare?\n- Quando conviene cambiare Throne Room?\n- Quali eventi sono più importanti per i nuovi?\n\nSo che sono consigli basic, ma magari possono aiutare altri nuovi membri. Correggete se sbaglio qualcosa!`,
-                        author: 'NewHelper',
-                        createdAt: Date.now() - 20*60*1000,
-                        replies: 0,
-                        views: 3,
-                        status: 'pending'
-                    }
+                
+                ],
+				'clan-bacheca': [
+                
                 ]
             };
             return examples[section] || [];
@@ -2812,24 +1408,7 @@
         function getExampleMessages(section) {
             const examples = {
                 'chat-generale': [
-                    {
-                        id: 'msg1',
-                        author: 'PlayerOne',
-                        message: 'Qualcuno sa quando esce il prossimo evento?',
-                        timestamp: Date.now() - 30*60*1000
-                    },
-                    {
-                        id: 'msg2',
-                        author: 'CastleKing', 
-                        message: 'Dovrebbe essere la prossima settimana!',
-                        timestamp: Date.now() - 25*60*1000
-                    },
-                    {
-                        id: 'msg3',
-                        author: 'NoobSlayer',
-                        message: 'Ho appena ottenuto una spada leggendaria! 🗡️',
-                        timestamp: Date.now() - 20*60*1000
-                    }
+                   
                 ]
             };
             return examples[section] || [];
@@ -2963,6 +1542,9 @@
             } else if (section.type === 'clan-admin') {
                 forumContent.style.display = 'block';
                 loadClanModerationContent();
+            } else if (section.type === 'dashboard') {
+                forumContent.style.display = 'block';
+                loadDashboard();
             }
 
             // Chiudi menu mobile se aperto
@@ -3004,6 +1586,374 @@
             overlay.classList.remove('show');
             document.body.style.overflow = 'auto';
         }
+
+        // Carica dashboard
+        function loadDashboard() {
+            const threadList = document.getElementById('thread-list');
+            
+            // Se l'utente non è ancora loggato, mostra messaggio di caricamento
+            if (!currentUser) {
+                threadList.innerHTML = `
+                    <div style="text-align: center; padding: 60px; color: #666;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
+                        <h2 style="color: #8B4513; margin-bottom: 10px;">Caricamento Dashboard...</h2>
+                        <p>Preparazione della tua area personale</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const userName = currentUser.displayName || 'Guerriero';
+            const userClan = getCurrentUserClan();
+            const userRole = getCurrentUserRole();
+            
+            let welcomeMessage = '';
+            const currentHour = new Date().getHours();
+            if (currentHour < 12) {
+                welcomeMessage = '🌅 Buongiorno';
+            } else if (currentHour < 18) {
+                welcomeMessage = '☀️ Buon pomeriggio';
+            } else {
+                welcomeMessage = '🌙 Buonasera';
+            }
+
+            let roleDisplay = '';
+            switch (userRole) {
+                case USER_ROLES.SUPERUSER:
+                    roleDisplay = '<span class="user-role role-superuser">👑 SUPER ADMIN</span>';
+                    break;
+                case USER_ROLES.CLAN_MOD:
+                    roleDisplay = '<span class="user-role role-moderator">🛡️ MODERATORE</span>';
+                    break;
+                default:
+                    roleDisplay = '<span class="user-role role-user">⚔️ GUERRIERO</span>';
+            }
+
+            threadList.innerHTML = `
+                <div style="display: grid; gap: 25px;">
+                    <!-- Welcome Section -->
+                    <div style="background: linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(244, 164, 96, 0.1) 100%); border-radius: 15px; padding: 25px; border: 2px solid rgba(218, 165, 32, 0.3); position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.1;">🏰</div>
+                        <h2 style="color: #8B4513; margin-bottom: 15px; font-size: 28px;">
+                            ${welcomeMessage}, ${userName}! ${roleDisplay}
+                        </h2>
+                        <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
+                            Benvenuto nel forum ufficiale di Hustle Castle! Qui puoi discutere strategie, 
+                            condividere esperienze e rimanere aggiornato sugli ultimi eventi del gioco.
+                        </p>
+                        ${userClan !== 'Nessuno' ? `
+                            <div style="background: rgba(52, 152, 219, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #3498db;">
+                                <strong style="color: #3498db;">🏰 Clan: ${userClan}</strong>
+                                <p style="color: #666; font-size: 14px; margin-top: 5px;">Accedi alle sezioni dedicate del tuo clan dal menu laterale</p>
+                            </div>
+                        ` : `
+                            <div style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                <strong style="color: #e68900;">⚠️ Non hai un clan</strong>
+                                <p style="color: #666; font-size: 14px; margin-top: 5px;">Unisciti a un clan per accedere a funzionalità esclusive!</p>
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- Quick Navigation -->
+                    <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                        <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                            <span>🧭</span> Navigazione Rapida
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div class="dashboard-card" onclick="switchSection('eventi')" style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">📅</div>
+                                <h4 style="margin-bottom: 8px;">Eventi</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Scopri eventi in corso</p>
+                            </div>
+                            <div class="dashboard-card" onclick="switchSection('oggetti')" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">⚔️</div>
+                                <h4 style="margin-bottom: 8px;">Oggetti</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Guide su armi e armature</p>
+                            </div>
+                            <div class="dashboard-card" onclick="switchSection('novita')" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">🆕</div>
+                                <h4 style="margin-bottom: 8px;">Novità</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Ultimi aggiornamenti</p>
+                            </div>
+                            <div class="dashboard-card" onclick="switchSection('chat-generale')" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">💬</div>
+                                <h4 style="margin-bottom: 8px;">Chat</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Chiacchiera con la community</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats and Tips Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Forum Stats -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>📊</span> Statistiche Forum
+                            </h3>
+                            <div style="display: grid; gap: 15px;">
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">📝 Thread Totali</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalThreads}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">💬 Messaggi Chat</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalMessages}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">👥 Utenti Registrati</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalUsers}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">🏰 Clan Attivi</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalClans}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Tips -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>💡</span> Suggerimenti Rapidi
+                            </h3>
+                            <div style="display: grid; gap: 12px;">
+                                <div style="padding: 12px; background: rgba(46, 204, 113, 0.1); border-radius: 8px; border-left: 4px solid #2ecc71;">
+                                    <strong style="color: #27ae60; font-size: 14px;">🎯 Partecipa alle Discussioni</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Condividi le tue strategie nella sezione Eventi</p>
+                                </div>
+                                <div style="padding: 12px; background: rgba(52, 152, 219, 0.1); border-radius: 8px; border-left: 4px solid #3498db;">
+                                    <strong style="color: #2980b9; font-size: 14px;">🏰 Unisciti a un Clan</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Accedi a chat e funzionalità esclusive</p>
+                                </div>
+                                <div style="padding: 12px; background: rgba(155, 89, 182, 0.1); border-radius: 8px; border-left: 4px solid #9b59b6;">
+                                    <strong style="color: #8e44ad; font-size: 14px;">⚔️ Condividi Equipaggiamenti</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Mostra le tue armi leggendarie!</p>
+                                </div>
+                                <div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
+                                    <strong style="color: #d68910; font-size: 14px;">📢 Rimani Aggiornato</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Controlla regolarmente le Novità</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions & Tips -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Quick Actions -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>⚡</span> Azioni Rapide
+                            </h3>
+                            <div style="display: grid; gap: 12px;">
+                                <button onclick="switchSection('eventi')" class="quick-action-btn" style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">📅</span>
+                                    <span>Controlla Eventi Attuali</span>
+                                </button>
+                                <button onclick="switchSection('chat-generale')" class="quick-action-btn" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">💬</span>
+                                    <span>Inizia una Conversazione</span>
+                                </button>
+                                <button onclick="showThreadCreationModal()" class="quick-action-btn" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">✍️</span>
+                                    <span>Crea Nuovo Thread</span>
+                                </button>
+                                ${userClan !== 'Nessuno' ? `
+                                    <button onclick="switchSection('clan-chat')" class="quick-action-btn" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 20px;">🏰</span>
+                                        <span>Chat del Clan</span>
+                                    </button>
+                                ` : `
+                                    <button onclick="alert('Unisciti a un clan per accedere a questa funzionalità!')" class="quick-action-btn" style="background: linear-gradient(135deg, #95a5a6, #7f8c8d); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px; opacity: 0.6;">
+                                        <span style="font-size: 20px;">🔒</span>
+                                        <span>Chat del Clan (Locked)</span>
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Daily Tips -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>🎯</span> Consiglio del Giorno
+                            </h3>
+                            <div id="daily-tip" style="padding: 20px; background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(155, 89, 182, 0.1)); border-radius: 10px; border-left: 4px solid #3498db;">
+                                <!-- Il consiglio verrà inserito qui -->
+                            </div>
+                            <div style="margin-top: 15px; text-align: center;">
+                                <button onclick="loadDailyTip()" style="background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db; color: #3498db; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.3s ease;">
+                                    🔄 Nuovo Consiglio
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Community Highlights -->
+                    <div style="background: linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(39, 174, 96, 0.1)); border-radius: 15px; padding: 25px; border: 2px solid #27ae60;">
+                        <h3 style="color: #27ae60; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                            <span>🌟</span> In Evidenza nella Community
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">🔥</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Thread Più Visto</h4>
+                                <p style="font-size: 12px; color: #666;">Guide alle Gemme Leggendarie</p>
+                                <p style="font-size: 11px; color: #999;">445 visualizzazioni</p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">👑</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Utente del Mese</h4>
+                                <p style="font-size: 12px; color: #666;">ProPlayer123</p>
+                                <p style="font-size: 11px; color: #999;">67 contributi</p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">🏆</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Clan Più Attivo</h4>
+                                <p style="font-size: 12px; color: #666;">Draghi Rossi</p>
+                                <p style="font-size: 11px; color: #999;">25 membri attivi</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Aggiungi stili hover per le dashboard cards
+            const style = document.createElement('style');
+            style.textContent = `
+                .dashboard-card:hover {
+                    transform: translateY(-5px) scale(1.02);
+                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Carica consigli del giorno dopo un breve delay
+            setTimeout(loadDailyTip, 300);
+        }
+
+        // Ottieni statistiche del forum
+        function getForumStats() {
+            let totalThreads = 0;
+            let totalMessages = 0;
+            let totalUsers = 0;
+            let totalClans = 0;
+
+            try {
+                if (window.useFirebase) {
+                    // In modalità Firebase, restituisci valori placeholder
+                    return {
+                        totalThreads: '50+',
+                        totalMessages: '200+', 
+                        totalUsers: '15+',
+                        totalClans: '5+'
+                    };
+                } else {
+                    // Modalità locale - conta i dati reali
+                    const sections = ['eventi', 'oggetti', 'novita'];
+                    sections.forEach(section => {
+                        const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
+                        totalThreads += threads.length;
+                    });
+
+                    const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
+                    totalMessages += messages.length;
+
+                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+                    totalUsers = Object.keys(users).length;
+
+                    const clanSet = new Set();
+                    Object.values(users).forEach(user => {
+                        if (user.clan && user.clan !== 'Nessuno') {
+                            clanSet.add(user.clan);
+                        }
+                    });
+                    totalClans = clanSet.size;
+                }
+            } catch (error) {
+                console.error('Errore calcolo statistiche:', error);
+            }
+
+            return {
+                totalThreads: totalThreads || 0,
+                totalMessages: totalMessages || 0,
+                totalUsers: totalUsers || 0,
+                totalClans: totalClans || 0
+            };
+        }
+
+        // Carica consiglio del giorno
+        function loadDailyTip() {
+            const tipContainer = document.getElementById('daily-tip');
+            if (!tipContainer) return;
+
+            const tips = [
+                {
+                    icon: '⚔️',
+                    title: 'Strategia di Combattimento',
+                    content: 'Bilancia sempre la tua formazione: un tank robusto, DPS equilibrati e un supporto possono fare la differenza in arena!'
+                },
+                {
+                    icon: '🏰',
+                    title: 'Gestione del Castello',
+                    content: 'Aggiorna sempre la sala del trono prima di potenziare altre stanze per massimizzare l\'efficienza delle risorse.'
+                },
+                {
+                    icon: '💎',
+                    title: 'Gemme e Equipaggiamento',
+                    content: 'Non vendere mai le gemme leggendarie! Anche se sembrano deboli ora, potrebbero essere utili per upgrade futuri.'
+                },
+                {
+                    icon: '🎯',
+                    title: 'Eventi Speciali',
+                    content: 'Partecipa sempre agli eventi temporanei: spesso offrono ricompense uniche che non puoi ottenere altrove!'
+                },
+                {
+                    icon: '👥',
+                    title: 'Vita di Clan',
+                    content: 'Coordina sempre con il tuo clan prima delle guerre. La comunicazione è la chiave per la vittoria!'
+                },
+                {
+                    icon: '📈',
+                    title: 'Progressione Intelligente',
+                    content: 'Non avere fretta di salire di Throne Room. Assicurati di avere equipaggiamento e truppe adeguate al tuo livello.'
+                },
+                {
+                    icon: '🛡️',
+                    title: 'Difesa del Castello',
+                    content: 'Posiziona strategicamente le tue difese: mescola danni fisici e magici per contrastare diversi tipi di attacco.'
+                },
+                {
+                    icon: '⏰',
+                    title: 'Gestione del Tempo',
+                    content: 'Ottimizza i tempi di training: inizia sempre con le truppe che richiedono più tempo prima di andare offline.'
+                },
+                {
+                    icon: '🏆',
+                    title: 'Arena e PvP',
+                    content: 'Studia sempre gli avversari prima di attaccare. Una strategia ben pianificata vale più della forza bruta!'
+                },
+                {
+                    icon: '💰',
+                    title: 'Economia del Gioco',
+                    content: 'Investi le gemme saggiamente: priorità a slot di barracks, mastro e velocizzazione di upgrade critici.'
+                }
+            ];
+
+            // Seleziona un consiglio basato sul giorno corrente per consistenza
+            const today = new Date().getDate();
+            const selectedTip = tips[today % tips.length];
+
+            tipContainer.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 15px;">
+                    <div style="font-size: 32px; flex-shrink: 0;">${selectedTip.icon}</div>
+                    <div>
+                        <h4 style="color: #3498db; margin: 0 0 8px 0; font-size: 16px;">${selectedTip.title}</h4>
+                        <p style="color: #666; margin: 0; line-height: 1.5; font-size: 14px;">${selectedTip.content}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Rendi la funzione globale
+        window.loadDailyTip = loadDailyTip;
 
         // Carica contenuto amministrativo
         function loadAdminContent(sectionKey) {
@@ -3095,7 +2045,7 @@
         // Ottieni thread in attesa per un clan
         async function getPendingThreadsForClan(clanName) {
             const pendingThreads = [];
-            const clanSections = ['clan-war', 'clan-premi', 'clan-consigli'];
+            const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
             
             for (const section of clanSections) {
                 try {
@@ -3168,36 +2118,43 @@
 
         // Aggiorna status thread
         async function updateThreadStatus(threadId, section, status, reason = null) {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath) return;
-            
-            const updateData = {
-                status: status,
-                moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
-                moderatedBy: currentUser.displayName || 'Moderatore'
-            };
-            
-            if (reason) {
-                updateData.rejectionReason = reason;
-            }
-            
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-                await update(ref(window.firebaseDatabase), {
-                    [`${dataPath}/${threadId}`]: { ...updateData }
-                });
-            } else {
-                // Modalità locale
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                const threadIndex = threads.findIndex(t => t.id === threadId);
-                
-                if (threadIndex !== -1) {
-                    threads[threadIndex] = { ...threads[threadIndex], ...updateData };
-                    localStorage.setItem(storageKey, JSON.stringify(threads));
-                }
-            }
-        }
+			const dataPath = getDataPath(section, 'threads');
+			if (!dataPath) return;
+
+			const updateData = {
+				status: status,
+				moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
+				moderatedBy: currentUser.displayName || 'Moderatore'
+			};
+
+			if (reason) {
+				updateData.rejectionReason = reason;
+			}
+
+			if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+				// leggi i dati esistenti del thread
+				const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+				const snapshot = await get(threadRef);
+				if (snapshot.exists()) {
+					const existingData = snapshot.val();
+					// mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
+					const updatedThread = { ...existingData, ...updateData };
+					await set(threadRef, updatedThread);
+				} else {
+					console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
+				}
+			} else {
+				// modalità locale
+				const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+				const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+				const threadIndex = threads.findIndex(t => t.id === threadId);
+				if (threadIndex !== -1) {
+					threads[threadIndex] = { ...threads[threadIndex], ...updateData };
+					localStorage.setItem(storageKey, JSON.stringify(threads));
+				}
+			}
+		}
+
 
         // Carica gestione utenti
         async function loadUsersManagement() {
@@ -3669,6 +2626,20 @@
                                 ${statusIndicator}
                             </div>
                             <div class="thread-author">da ${thread.author}</div>
+                            <div class="thread-stats-mobile">
+                                <div class="stat">
+                                    <span>💬</span>
+                                    <span>${thread.replies || 0}</span>
+                                </div>
+                                <div class="stat">
+                                    <span>👁️</span>
+                                    <span>${thread.views || 0}</span>
+                                </div>
+                                <div class="stat">
+                                    <span>🕐</span>
+                                    <span>${formatTime(thread.createdAt)}</span>
+                                </div>
+                            </div>
                             ${thread.status === 'pending' && canModerateSection(currentSection) ? `
                                 <div class="moderation-actions">
                                     <button class="approve-btn" onclick="approveThread('${thread.id}', '${currentSection}')">
@@ -3775,7 +2746,51 @@
                 createBtn.disabled = false;
                 createBtn.textContent = 'Crea Thread';
             }
+			  loadThreads(currentSection); 
+			
         }
+		
+		async function handleGoogleLogin() {
+    if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
+        alert("⚠️ Login con Google non disponibile in modalità demo");
+        return;
+    }
+
+    try {
+        const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
+        const user = result.user;
+
+        console.log("👤 Login Google OK:", user);
+
+        // dopo login, salva (se nuovo utente)
+        const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+
+        if (!snapshot.exists()) {
+            // chiedi extra info se vuoi, per esempio clan
+            const username = user.displayName || prompt("Inserisci un username:");
+            const clan = prompt("Inserisci il tuo clan (opzionale):") || "Nessuno";
+
+            await set(userRef, {
+                username: username,
+                email: user.email,
+                clan: clan,
+                role: "user",
+                createdAt: serverTimestamp(),
+                lastSeen: serverTimestamp(),
+                provider: "google"
+            });
+        }
+
+        alert("✅ Login con Google completato!");
+        hideError();
+        showSuccess("Login effettuato!");
+    } catch (error) {
+        console.error("Errore login con Google:", error);
+        alert(error.message || "Errore login con Google");
+    }
+}
+
 
         // Apri thread per visualizzazione
         async function openThread(threadId, section) {
@@ -3836,9 +2851,14 @@
             currentThreadId = null;
             currentThreadSection = null;
             
-            // Ricarica thread se necessario
-            if (currentSection && sectionConfig[currentSection]?.type === 'forum') {
-                loadThreads(currentSection);
+            // Ricarica contenuto se necessario
+            if (currentSection && sectionConfig[currentSection]) {
+                const section = sectionConfig[currentSection];
+                if (section.type === 'forum') {
+                    loadThreads(currentSection);
+                } else if (section.type === 'dashboard') {
+                    loadDashboard();
+                }
             }
         }
 
