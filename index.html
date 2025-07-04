@@ -1027,7 +1027,7 @@ const appCheck = initializeAppCheck(app, {
                 if (!snapshot.exists()) {
                     // Nuovo utente Google - chiedi dati aggiuntivi
                     const username = user.displayName || prompt('Inserisci il tuo username:');
-                    const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
+                    //const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
                     
                     if (!username) {
                         throw new Error('Username richiesto');
@@ -1037,7 +1037,7 @@ const appCheck = initializeAppCheck(app, {
                     await set(userRef, {
                         username: username,
                         email: user.email,
-                        clan: clan,
+                        //clan: clan,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
                         provider: 'google'
