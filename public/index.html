@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hustle Castle Forum</title>
-     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    
     <!-- Firebase SDK v9 -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
@@ -137,12 +137,10 @@
                 <label for="password">Password *</label>
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
-			<div class="g-recaptcha" data-sitekey="6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw"></div>
             
             <div class="form-buttons">
                 <button id="submitBtn" class="btn-primary" onclick="handleSubmit()">Accedi</button>
             </div>
-			 
             
             <div id="loading" class="loading">
                 <div>🔄 Connessione in corso...</div>

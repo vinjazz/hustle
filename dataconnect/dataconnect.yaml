@@ -1,0 +1,12 @@
+specVersion: "v1"
+serviceId: "hustle"
+location: "us-central1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "hustle-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]
