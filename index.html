@@ -121,10 +121,10 @@
                     <label for="username">Username *</label>
                     <input type="text" id="username" placeholder="Scegli il tuo username">
                 </div>
-                <div class="form-group">
+               <!-- <div class="form-group">
                     <label for="clan">Clan (opzionale)</label>
                     <input type="text" id="clan" placeholder="Nome del tuo clan">
-                </div>
+                </div>-->
             </div>
             
             <!-- Campi comuni -->
@@ -1044,7 +1044,7 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const username = document.getElementById('username').value;
-            const clan = document.getElementById('clan').value;
+            //const clan = document.getElementById('clan').value;
 
             if (!email || !password || !username) {
                 showError('Inserisci email, password e username');
@@ -1068,7 +1068,7 @@
                     await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
                         username: username,
                         email: email,
-                        clan: clan || 'Nessuno',
+                        clan:  'Nessuno',
                         role: userRole,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
