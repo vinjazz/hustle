@@ -1128,7 +1128,7 @@ const appCheck = initializeAppCheck(app, {
                     });
                 } else {
                     // Registrazione locale (demo)
-                    await simulateRegister(email, password, username, clan, userRole);
+                    await simulateRegister(email, password, username, userRole);
                 }
                 
                 const roleMessage = userRole === USER_ROLES.SUPERUSER ? 

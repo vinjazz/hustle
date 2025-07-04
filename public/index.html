@@ -7,6 +7,25 @@
      <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <!-- Firebase SDK v9 -->
     <script type="module">
+		import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+
+const app = initializeApp({
+  // Your firebase configuration object
+});
+
+// Pass your reCAPTCHA v3 site key (public key) to activate(). Make sure this
+// key is the counterpart to the secret key you set in the Firebase console.
+const appCheck = initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+
+  // Optional argument. If true, the SDK automatically refreshes App Check
+  // tokens as needed.
+  isTokenAutoRefreshEnabled: true
+});
+
+	
+	
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
         import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
@@ -138,11 +157,9 @@
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
 			
-			 <form action="?" method="POST">
-			  <div class="g-recaptcha" data-sitekey="6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw"></div>
-			  <br/>
-			  <input type="submit" value="Submit">
-			</form>
+			 
+			<div class="g-recaptcha" data-sitekey="6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw"></div>
+			  
 					
             <div class="form-buttons">
                 <button id="submitBtn" class="btn-primary" onclick="handleSubmit()">Accedi</button>
@@ -1010,7 +1027,7 @@
                 if (!snapshot.exists()) {
                     // Nuovo utente Google - chiedi dati aggiuntivi
                     const username = user.displayName || prompt('Inserisci il tuo username:');
-                    const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
+                    //const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
                     
                     if (!username) {
                         throw new Error('Username richiesto');
@@ -1020,7 +1037,7 @@
                     await set(userRef, {
                         username: username,
                         email: user.email,
-                        clan: clan,
+                        //clan: clan,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
                         provider: 'google'
@@ -1103,7 +1120,7 @@
                     await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
                         username: username,
                         email: email,
-                        clan:  'Nessuno',
+                        //clan:  'Nessuno',
                         role: userRole,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
