@@ -1497,3 +1497,130 @@ textarea:focus,
 .clan-card:hover::before {
     opacity: 1;
 }
+
+
+/* RESPONSIVE DESIGN */
+@media (max-width: 1024px) {
+    .forum-header,
+    .thread-item {
+        grid-template-columns: 1fr 80px 100px 150px;
+    }
+    
+    .main-content {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-toggle {
+        display: block;
+    }
+    
+    .sidebar {
+        width: 100%;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    .main-content {
+        margin-left: 0;
+        padding: 1rem;
+        padding-top: 100px; /* Aumentato per fare spazio agli elementi di stato */
+    }
+    
+    /* Riorganizza gli elementi di stato in una colonna */
+    .connection-status {
+        top: 70px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+        text-align: center;
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+    
+    .message-counter {
+        top: 105px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+        text-align: center;
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+    
+    .notifications-bell {
+        display: none; /* Nascondi su mobile per risparmiare spazio */
+    }
+    
+    .banner-title {
+        font-size: 1.8rem;
+    }
+    
+    .content-area {
+        padding: 1rem;
+        overflow-x: hidden; /* Previene l'overflow orizzontale */
+    }
+    
+    .forum-header {
+        display: none;
+    }
+    
+    .thread-item {
+        grid-template-columns: 1fr;
+        gap: 0;
+        margin-bottom: 1rem;
+        padding: 1rem;
+    }
+    
+    .thread-stats-mobile {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+    }
+    
+    .thread-replies,
+    .thread-stats,
+    .thread-last-post {
+        display: none;
+    }
+    
+    .new-thread-btn {
+        bottom: 1rem;
+        right: 1rem;
+        font-size: 1rem;
+        padding: 0.8rem 1.5rem;
+    }
+    
+    .thread-creation-form,
+    .login-form {
+        margin: 1rem;
+        width: calc(100% - 2rem);
+        max-width: none;
+    }
+    
+    .users-grid,
+    .clan-list {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Migliora i dashboard cards su mobile */
+    .dashboard-card {
+        min-width: auto !important;
+    }
+    
+    /* Fix per le grid che potrebbero uscire dallo schermo */
+    .banner,
+    .header,
+    .content-area,
+    .thread-item,
+    .user-card,
+    .clan-card {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+}
