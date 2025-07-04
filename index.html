@@ -218,6 +218,9 @@
             <div class="nav-item clan-only" data-section="clan-consigli">
                 <span>💡 Consigli</span>
             </div>
+			<div class="nav-item clan-only" data-section="clan-bacheca">
+                <span>🏰 Bacheca</span>
+            </div>
         </div>
     </div>
 
@@ -367,6 +370,25 @@
     </div>
 
     <script>
+	
+	 // Aggiungi animazioni al caricamento
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+
+            // Effetto hover per i nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        });
+	
+	
         // Aspetta che Firebase sia caricato
         window.addEventListener('load', async () => {
             // Attendi che i moduli Firebase siano pronti
@@ -552,6 +574,11 @@
             'clan-consigli': {
                 title: '💡 Consigli Clan',
                 description: 'Suggerimenti e guide per i membri del clan',
+                type: 'forum'
+            },
+			'clan-bacheca': {
+                title: '🏰 Bacheca Clan',
+                description: 'Messaggi importati per i membri del clan',
                 type: 'forum'
             }
         };
@@ -1308,7 +1335,7 @@
                 const safeClanName = clan.replace(/[.#$[\]]/g, '_');
                 
                 // Thread clan (alcuni pending per testare moderazione)
-                const clanSections = ['clan-war', 'clan-premi', 'clan-consigli'];
+                const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
                 clanSections.forEach(section => {
                     const storageKey = `hc_threads_clan_${safeClanName}_${section}`;
                     const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -1330,51 +1357,9 @@
 
         function getExampleThreads(section) {
             const examples = {
-                'eventi': [
-                    {
-                        id: 'evt1',
-                        title: 'Evento Arena Portal - Ricompense Doppie!',
-                        content: 'Cari guerrieri di Hustle Castle!\n\nÈ iniziato l\'evento Arena Portal con ricompense doppie! Ecco tutti i dettagli:\n\n🏆 Ricompense doppie per tutti i livelli dell\'arena\n⚔️ Nuove skin esclusive disponibili\n💎 Bonus gemme per i primi 100 classificati\n⏰ L\'evento durerà fino al 15 di questo mese\n\nNon perdete questa occasione unica! Buona fortuna a tutti!',
-                        author: 'GameMaster',
-                        createdAt: Date.now() - 2*60*60*1000,
-                        replies: 45,
-                        views: 234,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'evt2', 
-                        title: 'Torneo dei Clan - Iscrizioni Aperte',
-                        content: 'Attenzione tutti i clan leader!\n\nSono aperte le iscrizioni per il Grande Torneo dei Clan di questa stagione.\n\n📅 Data: Dal 20 al 27 di questo mese\n🏰 Modalità: Eliminazione diretta\n🎖️ Premi: Corone clan, risorse speciali e titoli esclusivi\n📝 Iscrizioni: Fino al 18 di questo mese\n\nPer iscriversi, il clan deve avere almeno 20 membri attivi.\nMaggiori dettagli nel forum ufficiale!',
-                        author: 'ClanLeader99',
-                        createdAt: Date.now() - 5*60*60*1000,
-                        replies: 23,
-                        views: 156,
-                        status: 'approved'
-                    }
-                ],
-                'oggetti': [
-                    {
-                        id: 'obj1',
-                        title: 'Guida alle Gemme Leggendarie',
-                        content: 'Guida completa alle gemme leggendarie e come ottenerle!\n\n💎 TIPI DI GEMME LEGGENDARIE:\n\n🔴 Rubino del Potere\n- Aumenta l\'attacco del 15%\n- Si ottiene: Arena Champion, eventi speciali\n\n🔵 Zaffiro della Difesa\n- Aumenta HP del 20%\n- Si ottiene: Dungeon Master, ricompense clan\n\n🟢 Smeraldo della Velocità\n- Aumenta velocità attacco del 10%\n- Si ottiene: Gara settimanale, shop premium\n\n⚡ CONSIGLI PER L\'UPGRADE:\n1. Upgrada sempre una gemma alla volta\n2. Usa gemme minori per potenziare\n3. Non vendere mai gemme leggendarie!\n\nBuona caccia alle gemme! 💪',
-                        author: 'ProPlayer123',
-                        createdAt: Date.now() - 24*60*60*1000,
-                        replies: 67,
-                        views: 445,
-                        status: 'approved'
-                    }
+                'eventi': [   
                 ],
                 'novita': [
-                    {
-                        id: 'nov1',
-                        title: 'Update 1.45.2 - Nuove Funzionalità!',
-                        content: '🎉 NOVITÀ MAJOR UPDATE 1.45.2!\n\n✨ NUOVE FUNZIONALITÀ:\n\n🏰 Nuova Stanza: Sala del Trono\n- Aumenta il morale di tutto il castello\n- Sbloccabile al livello TR9\n- Nuove decorazioni esclusive\n\n⚔️ Nuove Armi Leggendarie:\n- Spada dell\'Alba Eterna\n- Arco delle Tempeste\n- Bastone del Mago Supremo\n\n🛡️ Sistema di Artigianato Migliorato:\n- Interfaccia più intuitiva\n- Tempi di creazione ridotti del 25%\n- Nuove ricette segrete\n\n🔧 CORREZIONI:\n- Risolto bug delle notifiche\n- Migliorata la stabilità in PvP\n- Ottimizzate le prestazioni\n\nL\'update è già disponibile! Aggiornate subito!',
-                        author: 'DevTeam',
-                        createdAt: Date.now() - 60*60*1000,
-                        replies: 89,
-                        views: 567,
-                        status: 'approved'
-                    }
                 ]
             };
             return examples[section] || [];
@@ -1383,80 +1368,15 @@
         function getExampleClanThreads(section, clanName) {
             const examples = {
                 'clan-war': [
-                    {
-                        id: 'war1',
-                        title: `Strategia vs Clan "Nemici Giurati"`,
-                        content: `Compagni del clan ${clanName}!\n\nAbbiamo la guerra contro i "Nemici Giurati" questo weekend. Ecco la strategia:\n\n⚔️ FORMAZIONE CONSIGLIATA:\n- Tank: Livello 70+\n- DPS: Arciere + Mago\n- Support: Resurrezione\n\n🎯 OBIETTIVI PRIORITARI:\n1. Attaccare sempre i castelli più deboli prima\n2. Coordinarsi in chat prima di ogni attacco\n3. Salvare gli attacchi migliori per la fine\n\n📊 STATISTICHE NEMICI:\n- Potenza media: 450K\n- Punti deboli: Difese magiche\n- Attenzione ai loro top 3 giocatori\n\nSiamo pronti per la vittoria! 🏆`,
-                        author: `Leader${clanName.replace(' ', '')}`,
-                        createdAt: Date.now() - 30*60*1000,
-                        replies: 12,
-                        views: 78,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'war2',
-                        title: 'Preparazione per la Guerra di Domenica',
-                        content: `Guerra importante domenica!\n\nTutti devono essere pronti:\n\n✅ CHECKLIST PRE-GUERRA:\n- Truppe al massimo livello\n- Equipaggiamento riparato\n- Risorse sufficienti per revive\n- Controllare formazione ottimale\n\n🕐 ORARI ATTACCO:\n- Fase 1: 14:00-16:00\n- Fase 2: 18:00-20:00\n- Fase finale: 21:00-22:00\n\nChi non può partecipare deve avvisare in chat!`,
-                        author: 'StrategiaMaster',
-                        createdAt: Date.now() - 2*60*60*1000,
-                        replies: 8,
-                        views: 45,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'war3',
-                        title: 'Nuova Tattica di Attacco - Serve Approvazione',
-                        content: `Ho sviluppato una nuova tattica che potrebbe funzionare:\n\n💡 IDEA:\nUsare tutti tank nella prima ondata per assorbire danni, poi attaccare con DPS puri nella seconda ondata quando le loro difese sono in cooldown.\n\n🤔 COSA NE PENSATE?\n- Pro: Massimo danno nella seconda fase\n- Contro: Richiede coordinazione perfetta\n\nVorrei testarlo nella prossima guerra minore. Moderatori, cosa ne dite?`,
-                        author: 'NewWarrior',
-                        createdAt: Date.now() - 15*60*1000,
-                        replies: 0,
-                        views: 2,
-                        status: 'pending'
-                    }
                 ],
                 'clan-premi': [
-                    {
-                        id: 'prize1',
-                        title: 'Distribuzione Ricompense Settimanali',
-                        content: `🏆 RICOMPENSE SETTIMANALI DISTRIBUITE!\n\n📊 RISULTATI QUESTA SETTIMANA:\n- Posizione clan: 15°\n- Punti totali: 125,840\n- Partecipazione: 85%\n\n🎁 PREMI ASSEGNATI:\n- 1° posto attività: 500 gemme\n- 2° posto attività: 300 gemme  \n- 3° posto attività: 200 gemme\n- Tutti i partecipanti: 50 gemme\n\n⭐ TOP PERFORMERS:\n1. WarriorKing - 15,200 punti\n2. MagicMaster - 12,800 punti\n3. DefenderPro - 11,500 punti\n\nComplimenti a tutti! La settimana prossima puntiamo al top 10! 💪`,
-                        author: `Leader${clanName.replace(' ', '')}`,
-                        createdAt: Date.now() - 24*60*60*1000,
-                        replies: 15,
-                        views: 89,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'prize2',
-                        title: 'Proposta: Torneo Interno del Clan',
-                        content: `Ciao a tutti!\n\nPropongo di organizzare un torneo interno al clan per animare un po' le cose:\n\n🎯 FORMATO PROPOSTO:\n- Eliminazione diretta\n- Bracket da 16 giocatori\n- Match settimanali\n- Finale con spettatori\n\n🏆 PREMI PROPOSTI:\n- 1° posto: 1000 gemme + titolo\n- 2° posto: 500 gemme\n- 3° posto: 250 gemme\n- Partecipazione: 50 gemme\n\n💰 COSTI:\nPotremmo usare parte del tesoro del clan o fare una piccola quota di iscrizione.\n\nChe ne dite? Chi sarebbe interessato?`,
-                        author: 'TournamentFan',
-                        createdAt: Date.now() - 45*60*1000,
-                        replies: 0,
-                        views: 5,
-                        status: 'pending'
-                    }
+                   
                 ],
                 'clan-consigli': [
-                    {
-                        id: 'tip1',
-                        title: 'Guida: Migliori Formazioni per TR8',
-                        content: `📚 GUIDA COMPLETA FORMAZIONI TR8\n\n🏰 SETUP CASTLE:\n- Throne Room: Livello 8\n- Caserma: 6 slot truppe\n- Equipaggiamento: Tier 8\n\n⚔️ FORMAZIONE PVP:\n1. Tank: Spadaccino pesante (100K+ HP)\n2. DPS: Arciere critico (80K+ attacco)\n3. DPS: Mago elementale (70K+ spell power)\n4. Support: Resurrezione + Heal\n5. DPS: Assassino (velocità max)\n6. Tank: Paladino (difesa magica)\n\n🎯 ARTEFATTI CONSIGLIATI:\n- Spada: +15% attacco\n- Armatura: +20% HP\n- Amuleto: +10% velocità\n\n💡 TRUCCHI:\n- Aggiorna sempre le gemme\n- Bilancia attacco e difesa\n- Non trascurare la velocità\n\nTr8 è un livello cruciale, fate attenzione agli upgrade!`,
-                        author: 'VeteranWarrior',
-                        createdAt: Date.now() - 12*60*60*1000,
-                        replies: 24,
-                        views: 156,
-                        status: 'approved'
-                    },
-                    {
-                        id: 'tip2',
-                        title: 'Consigli per Principianti - Da Verificare',
-                        content: `Salve! Sono nuovo del clan e volevo condividere alcuni consigli che ho imparato:\n\n📝 CONSIGLI BASE:\n1. Aggiornate sempre la cucina prima di tutto\n2. Non spendete gemme per accelerare\n3. Fate sempre la quest giornaliera\n4. Salvate le risorse per gli upgrade importanti\n\n🤔 DOMANDE:\n- È meglio concentrarsi su un tipo di truppa o diversificare?\n- Quando conviene cambiare Throne Room?\n- Quali eventi sono più importanti per i nuovi?\n\nSo che sono consigli basic, ma magari possono aiutare altri nuovi membri. Correggete se sbaglio qualcosa!`,
-                        author: 'NewHelper',
-                        createdAt: Date.now() - 20*60*1000,
-                        replies: 0,
-                        views: 3,
-                        status: 'pending'
-                    }
+                
+                ],
+				'clan-bacheca': [
+                
                 ]
             };
             return examples[section] || [];
@@ -1465,24 +1385,7 @@
         function getExampleMessages(section) {
             const examples = {
                 'chat-generale': [
-                    {
-                        id: 'msg1',
-                        author: 'PlayerOne',
-                        message: 'Qualcuno sa quando esce il prossimo evento?',
-                        timestamp: Date.now() - 30*60*1000
-                    },
-                    {
-                        id: 'msg2',
-                        author: 'CastleKing', 
-                        message: 'Dovrebbe essere la prossima settimana!',
-                        timestamp: Date.now() - 25*60*1000
-                    },
-                    {
-                        id: 'msg3',
-                        author: 'NoobSlayer',
-                        message: 'Ho appena ottenuto una spada leggendaria! 🗡️',
-                        timestamp: Date.now() - 20*60*1000
-                    }
+                   
                 ]
             };
             return examples[section] || [];
@@ -2119,7 +2022,7 @@
         // Ottieni thread in attesa per un clan
         async function getPendingThreadsForClan(clanName) {
             const pendingThreads = [];
-            const clanSections = ['clan-war', 'clan-premi', 'clan-consigli'];
+            const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
             
             for (const section of clanSections) {
                 try {
