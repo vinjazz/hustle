@@ -1298,205 +1298,7 @@ body::before {
     50% { opacity: 0.5; }
 }
 
-/* RESPONSIVE DESIGN */
-@media (max-width: 1024px) {
-    .forum-header,
-    .thread-item {
-        grid-template-columns: 1fr 80px 100px 150px;
-    }
-    
-    .main-content {
-        padding: 1rem;
-    }
-}
 
-@media (max-width: 768px) {
-    .mobile-menu-toggle {
-        display: block;
-    }
-    
-    .sidebar {
-        width: 100%;
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-    }
-    
-    .sidebar.open {
-        transform: translateX(0);
-    }
-    
-    .main-content {
-        margin-left: 0;
-        padding: 1rem;
-        padding-top: 80px;
-    }
-    
-    .connection-status {
-        top: 80px;
-        right: 10px;
-    }
-    
-    .message-counter {
-        top: 80px;
-        right: 160px;
-    }
-    
-    .notifications-bell {
-        top: 80px;
-        right: 220px;
-    }
-    
-    .banner-title {
-        font-size: 2rem;
-    }
-    
-    .content-area {
-        padding: 1rem;
-    }
-    
-    .forum-header {
-        display: none;
-    }
-    
-    .thread-item {
-        grid-template-columns: 1fr;
-        gap: 0;
-    }
-    
-    .thread-stats-mobile {
-        display: flex;
-    }
-    
-    .thread-replies,
-    .thread-stats,
-    .thread-last-post {
-        display: none;
-    }
-    
-    .new-thread-btn {
-        bottom: 1rem;
-        right: 1rem;
-    }
-    
-    .thread-creation-form,
-    .login-form {
-        margin: 1rem;
-        width: calc(100% - 2rem);
-    }
-    
-    .users-grid,
-    .clan-list {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 480px) {
-    .banner {
-        padding: 2rem 1rem;
-    }
-    
-    .banner-title {
-        font-size: 1.5rem;
-    }
-    
-    .header h2 {
-        font-size: 1.5rem;
-    }
-    
-    .thread-header h1 {
-        font-size: 1.5rem;
-    }
-    
-    .chat-input {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .chat-input button {
-        width: 100%;
-    }
-}
-
-/* SCROLLBAR CUSTOMIZATION */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--primary-dark);
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--gradient-primary);
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--gradient-secondary);
-}
-
-/* UTILITY ANIMATIONS */
-.fade-in {
-    animation: fadeIn 0.5s ease-in;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* DARK THEME ENHANCEMENTS */
-input::placeholder,
-textarea::placeholder {
-    color: var(--text-muted);
-    opacity: 0.8;
-}
-
-button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none !important;
-}
-
-/* FOCUS STYLES FOR ACCESSIBILITY */
-button:focus,
-input:focus,
-textarea:focus,
-.nav-item:focus {
-    outline: 2px solid var(--accent-4);
-    outline-offset: 2px;
-}
-
-/* LOADING STATES */
-.btn-primary:disabled,
-.btn-create-thread:disabled {
-    background: var(--text-muted);
-    cursor: not-allowed;
-}
-
-/* ADDITIONAL MODERN TOUCHES */
-.thread-item::before,
-.user-card::before,
-.clan-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--gradient-secondary);
-    border-radius: 15px 15px 0 0;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.thread-item:hover::before,
-.user-card:hover::before,
-.clan-card:hover::before {
-    opacity: 1;
-}
 
 
 /* RESPONSIVE DESIGN */
@@ -1623,4 +1425,112 @@ textarea:focus,
         max-width: 100%;
         box-sizing: border-box;
     }
+}
+
+@media (max-width: 480px) {
+    .banner {
+        padding: 2rem 1rem;
+    }
+    
+    .banner-title {
+        font-size: 1.5rem;
+    }
+    
+    .header h2 {
+        font-size: 1.5rem;
+    }
+    
+    .thread-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .chat-input {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .chat-input button {
+        width: 100%;
+    }
+}
+
+/* SCROLLBAR CUSTOMIZATION */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--primary-dark);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gradient-primary);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--gradient-secondary);
+}
+
+/* UTILITY ANIMATIONS */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* DARK THEME ENHANCEMENTS */
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* FOCUS STYLES FOR ACCESSIBILITY */
+button:focus,
+input:focus,
+textarea:focus,
+.nav-item:focus {
+    outline: 2px solid var(--accent-4);
+    outline-offset: 2px;
+}
+
+/* LOADING STATES */
+.btn-primary:disabled,
+.btn-create-thread:disabled {
+    background: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* ADDITIONAL MODERN TOUCHES */
+.thread-item::before,
+.user-card::before,
+.clan-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--gradient-secondary);
+    border-radius: 15px 15px 0 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.thread-item:hover::before,
+.user-card:hover::before,
+.clan-card:hover::before {
+    opacity: 1;
 }
