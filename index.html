@@ -1120,7 +1120,7 @@ const appCheck = initializeAppCheck(app, {
                     await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
                         username: username,
                         email: email,
-                        clan:  'Nessuno',
+                        //clan:  'Nessuno',
                         role: userRole,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
