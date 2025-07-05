@@ -1298,6 +1298,233 @@ body::before {
     50% { opacity: 0.5; }
 }
 
+/* IMAGE UPLOAD STYLES */
+.image-upload-section {
+    margin: 15px 0;
+    padding: 15px;
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    transition: all 0.3s ease;
+}
+
+.image-upload-section:hover {
+    border-color: var(--accent-2);
+    background: rgba(83, 52, 131, 0.05);
+}
+
+.image-upload-label {
+    display: inline-block;
+    background: var(--gradient-secondary);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    border: none;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.image-upload-label:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(45, 130, 181, 0.4);
+}
+
+.image-upload-input {
+    display: none;
+}
+
+.image-preview {
+    margin-top: 10px;
+    position: relative;
+    max-width: 100%;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 200px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.05);
+    display: block;
+    margin: 0 auto;
+}
+
+.remove-image {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: var(--gradient-danger);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.remove-image:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+}
+
+.upload-progress {
+    margin-top: 10px;
+    display: none;
+}
+
+
+/* THREAD AND COMMENT IMAGES */
+.thread-image, .comment-image {
+    margin: 15px 0;
+    text-align: center;
+}
+
+.thread-image img, .comment-image img {
+    max-width: 100%;
+    max-height: 400px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.thread-image img:hover, .comment-image img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    border-color: var(--accent-2);
+}
+
+/* IMAGE MODAL */
+.image-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    cursor: pointer;
+}
+
+.image-modal img {
+    max-width: 95%;
+    max-height: 95%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 10px;
+    cursor: default;
+}
+
+.close-modal {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 2001;
+    transition: all 0.3s ease;
+}
+
+.close-modal:hover {
+    color: var(--accent-4);
+    transform: scale(1.1);
+}
+
+
+/* COMMENT INPUT IMAGE UPLOAD */
+.comment-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.comment-input-main {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.comment-textarea-container {
+    flex: 1;
+    position: relative;
+}
+
+.comment-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-end;
+}
+
+.comment-image-upload {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    display: none;
+}
+
+.comment-image-upload.show {
+    display: block;
+}
+
+.comment-image-upload .image-upload-label {
+    font-size: 12px;
+    padding: 8px 16px;
+    margin-bottom: 8px;
+}
+
+.comment-image-upload .image-preview img {
+    max-height: 150px;
+}
+
+/* SMALL IMAGE UPLOAD BUTTON */
+.small-upload-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    min-width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.small-upload-btn:hover {
+    background: var(--hover-bg);
+    border-color: var(--accent-2);
+    color: var(--accent-2);
+}
+
 /* RESPONSIVE DESIGN */
 @media (max-width: 1024px) {
     .forum-header,
@@ -1388,6 +1615,59 @@ body::before {
     .clan-list {
         grid-template-columns: 1fr;
     }
+    
+    /* Mobile Image Styles */
+    .thread-image img, .comment-image img {
+        max-width: 100%;
+        max-height: 250px;
+        width: auto;
+        height: auto;
+    }
+    
+    .image-preview img {
+        max-width: 100%;
+        max-height: 150px;
+    }
+    
+    .comment-input-main {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .comment-controls {
+        align-items: stretch;
+        width: 100%;
+    }
+    
+    .comment-controls > div:first-child {
+        justify-content: center;
+    }
+    
+    .image-modal img {
+        max-width: 95%;
+        max-height: 85%;
+        margin-top: 5%;
+    }
+    
+    .close-modal {
+        font-size: 30px;
+        top: 10px;
+        right: 15px;
+    }
+    
+    /* Thread creation mobile styles */
+    .thread-creation-form .image-preview img {
+        max-height: 120px;
+    }
+    
+    /* Dashboard mobile adjustments */
+    .dashboard-card {
+        padding: 15px;
+    }
+    
+    .dashboard-card div[style*="font-size: 32px"] {
+        font-size: 24px !important;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1415,8 +1695,79 @@ body::before {
     .chat-input button {
         width: 100%;
     }
+    
+    /* Ultra mobile image optimizations */
+    .thread-image img, .comment-image img {
+        max-width: 100%;
+        max-height: 200px;
+        object-fit: contain;
+    }
+    
+    .image-preview img {
+        max-width: 100%;
+        max-height: 120px;
+    }
+    
+    .comment-input-main {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .comment-controls {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .comment-controls > div:first-child {
+        justify-content: flex-start;
+    }
+    
+    .image-modal img {
+        max-width: 90%;
+        max-height: 80%;
+        margin-top: 10%;
+    }
+    
+    .close-modal {
+        font-size: 24px;
+        top: 5px;
+        right: 10px;
+    }
+    
+    /* Smaller upload buttons on mobile */
+    .small-upload-btn {
+        min-width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .emoticon-btn {
+        padding: 6px;
+        font-size: 14px;
+    }
+    
+    /* More compact comment image upload */
+    .comment-image-upload .image-upload-label {
+        font-size: 11px;
+        padding: 6px 12px;
+    }
+    
+    .comment-image-upload .image-preview img {
+        max-height: 100px;
+    }
+    
+    /* Thread creation mobile optimizations */
+    .thread-creation-form .image-preview img {
+        max-height: 100px;
+    }
+    
+    .remove-image {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+    }
 }
-
 /* SCROLLBAR CUSTOMIZATION */
 ::-webkit-scrollbar {
     width: 8px;
