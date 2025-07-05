@@ -271,7 +271,7 @@
         <div class="nav-section">
             <div class="nav-title">🏠 Home</div>
             <div class="nav-item active" data-section="home">
-                <span>🏠 Dashboard</span>
+                <span> Dashboard</span>
             </div>
         </div>
 
@@ -288,6 +288,9 @@
             </div>
             <div class="nav-item" data-section="chat-generale">
                 <span>💬 Chat Generale</span>
+            </div>
+			<div class="nav-item" data-section="associa-clan">
+                <span>🏠 Associa Clan</span>
             </div>
         </div>
 
@@ -659,6 +662,11 @@
                 title: '💬 Chat Generale',
                 description: 'Chiacchiere libere tra tutti i giocatori',
                 type: 'chat'
+            },
+			'associa-clan': {
+                title: '🏠 Associa Clan',
+                description: 'Richiedi di essere associato ad un clan',
+                type: 'forum'
             },
             'admin-users': {
                 title: '👥 Gestione Utenti',
@@ -1515,7 +1523,7 @@
             }
             
             // Aggiungi thread di esempio per sezioni generali se non esistono
-            const sections = ['eventi', 'oggetti', 'novita'];
+            const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
             sections.forEach(section => {
                 const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
                 if (threads.length === 0) {
@@ -1876,6 +1884,11 @@
                                 <h4 style="margin-bottom: 8px;">Novità</h4>
                                 <p style="font-size: 12px; opacity: 0.9;">Ultimi aggiornamenti</p>
                             </div>
+							<div class="dashboard-card" onclick="switchSection('novita')" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;"> 🏠</div>
+                                <h4 style="margin-bottom: 8px;">Associa Clan</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Richiedi di associarti ad un clan</p>
+                            </div>
                             <div class="dashboard-card" onclick="switchSection('chat-generale')" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
                                 <div style="font-size: 32px; margin-bottom: 10px;">💬</div>
                                 <h4 style="margin-bottom: 8px;">Chat</h4>
@@ -1932,6 +1945,10 @@
                                 <div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
                                     <strong style="color: #d68910; font-size: 14px;">📢 Rimani Aggiornato</strong>
                                     <p style="color: #666; font-size: 12px; margin-top: 4px;">Controlla regolarmente le Novità</p>
+                                </div>
+								<div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
+                                    <strong style="color: #d68910; font-size: 14px;">📢 Unisciti ad un clan</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Cerca il tuo clan per e unisciti al gruppo</p>
                                 </div>
                             </div>
                         </div>
@@ -2048,7 +2065,7 @@
                     };
                 } else {
                     // Modalità locale - conta i dati reali
-                    const sections = ['eventi', 'oggetti', 'novita'];
+                    const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
                     sections.forEach(section => {
                         const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
                         totalThreads += threads.length;
