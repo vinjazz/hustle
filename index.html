@@ -3375,7 +3375,7 @@ function displayThreadComments(comments) {
 				return;
 			}
 
-			const commentBtn = document.querySelector('.comment-input button');
+			const commentBtn = document.getElementById('submit-comment-btn');
 			const progressContainer = document.getElementById('comment-upload-progress');
 			
 			commentBtn.disabled = true;
@@ -3855,12 +3855,26 @@ function toggleCommentImageUpload() {
     const uploadSection = document.getElementById('comment-image-upload');
     const isVisible = uploadSection.classList.contains('show');
     
+    console.log('📷 Toggle upload commento, visibile:', isVisible);
+    
     if (isVisible) {
         uploadSection.classList.remove('show');
         removeCommentSelectedImage();
+        console.log('📷 Sezione upload nascosta');
     } else {
         uploadSection.classList.add('show');
-        setupCommentImageUpload();
+        setupCommentImageUploadImmediate();
+        console.log('📷 Sezione upload mostrata e configurata');
+    }
+}
+
+function setupCommentImageUploadImmediate() {
+    const imageInput = document.getElementById('comment-image-input');
+    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+    
+    if (imageInput && imageLabel) {
+        imageInput.addEventListener('change', handleCommentImageSelect);
+        imageLabel.addEventListener('click', () => imageInput.click());
     }
 }
 
@@ -3869,22 +3883,33 @@ function setupCommentImageUpload() {
     const imageInput = document.getElementById('comment-image-input');
     const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
     
-    // Remove existing listeners
-    imageInput.removeEventListener('change', handleCommentImageSelect);
-    imageLabel.removeEventListener('click', () => imageInput.click());
-    
-    // Add new listeners
-    imageInput.addEventListener('change', handleCommentImageSelect);
-    imageLabel.addEventListener('click', () => imageInput.click());
+    if (imageInput && imageLabel) {
+        try {
+            imageInput.removeEventListener('change', handleCommentImageSelect);
+            imageLabel.removeEventListener('click', () => imageInput.click());
+        } catch (e) {
+            // Ignora errori se i listener non esistevano
+        }
+        
+        imageInput.addEventListener('change', handleCommentImageSelect);
+        imageLabel.addEventListener('click', () => imageInput.click());
+    }
 }
 
 // Handle comment image selection
 function handleCommentImageSelect(event) {
+	console.log('🖼️ Selezione immagine commento avviata');
+    
     const file = event.target.files[0];
     const preview = document.getElementById('comment-image-preview');
     const progressContainer = document.getElementById('comment-upload-progress');
     
-    if (!file) return;
+     if (!file) {
+        console.log('❌ Nessun file selezionato');
+        return;
+    }
+    
+    console.log('📁 File selezionato:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
