@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hustle Castle Forum</title>
+    <title>🏰 Hustle Castle Council</title>
     <!-- reCAPTCHA con callback personalizzato -->
     <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
     
@@ -213,7 +213,7 @@
 
     <div class="sidebar">
         <div class="logo">
-            <h1>🏰 Hustle Castle</h1>
+            <h1>🏰 Hustle Castle Council</h1>
         </div>
         
         <div class="user-info">
@@ -288,14 +288,14 @@
         <!-- Banner Hero -->
         <div class="banner">
             <div class="banner-content">
-                <div class="banner-title">⚔️ Hustle Castle ⚔️</div>
+                <div class="banner-title">⚔️ Hustle Castle Council ⚔️</div>
                 <div class="banner-subtitle">Il Forum Ufficiale della Community</div>
             </div>
         </div>
 
         <div class="header">
             <h2 id="section-title">🏠 Dashboard</h2>
-            <p id="section-description">Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità</p>
+            <p id="section-description">Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità</p>
         </div>
 
         <div class="content-area">
@@ -577,12 +577,12 @@
         const sectionConfig = {
             'home': {
                 title: '🏠 Dashboard',
-                description: 'Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità',
+                description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
                 type: 'dashboard'
             },
             'eventi': {
                 title: '📅 Eventi',
-                description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle',
+                description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle Council',
                 type: 'forum'
             },
             'oggetti': {
@@ -1751,7 +1751,7 @@
                             ${welcomeMessage}, ${userName}! ${roleDisplay}
                         </h2>
                         <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
-                            Benvenuto nel forum ufficiale di Hustle Castle! Qui puoi discutere strategie, 
+                            Benvenuto nel forum ufficiale di Hustle Castle Council! Qui puoi discutere strategie, 
                             condividere esperienze e rimanere aggiornato sugli ultimi eventi del gioco.
                         </p>
                         ${userClan !== 'Nessuno' ? `
@@ -2850,6 +2850,32 @@
             document.getElementById('thread-image-input').value = '';
             document.getElementById('image-preview').innerHTML = '';
             document.getElementById('upload-progress').style.display = 'none';
+        }
+		
+		 // Update upload progress
+        function updateUploadProgress(progress) {
+            const progressContainer = document.getElementById('upload-progress');
+            const progressPercent = Math.round(progress);
+            
+            progressContainer.innerHTML = `
+                <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
+                        <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
+                    </div>
+                </div>
+            `;
+            progressContainer.style.display = 'block';
+            
+            // Nascondi il progresso quando completato
+            if (progress >= 100) {
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1000);
+            }
         }
 
         // Nascondi modal creazione thread
