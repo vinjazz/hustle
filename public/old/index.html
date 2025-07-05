@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hustle Castle Forum</title>
+    <title>🏰 Hustle Castle Council</title>
     <!-- reCAPTCHA con callback personalizzato -->
     <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
     
@@ -13,6 +13,7 @@
         import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
         import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
         
         // 🔥 CONFIGURAZIONE FIREBASE - INIZIALIZZAZIONE SINGOLA
         const firebaseConfig = {
@@ -28,17 +29,24 @@
         // Inizializza Firebase UNA SOLA VOLTA
         let useFirebase = true;
         let app = null;
+        let appCheckEnabled = false;
         
         try {
             app = initializeApp(firebaseConfig);
             console.log('🔥 Firebase inizializzato con successo');
             
-            // Inizializza App Check con reCaptcha V3 per la protezione automatica
-            const appCheck = initializeAppCheck(app, {
-                provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
-                isTokenAutoRefreshEnabled: true
-            });
-            console.log('🛡️ App Check inizializzato');
+            // Prova ad inizializzare App Check, ma non bloccare se fallisce
+            try {
+                const appCheck = initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+                    isTokenAutoRefreshEnabled: true
+                });
+                appCheckEnabled = true;
+                console.log('🛡️ App Check inizializzato');
+            } catch (appCheckError) {
+                console.warn('⚠️ App Check non disponibile:', appCheckError.message);
+                console.log('📝 Il forum funzionerà senza App Check');
+            }
             
         } catch (error) {
             console.error('❌ Errore inizializzazione Firebase:', error);
@@ -48,13 +56,16 @@
         
         const auth = useFirebase ? getAuth(app) : null;
         const database = useFirebase ? getDatabase(app) : null;
+        const storage = useFirebase ? getStorage(app) : null;
         const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
         
         // Esponi Firebase globalmente per compatibilità
         window.firebaseApp = app;
         window.firebaseAuth = auth;
         window.firebaseDatabase = database;
+        window.firebaseStorage = storage;
         window.useFirebase = useFirebase;
+        window.appCheckEnabled = appCheckEnabled;
         window.firebaseImports = {
             signInWithEmailAndPassword,
             createUserWithEmailAndPassword,
@@ -72,45 +83,81 @@
             serverTimestamp,
             onDisconnect,
             child,
-            update
+            update,
+            storageRef,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
         };
         window.googleProvider = googleProvider;
         
-        // 🤖 FUNZIONI reCAPTCHA
+        // 🤖 FUNZIONI reCAPTCHA - GESTIONE MIGLIORATA
+        let recaptchaRendered = false;
+        
         window.verifyRecaptcha = function() {
+            if (!recaptchaRendered || typeof grecaptcha === 'undefined') {
+                return true; // Permetti se reCAPTCHA non disponibile
+            }
             const recaptchaResponse = grecaptcha.getResponse();
             return recaptchaResponse && recaptchaResponse.length > 0;
         };
         
         window.resetRecaptcha = function() {
-            if (typeof grecaptcha !== 'undefined') {
-                grecaptcha.reset();
+            if (recaptchaRendered && typeof grecaptcha !== 'undefined') {
+                try {
+                    grecaptcha.reset();
+                } catch (error) {
+                    console.log('Reset reCAPTCHA ignorato:', error.message);
+                }
             }
         };
 
-        // Render reCAPTCHA quando è pronto
+        // Render reCAPTCHA quando è pronto - CON CONTROLLO DOPPIO RENDERING
         window.onRecaptchaLoad = function() {
-            if (window.useFirebase && typeof grecaptcha !== 'undefined') {
+            if (!window.useFirebase || !appCheckEnabled) {
+                console.log('🤖 reCAPTCHA disabilitato - App Check non attivo');
+                return;
+            }
+            
+            if (recaptchaRendered) {
+                console.log('🤖 reCAPTCHA già renderizzato, skip');
+                return;
+            }
+            
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
                 try {
-                    grecaptcha.render('recaptcha-container', {
-                        'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
-                        'theme': 'dark',
-                        'size': 'normal'
-                    });
-                    console.log('✅ reCAPTCHA renderizzato');
+                    const container = document.getElementById('recaptcha-container');
+                    if (container && container.innerHTML === '') {
+                        grecaptcha.render('recaptcha-container', {
+                            'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
+                            'theme': 'dark',
+                            'size': 'normal'
+                        });
+                        recaptchaRendered = true;
+                        console.log('✅ reCAPTCHA renderizzato');
+                    }
                 } catch (error) {
-                    console.error('❌ Errore rendering reCAPTCHA:', error);
+                    console.log('⚠️ reCAPTCHA già presente o errore:', error.message);
                 }
             }
         };
         
-        // Carica reCAPTCHA quando Google reCAPTCHA è pronto
+        // Carica reCAPTCHA quando Google reCAPTCHA è pronto - SOLO SE NECESSARIO
         window.addEventListener('load', () => {
+            if (!window.useFirebase || !appCheckEnabled) {
+                // Nascondi reCAPTCHA se App Check non è attivo
+                const container = document.getElementById('recaptcha-container');
+                if (container) {
+                    container.parentElement.style.display = 'none';
+                }
+                return;
+            }
+            
             // Controlla periodicamente se reCAPTCHA è disponibile
             const checkRecaptcha = () => {
-                if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
+                if (typeof grecaptcha !== 'undefined' && grecaptcha.render && !recaptchaRendered) {
                     setTimeout(window.onRecaptchaLoad, 100);
-                } else {
+                } else if (!recaptchaRendered) {
                     setTimeout(checkRecaptcha, 500);
                 }
             };
@@ -206,7 +253,7 @@
 
     <div class="sidebar">
         <div class="logo">
-            <h1>🏰 Hustle Castle</h1>
+            <h1>🏰 Hustle Castle Council</h1>
         </div>
         
         <div class="user-info">
@@ -224,7 +271,7 @@
         <div class="nav-section">
             <div class="nav-title">🏠 Home</div>
             <div class="nav-item active" data-section="home">
-                <span>🏠 Dashboard</span>
+                <span> Dashboard</span>
             </div>
         </div>
 
@@ -241,6 +288,9 @@
             </div>
             <div class="nav-item" data-section="chat-generale">
                 <span>💬 Chat Generale</span>
+            </div>
+			<div class="nav-item" data-section="associa-clan">
+                <span>🏠 Associa Clan</span>
             </div>
         </div>
 
@@ -281,14 +331,14 @@
         <!-- Banner Hero -->
         <div class="banner">
             <div class="banner-content">
-                <div class="banner-title">⚔️ Hustle Castle ⚔️</div>
+                <div class="banner-title">⚔️ Hustle Castle Council ⚔️</div>
                 <div class="banner-subtitle">Il Forum Ufficiale della Community</div>
             </div>
         </div>
 
         <div class="header">
             <h2 id="section-title">🏠 Dashboard</h2>
-            <p id="section-description">Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità</p>
+            <p id="section-description">Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità</p>
         </div>
 
         <div class="content-area">
@@ -365,42 +415,59 @@
                         </div>
                     </div>
                     
+                    
                     <div class="comment-input">
-                        <div style="display: flex; align-items: flex-end; gap: 10px;">
-                            <div style="flex: 1;">
-                                <textarea id="comment-text" placeholder="Scrivi un commento..."></textarea>
-                            </div>
-                            <div style="display: flex; flex-direction: column; gap: 5px;">
-                                <div class="emoticon-picker">
-                                    <button class="emoticon-btn" onclick="toggleEmoticonPicker('comment')">😊</button>
-                                    <div class="emoticon-panel" id="comment-emoticon-panel">
-                                        <div class="emoticon-grid">
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '😊')">😊</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '😂')">😂</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🎉')">🎉</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '❤️')">❤️</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '👍')">👍</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '👎')">👎</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🔥')">🔥</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '💪')">💪</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🎯')">🎯</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '⚔️')">⚔️</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🏰')">🏰</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🛡️')">🛡️</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🏆')">🏆</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '💎')">💎</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '⭐')">⭐</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🚀')">🚀</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '💯')">💯</button>
-                                            <button class="emoticon-item" onclick="addEmoticon('comment', '🤔')">🤔</button>
+                        <div class="comment-input-container">
+                            <div class="comment-input-main">
+                                <div class="comment-textarea-container">
+                                    <textarea id="comment-text" placeholder="Scrivi un commento..."></textarea>
+                                </div>
+                                <div class="comment-controls">
+                                    <div class="comment-buttons-row">
+                                        <button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
+                                        <div class="emoticon-picker">
+                                            <button class="emoticon-btn" onclick="toggleEmoticonPicker('comment')">😊</button>
+                                            <div class="emoticon-panel" id="comment-emoticon-panel">
+                                                <div class="emoticon-grid">
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😊')">😊</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😂')">😂</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎉')">🎉</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '❤️')">❤️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👍')">👍</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👎')">👎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🔥')">🔥</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💪')">💪</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎯')">🎯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⚔️')">⚔️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏰')">🏰</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🛡️')">🛡️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏆')">🏆</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💎')">💎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⭐')">⭐</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🚀')">🚀</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💯')">💯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🤔')">🤔</button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
+                                    <button id="submit-comment-btn" onclick="addComment()" class="submit-comment-btn">Commenta</button>
                                 </div>
-                                <button onclick="addComment()" style="padding: 10px 20px; background: linear-gradient(45deg, #DAA520, #B8860B); border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer;">Commenta</button>
+                            </div>
+                            
+                            <!-- Image Upload Section for Comments -->
+                            <div id="comment-image-upload" class="comment-image-upload">
+                                <label for="comment-image-input" class="image-upload-label">
+                                    📷 Seleziona Immagine
+                                </label>
+                                <input type="file" id="comment-image-input" accept="image/*" class="image-upload-input" />
+                                <div id="comment-image-preview" class="image-preview"></div>
+                                <div id="comment-upload-progress" class="upload-progress"></div>
                             </div>
                         </div>
                     </div>
-                </div>
+				
+				</div>
             </div>
         </div>
     </div>
@@ -415,11 +482,27 @@
             <input type="text" id="thread-title-input" placeholder="Titolo del thread *" />
             <textarea id="thread-content-input" placeholder="Contenuto del thread *"></textarea>
             
+            <!-- Image Upload Section -->
+            <div class="image-upload-section">
+                <label for="thread-image-input" class="image-upload-label">
+                    📷 Aggiungi Immagine (opzionale)
+                </label>
+                <input type="file" id="thread-image-input" accept="image/*" class="image-upload-input" />
+                <div id="image-preview" class="image-preview"></div>
+                <div id="upload-progress" class="upload-progress"></div>
+            </div>
+            
             <div class="thread-creation-buttons">
                 <button class="btn-create-thread" onclick="createThread()">Crea Thread</button>
                 <button class="btn-cancel-thread" onclick="hideThreadCreationModal()">Annulla</button>
             </div>
         </div>
+    </div>
+
+    <!-- Image Modal for fullscreen view -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+        <span class="close-modal">&times;</span>
+        <img id="modalImage" src="" alt="Immagine a schermo intero">
     </div>
 
     <script>
@@ -465,7 +548,7 @@
         // Funzioni Firebase (saranno assegnate quando Firebase è pronto)
         let signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, 
             signOut, updateProfile, GoogleAuthProvider, signInWithPopup, ref, push, set, get, onValue, off, serverTimestamp, 
-            onDisconnect, child, update;
+            onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject;
 
         // Rendi le funzioni globali per gli onclick
         window.switchToLogin = switchToLogin;
@@ -491,6 +574,13 @@
         window.createNewClan = createNewClan;
         window.deleteClan = deleteClan;
         window.switchSection = switchSection;
+        window.handleImageSelect = handleImageSelect;
+        window.removeSelectedImage = removeSelectedImage;
+        window.openImageModal = openImageModal;
+        window.closeImageModal = closeImageModal;
+		window.toggleCommentImageUpload = toggleCommentImageUpload;
+		window.handleCommentImageSelect = handleCommentImageSelect;
+		window.removeCommentSelectedImage = removeCommentSelectedImage;
 
         // Funzioni per la gestione dei ruoli
         function getCurrentUserRole() {
@@ -550,12 +640,12 @@
         const sectionConfig = {
             'home': {
                 title: '🏠 Dashboard',
-                description: 'Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità',
+                description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
                 type: 'dashboard'
             },
             'eventi': {
                 title: '📅 Eventi',
-                description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle',
+                description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle Council',
                 type: 'forum'
             },
             'oggetti': {
@@ -572,6 +662,11 @@
                 title: '💬 Chat Generale',
                 description: 'Chiacchiere libere tra tutti i giocatori',
                 type: 'chat'
+            },
+			'associa-clan': {
+                title: '🏠 Associa Clan',
+                description: 'Richiedi di essere associato ad un clan',
+                type: 'forum'
             },
             'admin-users': {
                 title: '👥 Gestione Utenti',
@@ -612,7 +707,7 @@
             },
 			'clan-bacheca': {
                 title: '🏰 Bacheca Clan',
-                description: 'Messaggi importati per i membri del clan',
+                description: 'Messaggi importanti per i membri del clan',
                 type: 'forum'
             }
         };
@@ -640,7 +735,11 @@
                     serverTimestamp,
                     onDisconnect,
                     child,
-                    update
+                    update,
+                    storageRef,
+                    uploadBytes,
+                    getDownloadURL,
+                    deleteObject
                 } = window.firebaseImports);
                 firebaseReady = true;
             }
@@ -653,7 +752,13 @@
                 console.log('✅ Modalità Firebase attiva');
                 statusEl.style.background = 'rgba(0, 255, 0, 0.1)';
                 statusEl.style.color = '#008800';
-                statusEl.textContent = '🔥 Firebase connesso - Configurare regole database per primo superuser';
+                
+                if (window.appCheckEnabled) {
+                    statusEl.textContent = '🔥 Firebase + App Check attivi - Sistema completo';
+                } else {
+                    statusEl.textContent = '🔥 Firebase attivo - App Check disabilitato (funzionalità ridotte)';
+                }
+                
                 hintEl.innerHTML = `🔐 <strong>Primo accesso?</strong><br>
                     1. Registrati normalmente (sarai USER)<br>
                     2. Configura regole Firebase o usa admin@hustlecastle.com / admin123 (SUPER)<br>
@@ -993,7 +1098,7 @@
             document.getElementById('username').value = '';
             
             // Reset reCAPTCHA
-            if (window.useFirebase && typeof window.resetRecaptcha === 'function') {
+            if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
                 window.resetRecaptcha();
             }
             
@@ -1009,7 +1114,7 @@
             document.getElementById('googleBtnText').textContent = 'Registrati con Google';
             
             // Reset reCAPTCHA
-            if (window.useFirebase && typeof window.resetRecaptcha === 'function') {
+            if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
                 window.resetRecaptcha();
             }
             
@@ -1056,21 +1161,43 @@
                         throw new Error('Username richiesto');
                     }
                     
+                    // Determina ruolo per nuovo utente
+                    const userRole = await determineUserRole();
+                    
                     // Salva i dati utente
                     await set(userRef, {
                         username: username,
                         email: user.email,
                         clan: clan,
+                        role: userRole,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
                         provider: 'google'
                     });
+                    
+                    const roleMessage = userRole === USER_ROLES.SUPERUSER ? 
+                        ' Ti sono stati assegnati i privilegi di SUPERUSER!' : '';
+                    showSuccess(`Account Google creato con successo!${roleMessage}`);
+                } else {
+                    showSuccess('Login con Google effettuato con successo!');
                 }
                 
-                showSuccess('Login con Google effettuato con successo!');
             } catch (error) {
                 console.error('Errore login Google:', error);
-                showError(getErrorMessage(error));
+                
+                // Gestione errori specifici di Google Auth
+                let errorMessage = 'Errore nel login con Google';
+                if (error.code === 'auth/popup-closed-by-user') {
+                    errorMessage = 'Login annullato dall\'utente';
+                } else if (error.code === 'auth/popup-blocked') {
+                    errorMessage = 'Popup bloccato dal browser. Abilita i popup per questo sito.';
+                } else if (error.code === 'auth/network-request-failed') {
+                    errorMessage = 'Errore di connessione. Controlla la tua connessione internet.';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                
+                showError(errorMessage);
             } finally {
                 googleBtn.disabled = false;
                 googleBtn.innerHTML = `
@@ -1085,7 +1212,7 @@
             }
         }
 
-        // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA
+        // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
         async function handleLogin() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -1095,8 +1222,8 @@
                 return;
             }
 
-            // Verifica reCAPTCHA solo in modalità Firebase
-            if (window.useFirebase && typeof grecaptcha !== 'undefined') {
+            // Verifica reCAPTCHA solo se App Check è attivo
+            if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
                 if (!window.verifyRecaptcha()) {
                     showError('🤖 Completa la verifica reCAPTCHA');
                     return;
@@ -1116,16 +1243,16 @@
                     await simulateLogin(email, password);
                 }
                 
-                // Reset reCAPTCHA dopo successo
-                if (window.useFirebase) {
+                // Reset reCAPTCHA dopo successo (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } catch (error) {
                 console.error('Errore login:', error);
                 showError(getErrorMessage(error));
                 
-                // Reset reCAPTCHA in caso di errore
-                if (window.useFirebase) {
+                // Reset reCAPTCHA in caso di errore (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } finally {
@@ -1143,8 +1270,8 @@
                 return;
             }
 
-            // Verifica reCAPTCHA solo in modalità Firebase
-            if (window.useFirebase && typeof grecaptcha !== 'undefined') {
+            // Verifica reCAPTCHA solo se App Check è attivo
+            if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
                 if (!window.verifyRecaptcha()) {
                     showError('🤖 Completa la verifica reCAPTCHA');
                     return;
@@ -1184,16 +1311,16 @@
                 
                 showSuccess(`Account creato con successo!${roleMessage}`);
                 
-                // Reset reCAPTCHA dopo successo
-                if (window.useFirebase) {
+                // Reset reCAPTCHA dopo successo (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } catch (error) {
                 console.error('Errore registrazione:', error);
                 showError(getErrorMessage(error));
                 
-                // Reset reCAPTCHA in caso di errore
-                if (window.useFirebase) {
+                // Reset reCAPTCHA in caso di errore (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } finally {
@@ -1396,7 +1523,7 @@
             }
             
             // Aggiungi thread di esempio per sezioni generali se non esistono
-            const sections = ['eventi', 'oggetti', 'novita'];
+            const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
             sections.forEach(section => {
                 const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
                 if (threads.length === 0) {
@@ -1440,8 +1567,34 @@
 
         function getExampleThreads(section) {
             const examples = {
-                'eventi': [],
-                'novita': []
+                'eventi': [
+                    {
+                        id: 'evt_demo_1',
+                        title: '🎃 Evento Halloween - Strategie e Premi',
+                        content: 'Discussione sulle migliori strategie per l\'evento Halloween! Condividete i vostri setup e le ricompense ottenute.',
+                        author: 'EventMaster',
+                        createdAt: Date.now() - 2*24*60*60*1000,
+                        replies: 15,
+                        views: 87,
+                        status: 'approved',
+                        imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmY2NjAwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfjoMgRXZlbnRvIEhhbGxvd2VlbiDwn46DPC90ZXh0Pjwvc3ZnPg==',
+                        imageName: 'halloween_event.jpg'
+                    }
+                ],
+                'novita': [
+                    {
+                        id: 'news_demo_1',
+                        title: '📢 Aggiornamento 1.58.0 - Nuove Features!',
+                        content: 'Ecco tutte le novità dell\'ultimo aggiornamento: nuovi eroi, dungeon migliorati e molto altro!',
+                        author: 'GameUpdater',
+                        createdAt: Date.now() - 1*24*60*60*1000,
+                        replies: 23,
+                        views: 145,
+                        status: 'approved',
+                        imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMDA4OGNjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfkKIgQWdnaW9ybmFtZW50byB2MS41OC4wIPCfkKI8L3RleHQ+PC9zdmc+',
+                        imageName: 'update_158.jpg'
+                    }
+                ]
             };
             return examples[section] || [];
         }
@@ -1694,7 +1847,7 @@
                             ${welcomeMessage}, ${userName}! ${roleDisplay}
                         </h2>
                         <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
-                            Benvenuto nel forum ufficiale di Hustle Castle! Qui puoi discutere strategie, 
+                            Benvenuto nel forum ufficiale di Hustle Castle Council! Qui puoi discutere strategie, 
                             condividere esperienze e rimanere aggiornato sugli ultimi eventi del gioco.
                         </p>
                         ${userClan !== 'Nessuno' ? `
@@ -1730,6 +1883,11 @@
                                 <div style="font-size: 32px; margin-bottom: 10px;">🆕</div>
                                 <h4 style="margin-bottom: 8px;">Novità</h4>
                                 <p style="font-size: 12px; opacity: 0.9;">Ultimi aggiornamenti</p>
+                            </div>
+							<div class="dashboard-card" onclick="switchSection('novita')" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;"> 🏠</div>
+                                <h4 style="margin-bottom: 8px;">Associa Clan</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Richiedi di associarti ad un clan</p>
                             </div>
                             <div class="dashboard-card" onclick="switchSection('chat-generale')" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
                                 <div style="font-size: 32px; margin-bottom: 10px;">💬</div>
@@ -1787,6 +1945,10 @@
                                 <div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
                                     <strong style="color: #d68910; font-size: 14px;">📢 Rimani Aggiornato</strong>
                                     <p style="color: #666; font-size: 12px; margin-top: 4px;">Controlla regolarmente le Novità</p>
+                                </div>
+								<div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
+                                    <strong style="color: #d68910; font-size: 14px;">📢 Unisciti ad un clan</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Cerca il tuo clan per e unisciti al gruppo</p>
                                 </div>
                             </div>
                         </div>
@@ -1903,7 +2065,7 @@
                     };
                 } else {
                     // Modalità locale - conta i dati reali
-                    const sections = ['eventi', 'oggetti', 'novita'];
+                    const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
                     sections.forEach(section => {
                         const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
                         totalThreads += threads.length;
@@ -2174,42 +2336,42 @@
 
         // Aggiorna status thread
         async function updateThreadStatus(threadId, section, status, reason = null) {
-			const dataPath = getDataPath(section, 'threads');
-			if (!dataPath) return;
+            const dataPath = getDataPath(section, 'threads');
+            if (!dataPath) return;
 
-			const updateData = {
-				status: status,
-				moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
-				moderatedBy: currentUser.displayName || 'Moderatore'
-			};
+            const updateData = {
+                status: status,
+                moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
+                moderatedBy: currentUser.displayName || 'Moderatore'
+            };
 
-			if (reason) {
-				updateData.rejectionReason = reason;
-			}
+            if (reason) {
+                updateData.rejectionReason = reason;
+            }
 
-			if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-				// leggi i dati esistenti del thread
-				const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-				const snapshot = await get(threadRef);
-				if (snapshot.exists()) {
-					const existingData = snapshot.val();
-					// mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
-					const updatedThread = { ...existingData, ...updateData };
-					await set(threadRef, updatedThread);
-				} else {
-					console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
-				}
-			} else {
-				// modalità locale
-				const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-				const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-				const threadIndex = threads.findIndex(t => t.id === threadId);
-				if (threadIndex !== -1) {
-					threads[threadIndex] = { ...threads[threadIndex], ...updateData };
-					localStorage.setItem(storageKey, JSON.stringify(threads));
-				}
-			}
-		}
+            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+                // leggi i dati esistenti del thread
+                const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+                const snapshot = await get(threadRef);
+                if (snapshot.exists()) {
+                    const existingData = snapshot.val();
+                    // mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
+                    const updatedThread = { ...existingData, ...updateData };
+                    await set(threadRef, updatedThread);
+                } else {
+                    console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
+                }
+            } else {
+                // modalità locale
+                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                const threadIndex = threads.findIndex(t => t.id === threadId);
+                if (threadIndex !== -1) {
+                    threads[threadIndex] = { ...threads[threadIndex], ...updateData };
+                    localStorage.setItem(storageKey, JSON.stringify(threads));
+                }
+            }
+        }
 
         // Carica gestione utenti
         async function loadUsersManagement() {
@@ -2590,6 +2752,109 @@
             }
         }
 
+        // Upload immagine thread
+        async function uploadThreadImage(file, progressCallback) {
+            if (!file) return null;
+            
+            try {
+                if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
+                    try {
+                        // Upload su Firebase Storage
+                        const timestamp = Date.now();
+                        const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
+                        const imageRef = storageRef(window.firebaseStorage, filename);
+                        
+                        // Upload con progress tracking
+                        const uploadTask = uploadBytes(imageRef, file);
+                        
+                        // Simula progress (Firebase v9 non ha onSnapshot per upload)
+                        let progress = 0;
+                        const progressInterval = setInterval(() => {
+                            progress += Math.random() * 30;
+                            if (progress > 90) progress = 90;
+                            progressCallback(progress);
+                        }, 200);
+                        
+                        const snapshot = await uploadTask;
+                        clearInterval(progressInterval);
+                        progressCallback(100);
+                        
+                        // Ottieni URL download
+                        const downloadURL = await getDownloadURL(snapshot.ref);
+                        return downloadURL;
+                        
+                    } catch (storageError) {
+                        console.warn('⚠️ Errore Firebase Storage, uso fallback locale:', storageError.message);
+                        
+                        // Fallback: converte in base64 se Firebase Storage fallisce
+                        return new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                progressCallback(100);
+                                console.log('📷 Immagine convertita in base64 (fallback)');
+                                resolve(e.target.result);
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    }
+                    
+                } else {
+                    // Modalità locale - converte in base64
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            progressCallback(100);
+                            resolve(e.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                }
+            } catch (error) {
+                console.error('Errore upload immagine:', error);
+                
+                // Ultimo tentativo: base64 fallback
+                console.log('🔄 Tentativo fallback base64...');
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        progressCallback(100);
+                        console.log('📷 Immagine salvata come base64 (fallback finale)');
+                        resolve(e.target.result);
+                    };
+                    reader.onerror = function() {
+                        reject(new Error('Errore nella conversione dell\'immagine'));
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
+
+        // Update upload progress
+        function updateUploadProgress(progress) {
+            const progressContainer = document.getElementById('upload-progress');
+            const progressPercent = Math.round(progress);
+            
+            progressContainer.innerHTML = `
+                <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
+                        <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
+                    </div>
+                </div>
+            `;
+            progressContainer.style.display = 'block';
+            
+            // Nascondi il progresso quando completato
+            if (progress >= 100) {
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1000);
+            }
+        }
+
         // Carica thread
         function loadThreads(sectionKey) {
             const dataPath = getDataPath(sectionKey, 'threads');
@@ -2732,6 +2997,67 @@
 
             document.getElementById('threadCreationModal').style.display = 'flex';
             document.getElementById('thread-title-input').focus();
+            
+            // Setup image upload listener
+            setupImageUpload();
+        }
+
+        // Setup image upload
+        function setupImageUpload() {
+            const imageInput = document.getElementById('thread-image-input');
+            const imageLabel = document.querySelector('.image-upload-label');
+            
+            // Remove existing listeners
+            imageInput.removeEventListener('change', handleImageSelect);
+            imageLabel.removeEventListener('click', () => imageInput.click());
+            
+            // Add new listeners
+            imageInput.addEventListener('change', handleImageSelect);
+            imageLabel.addEventListener('click', () => imageInput.click());
+        }
+
+        // Handle image selection
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('image-preview');
+            const progressContainer = document.getElementById('upload-progress');
+            
+            if (!file) return;
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+                return;
+            }
+            
+            // Validate file size (max 5MB)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+                return;
+            }
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.innerHTML = `
+                    <img src="${e.target.result}" alt="Anteprima immagine">
+                    <button type="button" class="remove-image" onclick="removeSelectedImage()">
+                        🗑️ Rimuovi Immagine
+                    </button>
+                `;
+            };
+            reader.readAsDataURL(file);
+            
+            // Hide progress initially
+            progressContainer.style.display = 'none';
+        }
+
+        // Remove selected image
+        function removeSelectedImage() {
+            document.getElementById('thread-image-input').value = '';
+            document.getElementById('image-preview').innerHTML = '';
+            document.getElementById('upload-progress').style.display = 'none';
         }
 
         // Nascondi modal creazione thread
@@ -2739,12 +3065,15 @@
             document.getElementById('threadCreationModal').style.display = 'none';
             document.getElementById('thread-title-input').value = '';
             document.getElementById('thread-content-input').value = '';
+            removeSelectedImage(); // Pulisci anche l'immagine selezionata
         }
 
         // Crea thread dalla modal
         async function createThread() {
             const title = document.getElementById('thread-title-input').value.trim();
             const content = document.getElementById('thread-content-input').value.trim();
+            const imageInput = document.getElementById('thread-image-input');
+            const imageFile = imageInput.files[0];
             
             if (!title || !content) {
                 alert('Inserisci sia il titolo che il contenuto del thread');
@@ -2752,6 +3081,8 @@
             }
 
             const createBtn = document.querySelector('.btn-create-thread');
+            const progressContainer = document.getElementById('upload-progress');
+            
             createBtn.disabled = true;
             createBtn.textContent = 'Creazione...';
 
@@ -2762,6 +3093,21 @@
                     author: currentUser.displayName || 'Utente',
                     authorId: currentUser.uid
                 };
+
+                // Upload immagine se presente
+                if (imageFile) {
+                    createBtn.textContent = 'Caricamento immagine...';
+                    progressContainer.style.display = 'block';
+                    
+                    const imageUrl = await uploadThreadImage(imageFile, (progress) => {
+                        updateUploadProgress(progress);
+                    });
+                    
+                    if (imageUrl) {
+                        threadData.imageUrl = imageUrl;
+                        threadData.imageName = imageFile.name;
+                    }
+                }
 
                 // Determina se il thread ha bisogno di approvazione
                 const needsApproval = currentSection.startsWith('clan-') && !canModerateSection(currentSection);
@@ -2774,6 +3120,8 @@
 
                 const dataPath = getDataPath(currentSection, 'threads');
                 if (!dataPath) return;
+
+                createBtn.textContent = 'Salvando thread...';
 
                 if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
                     // Salva su Firebase
@@ -2796,56 +3144,14 @@
                 }
             } catch (error) {
                 console.error('Errore creazione thread:', error);
-                alert('Errore nella creazione del thread');
+                alert('Errore nella creazione del thread: ' + (error.message || error));
             } finally {
                 createBtn.disabled = false;
                 createBtn.textContent = 'Crea Thread';
+                progressContainer.style.display = 'none';
             }
-			  loadThreads(currentSection); 
-			
+            loadThreads(currentSection); 
         }
-		
-		async function handleGoogleLogin() {
-    if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
-        alert("⚠️ Login con Google non disponibile in modalità demo");
-        return;
-    }
-
-    try {
-        const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
-        const user = result.user;
-
-        console.log("👤 Login Google OK:", user);
-
-        // dopo login, salva (se nuovo utente)
-        const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
-        const snapshot = await get(userRef);
-
-        if (!snapshot.exists()) {
-            // chiedi extra info se vuoi, per esempio clan
-            const username = user.displayName || prompt("Inserisci un username:");
-            const clan = prompt("Inserisci il tuo clan (opzionale):") || "Nessuno";
-
-            await set(userRef, {
-                username: username,
-                email: user.email,
-                clan: clan,
-                role: "user",
-                createdAt: serverTimestamp(),
-                lastSeen: serverTimestamp(),
-                provider: "google"
-            });
-        }
-
-        alert("✅ Login con Google completato!");
-        hideError();
-        showSuccess("Login effettuato!");
-    } catch (error) {
-        console.error("Errore login con Google:", error);
-        alert(error.message || "Errore login con Google");
-    }
-}
-
 
         // Apri thread per visualizzazione
         async function openThread(threadId, section) {
@@ -2881,7 +3187,23 @@
                 document.getElementById('thread-author').textContent = thread.author;
                 document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
                 document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
-                document.getElementById('thread-content').textContent = thread.content || 'Nessun contenuto disponibile';
+                
+                // Contenuto del thread con immagine se presente
+                const threadContentEl = document.getElementById('thread-content');
+                let contentHtml = escapeHtml(thread.content || 'Nessun contenuto disponibile');
+                
+                if (thread.imageUrl) {
+                    contentHtml += `
+                        <div class="thread-image">
+                            <img src="${thread.imageUrl}" 
+                                 alt="${thread.imageName || 'Immagine del thread'}" 
+                                 onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
+                                 title="Clicca per ingrandire">
+                        </div>
+                    `;
+                }
+                
+                threadContentEl.innerHTML = contentHtml;
 
                 // Carica commenti
                 loadThreadComments(threadId, section);
@@ -2989,84 +3311,134 @@
         }
 
         // Mostra commenti thread
-        function displayThreadComments(comments) {
-            const commentsContainer = document.getElementById('thread-comments');
-            
-            if (comments.length === 0) {
-                commentsContainer.innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: #666;">
-                        Nessun commento ancora. Sii il primo a commentare!
-                    </div>
-                `;
-                return;
-            }
-            
-            commentsContainer.innerHTML = comments.map(comment => `
-                <div class="comment">
-                    <div class="comment-header">
-                        <span class="comment-author">${comment.author}</span>
-                        <span class="comment-time">${formatTime(comment.timestamp)}</span>
-                    </div>
-                    <div class="comment-content">${escapeHtml(comment.content)}</div>
-                </div>
-            `).join('');
-            
-            // Scroll to bottom
-            commentsContainer.scrollTop = commentsContainer.scrollHeight;
+        // Mostra commenti thread
+function displayThreadComments(comments) {
+    const commentsContainer = document.getElementById('thread-comments');
+    
+    if (comments.length === 0) {
+        commentsContainer.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #666;">
+                Nessun commento ancora. Sii il primo a commentare!
+            </div>
+        `;
+        return;
+    }
+    
+    commentsContainer.innerHTML = comments.map(comment => {
+        let commentContentHtml = '';
+        
+        // Aggiungi testo del commento se presente
+        if (comment.content && comment.content.trim()) {
+            commentContentHtml += `<div class="comment-text">${escapeHtml(comment.content)}</div>`;
         }
+        
+        // Aggiungi immagine se presente
+        if (comment.imageUrl) {
+            commentContentHtml += `
+                <div class="comment-image">
+                    <img src="${comment.imageUrl}" 
+                         alt="${comment.imageName || 'Immagine del commento'}" 
+                         onclick="openImageModal('${comment.imageUrl}', '${comment.imageName || 'Immagine del commento'}')"
+                         title="Clicca per ingrandire">
+                </div>
+            `;
+        }
+        
+        return `
+            <div class="comment">
+                <div class="comment-header">
+                    <span class="comment-author">${comment.author}</span>
+                    <span class="comment-time">${formatTime(comment.timestamp)}</span>
+                </div>
+                <div class="comment-content">${commentContentHtml}</div>
+            </div>
+        `;
+    }).join('');
+    
+    // Scroll to bottom
+    commentsContainer.scrollTop = commentsContainer.scrollHeight;
+}
 
         // Aggiungi commento
-        async function addComment() {
-            if (!currentUser) {
-                alert('Devi effettuare l\'accesso per commentare');
-                return;
-            }
+		async function addComment() {
+			if (!currentUser) {
+				alert('Devi effettuare l\'accesso per commentare');
+				return;
+			}
 
-            const commentText = document.getElementById('comment-text').value.trim();
-            if (!commentText) {
-                alert('Scrivi un commento prima di inviare');
-                return;
-            }
+			const commentText = document.getElementById('comment-text').value.trim();
+			const imageInput = document.getElementById('comment-image-input');
+			const imageFile = imageInput.files[0];
+			
+			if (!commentText && !imageFile) {
+				alert('Scrivi un commento o aggiungi un\'immagine prima di inviare');
+				return;
+			}
 
-            const commentBtn = document.querySelector('.comment-input button');
-            commentBtn.disabled = true;
-            commentBtn.textContent = 'Invio...';
+			const commentBtn = document.querySelector('.comment-input button');
+			const progressContainer = document.getElementById('comment-upload-progress');
+			
+			commentBtn.disabled = true;
+			commentBtn.textContent = 'Invio...';
 
-            try {
-                const commentData = {
-                    author: currentUser.displayName || 'Utente',
-                    authorId: currentUser.uid,
-                    content: commentText,
-                    threadId: currentThreadId
-                };
+			try {
+				const commentData = {
+					author: currentUser.displayName || 'Utente',
+					authorId: currentUser.uid,
+					content: commentText || '',
+					threadId: currentThreadId
+				};
 
-                const dataPath = getDataPath(currentThreadSection, 'comments');
-                if (!dataPath) return;
+				// Upload immagine se presente
+				if (imageFile) {
+					commentBtn.textContent = 'Caricamento immagine...';
+					progressContainer.style.display = 'block';
+					
+					const imageUrl = await uploadThreadImage(imageFile, (progress) => {
+						updateCommentUploadProgress(progress);
+					});
+					
+					if (imageUrl) {
+						commentData.imageUrl = imageUrl;
+						commentData.imageName = imageFile.name;
+					}
+				}
 
-                if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
-                    // Salva su Firebase
-                    const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${currentThreadId}`);
-                    commentData.timestamp = serverTimestamp();
-                    await push(commentsRef, commentData);
-                    
-                    // Aggiorna contatore risposte
-                    await incrementThreadReplies(currentThreadId, currentThreadSection);
-                } else {
-                    // Salva in locale
-                    saveLocalComment(currentThreadSection, currentThreadId, commentData);
-                }
+				const dataPath = getDataPath(currentThreadSection, 'comments');
+				if (!dataPath) return;
 
-                // Pulisci input
-                document.getElementById('comment-text').value = '';
-                
-            } catch (error) {
-                console.error('Errore invio commento:', error);
-                alert('Errore nell\'invio del commento');
-            } finally {
-                commentBtn.disabled = false;
-                commentBtn.textContent = 'Commenta';
-            }
-        }
+				commentBtn.textContent = 'Salvando commento...';
+
+				if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
+					// Salva su Firebase
+					const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${currentThreadId}`);
+					commentData.timestamp = serverTimestamp();
+					await push(commentsRef, commentData);
+					
+					// Aggiorna contatore risposte
+					await incrementThreadReplies(currentThreadId, currentThreadSection);
+				} else {
+					// Salva in locale
+					saveLocalComment(currentThreadSection, currentThreadId, commentData);
+				}
+
+				// Pulisci input
+				document.getElementById('comment-text').value = '';
+				removeCommentSelectedImage();
+				
+				// Nascondi sezione upload se visibile
+				const uploadSection = document.getElementById('comment-image-upload');
+				uploadSection.classList.remove('show');
+				
+			} catch (error) {
+				console.error('Errore invio commento:', error);
+				alert('Errore nell\'invio del commento: ' + (error.message || error));
+			} finally {
+				commentBtn.disabled = false;
+				commentBtn.textContent = 'Commenta';
+				progressContainer.style.display = 'none';
+			}
+		}
 
         // Salva commento locale
         function saveLocalComment(section, threadId, commentData) {
@@ -3142,6 +3514,28 @@
             
             // Chiudi picker
             document.getElementById(`${type}-emoticon-panel`).classList.remove('show');
+        }
+
+        // Apri modal immagine a schermo intero
+        function openImageModal(imageUrl, imageName) {
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            
+            modalImage.src = imageUrl;
+            modalImage.alt = imageName || 'Immagine';
+            modal.style.display = 'flex';
+            
+            // Previeni scroll del body
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Chiudi modal immagine
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.style.display = 'none';
+            
+            // Ripristina scroll del body
+            document.body.style.overflow = 'auto';
         }
 
         // Chiudi emoticon picker quando si clicca fuori
@@ -3437,6 +3831,8 @@
                 if (e.key === 'Escape') {
                     if (document.getElementById('threadCreationModal').style.display === 'flex') {
                         hideThreadCreationModal();
+                    } else if (document.getElementById('imageModal').style.display === 'flex') {
+                        closeImageModal();
                     }
                 }
             });
@@ -3447,7 +3843,110 @@
                     hideThreadCreationModal();
                 }
             });
+
+            // Previeni chiusura modal immagine cliccando sull'immagine
+            document.getElementById('modalImage').addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
         }
+		
+		// Toggle comment image upload section
+function toggleCommentImageUpload() {
+    const uploadSection = document.getElementById('comment-image-upload');
+    const isVisible = uploadSection.classList.contains('show');
+    
+    if (isVisible) {
+        uploadSection.classList.remove('show');
+        removeCommentSelectedImage();
+    } else {
+        uploadSection.classList.add('show');
+        setupCommentImageUpload();
+    }
+}
+
+// Setup comment image upload
+function setupCommentImageUpload() {
+    const imageInput = document.getElementById('comment-image-input');
+    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+    
+    // Remove existing listeners
+    imageInput.removeEventListener('change', handleCommentImageSelect);
+    imageLabel.removeEventListener('click', () => imageInput.click());
+    
+    // Add new listeners
+    imageInput.addEventListener('change', handleCommentImageSelect);
+    imageLabel.addEventListener('click', () => imageInput.click());
+}
+
+// Handle comment image selection
+function handleCommentImageSelect(event) {
+    const file = event.target.files[0];
+    const preview = document.getElementById('comment-image-preview');
+    const progressContainer = document.getElementById('comment-upload-progress');
+    
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+        return;
+    }
+    
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+        alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+        return;
+    }
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        preview.innerHTML = `
+            <img src="${e.target.result}" alt="Anteprima immagine commento">
+            <button type="button" class="remove-image" onclick="removeCommentSelectedImage()">
+                🗑️
+            </button>
+        `;
+    };
+    reader.readAsDataURL(file);
+    
+    // Hide progress initially
+    progressContainer.style.display = 'none';
+}
+
+// Remove selected comment image
+function removeCommentSelectedImage() {
+    document.getElementById('comment-image-input').value = '';
+    document.getElementById('comment-image-preview').innerHTML = '';
+    document.getElementById('comment-upload-progress').style.display = 'none';
+}
+
+// Update comment upload progress
+function updateCommentUploadProgress(progress) {
+    const progressContainer = document.getElementById('comment-upload-progress');
+    const progressPercent = Math.round(progress);
+    
+    progressContainer.innerHTML = `
+        <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
+                <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
+            </div>
+            <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
+                <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
+            </div>
+        </div>
+    `;
+    progressContainer.style.display = 'block';
+    
+    // Nascondi il progresso quando completato
+    if (progress >= 100) {
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 1000);
+    }
+}
     </script>
 </body>
 </html>
