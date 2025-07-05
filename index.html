@@ -29,17 +29,24 @@
         // Inizializza Firebase UNA SOLA VOLTA
         let useFirebase = true;
         let app = null;
+        let appCheckEnabled = false;
         
         try {
             app = initializeApp(firebaseConfig);
             console.log('🔥 Firebase inizializzato con successo');
             
-            // Inizializza App Check con reCaptcha V3 per la protezione automatica
-            const appCheck = initializeAppCheck(app, {
-                provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
-                isTokenAutoRefreshEnabled: true
-            });
-            console.log('🛡️ App Check inizializzato');
+            // Prova ad inizializzare App Check, ma non bloccare se fallisce
+            try {
+                const appCheck = initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+                    isTokenAutoRefreshEnabled: true
+                });
+                appCheckEnabled = true;
+                console.log('🛡️ App Check inizializzato');
+            } catch (appCheckError) {
+                console.warn('⚠️ App Check non disponibile:', appCheckError.message);
+                console.log('📝 Il forum funzionerà senza App Check');
+            }
             
         } catch (error) {
             console.error('❌ Errore inizializzazione Firebase:', error);
@@ -58,6 +65,7 @@
         window.firebaseDatabase = database;
         window.firebaseStorage = storage;
         window.useFirebase = useFirebase;
+        window.appCheckEnabled = appCheckEnabled;
         window.firebaseImports = {
             signInWithEmailAndPassword,
             createUserWithEmailAndPassword,
@@ -83,41 +91,73 @@
         };
         window.googleProvider = googleProvider;
         
-        // 🤖 FUNZIONI reCAPTCHA
+        // 🤖 FUNZIONI reCAPTCHA - GESTIONE MIGLIORATA
+        let recaptchaRendered = false;
+        
         window.verifyRecaptcha = function() {
+            if (!recaptchaRendered || typeof grecaptcha === 'undefined') {
+                return true; // Permetti se reCAPTCHA non disponibile
+            }
             const recaptchaResponse = grecaptcha.getResponse();
             return recaptchaResponse && recaptchaResponse.length > 0;
         };
         
         window.resetRecaptcha = function() {
-            if (typeof grecaptcha !== 'undefined') {
-                grecaptcha.reset();
+            if (recaptchaRendered && typeof grecaptcha !== 'undefined') {
+                try {
+                    grecaptcha.reset();
+                } catch (error) {
+                    console.log('Reset reCAPTCHA ignorato:', error.message);
+                }
             }
         };
 
-        // Render reCAPTCHA quando è pronto
+        // Render reCAPTCHA quando è pronto - CON CONTROLLO DOPPIO RENDERING
         window.onRecaptchaLoad = function() {
-            if (window.useFirebase && typeof grecaptcha !== 'undefined') {
+            if (!window.useFirebase || !appCheckEnabled) {
+                console.log('🤖 reCAPTCHA disabilitato - App Check non attivo');
+                return;
+            }
+            
+            if (recaptchaRendered) {
+                console.log('🤖 reCAPTCHA già renderizzato, skip');
+                return;
+            }
+            
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
                 try {
-                    grecaptcha.render('recaptcha-container', {
-                        'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
-                        'theme': 'dark',
-                        'size': 'normal'
-                    });
-                    console.log('✅ reCAPTCHA renderizzato');
+                    const container = document.getElementById('recaptcha-container');
+                    if (container && container.innerHTML === '') {
+                        grecaptcha.render('recaptcha-container', {
+                            'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
+                            'theme': 'dark',
+                            'size': 'normal'
+                        });
+                        recaptchaRendered = true;
+                        console.log('✅ reCAPTCHA renderizzato');
+                    }
                 } catch (error) {
-                    console.error('❌ Errore rendering reCAPTCHA:', error);
+                    console.log('⚠️ reCAPTCHA già presente o errore:', error.message);
                 }
             }
         };
         
-        // Carica reCAPTCHA quando Google reCAPTCHA è pronto
+        // Carica reCAPTCHA quando Google reCAPTCHA è pronto - SOLO SE NECESSARIO
         window.addEventListener('load', () => {
+            if (!window.useFirebase || !appCheckEnabled) {
+                // Nascondi reCAPTCHA se App Check non è attivo
+                const container = document.getElementById('recaptcha-container');
+                if (container) {
+                    container.parentElement.style.display = 'none';
+                }
+                return;
+            }
+            
             // Controlla periodicamente se reCAPTCHA è disponibile
             const checkRecaptcha = () => {
-                if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
+                if (typeof grecaptcha !== 'undefined' && grecaptcha.render && !recaptchaRendered) {
                     setTimeout(window.onRecaptchaLoad, 100);
-                } else {
+                } else if (!recaptchaRendered) {
                     setTimeout(checkRecaptcha, 500);
                 }
             };
@@ -639,7 +679,7 @@
             },
 			'clan-bacheca': {
                 title: '🏰 Bacheca Clan',
-                description: 'Messaggi importati per i membri del clan',
+                description: 'Messaggi importanti per i membri del clan',
                 type: 'forum'
             }
         };
@@ -684,7 +724,13 @@
                 console.log('✅ Modalità Firebase attiva');
                 statusEl.style.background = 'rgba(0, 255, 0, 0.1)';
                 statusEl.style.color = '#008800';
-                statusEl.textContent = '🔥 Firebase connesso - Configurare regole database per primo superuser';
+                
+                if (window.appCheckEnabled) {
+                    statusEl.textContent = '🔥 Firebase + App Check attivi - Sistema completo';
+                } else {
+                    statusEl.textContent = '🔥 Firebase attivo - App Check disabilitato (funzionalità ridotte)';
+                }
+                
                 hintEl.innerHTML = `🔐 <strong>Primo accesso?</strong><br>
                     1. Registrati normalmente (sarai USER)<br>
                     2. Configura regole Firebase o usa admin@hustlecastle.com / admin123 (SUPER)<br>
@@ -1024,7 +1070,7 @@
             document.getElementById('username').value = '';
             
             // Reset reCAPTCHA
-            if (window.useFirebase && typeof window.resetRecaptcha === 'function') {
+            if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
                 window.resetRecaptcha();
             }
             
@@ -1040,7 +1086,7 @@
             document.getElementById('googleBtnText').textContent = 'Registrati con Google';
             
             // Reset reCAPTCHA
-            if (window.useFirebase && typeof window.resetRecaptcha === 'function') {
+            if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
                 window.resetRecaptcha();
             }
             
@@ -1087,21 +1133,43 @@
                         throw new Error('Username richiesto');
                     }
                     
+                    // Determina ruolo per nuovo utente
+                    const userRole = await determineUserRole();
+                    
                     // Salva i dati utente
                     await set(userRef, {
                         username: username,
                         email: user.email,
                         clan: clan,
+                        role: userRole,
                         createdAt: serverTimestamp(),
                         lastSeen: serverTimestamp(),
                         provider: 'google'
                     });
+                    
+                    const roleMessage = userRole === USER_ROLES.SUPERUSER ? 
+                        ' Ti sono stati assegnati i privilegi di SUPERUSER!' : '';
+                    showSuccess(`Account Google creato con successo!${roleMessage}`);
+                } else {
+                    showSuccess('Login con Google effettuato con successo!');
                 }
                 
-                showSuccess('Login con Google effettuato con successo!');
             } catch (error) {
                 console.error('Errore login Google:', error);
-                showError(getErrorMessage(error));
+                
+                // Gestione errori specifici di Google Auth
+                let errorMessage = 'Errore nel login con Google';
+                if (error.code === 'auth/popup-closed-by-user') {
+                    errorMessage = 'Login annullato dall\'utente';
+                } else if (error.code === 'auth/popup-blocked') {
+                    errorMessage = 'Popup bloccato dal browser. Abilita i popup per questo sito.';
+                } else if (error.code === 'auth/network-request-failed') {
+                    errorMessage = 'Errore di connessione. Controlla la tua connessione internet.';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                
+                showError(errorMessage);
             } finally {
                 googleBtn.disabled = false;
                 googleBtn.innerHTML = `
@@ -1116,7 +1184,7 @@
             }
         }
 
-        // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA
+        // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
         async function handleLogin() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -1126,8 +1194,8 @@
                 return;
             }
 
-            // Verifica reCAPTCHA solo in modalità Firebase
-            if (window.useFirebase && typeof grecaptcha !== 'undefined') {
+            // Verifica reCAPTCHA solo se App Check è attivo
+            if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
                 if (!window.verifyRecaptcha()) {
                     showError('🤖 Completa la verifica reCAPTCHA');
                     return;
@@ -1147,16 +1215,16 @@
                     await simulateLogin(email, password);
                 }
                 
-                // Reset reCAPTCHA dopo successo
-                if (window.useFirebase) {
+                // Reset reCAPTCHA dopo successo (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } catch (error) {
                 console.error('Errore login:', error);
                 showError(getErrorMessage(error));
                 
-                // Reset reCAPTCHA in caso di errore
-                if (window.useFirebase) {
+                // Reset reCAPTCHA in caso di errore (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } finally {
@@ -1174,8 +1242,8 @@
                 return;
             }
 
-            // Verifica reCAPTCHA solo in modalità Firebase
-            if (window.useFirebase && typeof grecaptcha !== 'undefined') {
+            // Verifica reCAPTCHA solo se App Check è attivo
+            if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
                 if (!window.verifyRecaptcha()) {
                     showError('🤖 Completa la verifica reCAPTCHA');
                     return;
@@ -1215,16 +1283,16 @@
                 
                 showSuccess(`Account creato con successo!${roleMessage}`);
                 
-                // Reset reCAPTCHA dopo successo
-                if (window.useFirebase) {
+                // Reset reCAPTCHA dopo successo (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } catch (error) {
                 console.error('Errore registrazione:', error);
                 showError(getErrorMessage(error));
                 
-                // Reset reCAPTCHA in caso di errore
-                if (window.useFirebase) {
+                // Reset reCAPTCHA in caso di errore (solo se attivo)
+                if (window.useFirebase && window.appCheckEnabled) {
                     window.resetRecaptcha();
                 }
             } finally {
@@ -2231,42 +2299,42 @@
 
         // Aggiorna status thread
         async function updateThreadStatus(threadId, section, status, reason = null) {
-			const dataPath = getDataPath(section, 'threads');
-			if (!dataPath) return;
+            const dataPath = getDataPath(section, 'threads');
+            if (!dataPath) return;
 
-			const updateData = {
-				status: status,
-				moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
-				moderatedBy: currentUser.displayName || 'Moderatore'
-			};
+            const updateData = {
+                status: status,
+                moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
+                moderatedBy: currentUser.displayName || 'Moderatore'
+            };
 
-			if (reason) {
-				updateData.rejectionReason = reason;
-			}
+            if (reason) {
+                updateData.rejectionReason = reason;
+            }
 
-			if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-				// leggi i dati esistenti del thread
-				const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-				const snapshot = await get(threadRef);
-				if (snapshot.exists()) {
-					const existingData = snapshot.val();
-					// mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
-					const updatedThread = { ...existingData, ...updateData };
-					await set(threadRef, updatedThread);
-				} else {
-					console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
-				}
-			} else {
-				// modalità locale
-				const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-				const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-				const threadIndex = threads.findIndex(t => t.id === threadId);
-				if (threadIndex !== -1) {
-					threads[threadIndex] = { ...threads[threadIndex], ...updateData };
-					localStorage.setItem(storageKey, JSON.stringify(threads));
-				}
-			}
-		}
+            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+                // leggi i dati esistenti del thread
+                const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+                const snapshot = await get(threadRef);
+                if (snapshot.exists()) {
+                    const existingData = snapshot.val();
+                    // mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
+                    const updatedThread = { ...existingData, ...updateData };
+                    await set(threadRef, updatedThread);
+                } else {
+                    console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
+                }
+            } else {
+                // modalità locale
+                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                const threadIndex = threads.findIndex(t => t.id === threadId);
+                if (threadIndex !== -1) {
+                    threads[threadIndex] = { ...threads[threadIndex], ...updateData };
+                    localStorage.setItem(storageKey, JSON.stringify(threads));
+                }
+            }
+        }
 
         // Carica gestione utenti
         async function loadUsersManagement() {
@@ -2647,6 +2715,109 @@
             }
         }
 
+        // Upload immagine thread
+        async function uploadThreadImage(file, progressCallback) {
+            if (!file) return null;
+            
+            try {
+                if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
+                    try {
+                        // Upload su Firebase Storage
+                        const timestamp = Date.now();
+                        const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
+                        const imageRef = storageRef(window.firebaseStorage, filename);
+                        
+                        // Upload con progress tracking
+                        const uploadTask = uploadBytes(imageRef, file);
+                        
+                        // Simula progress (Firebase v9 non ha onSnapshot per upload)
+                        let progress = 0;
+                        const progressInterval = setInterval(() => {
+                            progress += Math.random() * 30;
+                            if (progress > 90) progress = 90;
+                            progressCallback(progress);
+                        }, 200);
+                        
+                        const snapshot = await uploadTask;
+                        clearInterval(progressInterval);
+                        progressCallback(100);
+                        
+                        // Ottieni URL download
+                        const downloadURL = await getDownloadURL(snapshot.ref);
+                        return downloadURL;
+                        
+                    } catch (storageError) {
+                        console.warn('⚠️ Errore Firebase Storage, uso fallback locale:', storageError.message);
+                        
+                        // Fallback: converte in base64 se Firebase Storage fallisce
+                        return new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                progressCallback(100);
+                                console.log('📷 Immagine convertita in base64 (fallback)');
+                                resolve(e.target.result);
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    }
+                    
+                } else {
+                    // Modalità locale - converte in base64
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            progressCallback(100);
+                            resolve(e.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                }
+            } catch (error) {
+                console.error('Errore upload immagine:', error);
+                
+                // Ultimo tentativo: base64 fallback
+                console.log('🔄 Tentativo fallback base64...');
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        progressCallback(100);
+                        console.log('📷 Immagine salvata come base64 (fallback finale)');
+                        resolve(e.target.result);
+                    };
+                    reader.onerror = function() {
+                        reject(new Error('Errore nella conversione dell\'immagine'));
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
+
+        // Update upload progress
+        function updateUploadProgress(progress) {
+            const progressContainer = document.getElementById('upload-progress');
+            const progressPercent = Math.round(progress);
+            
+            progressContainer.innerHTML = `
+                <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
+                        <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
+                    </div>
+                </div>
+            `;
+            progressContainer.style.display = 'block';
+            
+            // Nascondi il progresso quando completato
+            if (progress >= 100) {
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1000);
+            }
+        }
+
         // Carica thread
         function loadThreads(sectionKey) {
             const dataPath = getDataPath(sectionKey, 'threads');
@@ -2851,32 +3022,6 @@
             document.getElementById('image-preview').innerHTML = '';
             document.getElementById('upload-progress').style.display = 'none';
         }
-		
-		 // Update upload progress
-        function updateUploadProgress(progress) {
-            const progressContainer = document.getElementById('upload-progress');
-            const progressPercent = Math.round(progress);
-            
-            progressContainer.innerHTML = `
-                <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
-                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
-                    </div>
-                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
-                        <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
-                    </div>
-                </div>
-            `;
-            progressContainer.style.display = 'block';
-            
-            // Nascondi il progresso quando completato
-            if (progress >= 100) {
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                }, 1000);
-            }
-        }
 
         // Nascondi modal creazione thread
         function hideThreadCreationModal() {
@@ -2968,54 +3113,7 @@
                 createBtn.textContent = 'Crea Thread';
                 progressContainer.style.display = 'none';
             }
-			loadThreads(currentSection); 
-        }
-
-        // Upload immagine thread
-        async function uploadThreadImage(file, progressCallback) {
-            if (!file) return null;
-            
-            try {
-                if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
-                    // Upload su Firebase Storage
-                    const timestamp = Date.now();
-                    const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
-                    const imageRef = storageRef(window.firebaseStorage, filename);
-                    
-                    // Upload con progress tracking
-                    const uploadTask = uploadBytes(imageRef, file);
-                    
-                    // Simula progress (Firebase v9 non ha onSnapshot per upload)
-                    let progress = 0;
-                    const progressInterval = setInterval(() => {
-                        progress += Math.random() * 30;
-                        if (progress > 90) progress = 90;
-                        progressCallback(progress);
-                    }, 200);
-                    
-                    const snapshot = await uploadTask;
-                    clearInterval(progressInterval);
-                    progressCallback(100);
-                    
-                    // Ottieni URL download
-                    const downloadURL = await getDownloadURL(snapshot.ref);
-                    return downloadURL;
-                    
-                } else {
-                    // Modalità locale - converte in base64
-                    return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            progressCallback(100);
-                            resolve(e.target.result);
-                        };
-                        reader.readAsDataURL(file);
-                    });
-                }
-            } catch (error) {
-                console.error('Errore upload immagine:', error);
-                throw new Error('Errore nel caricamento dell\'immagine');
-            }
+            loadThreads(currentSection); 
         }
 
         // Apri thread per visualizzazione

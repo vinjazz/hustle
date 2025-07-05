@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hustle Castle Forum</title>
+    <title>🏰 Hustle Castle Council</title>
     <!-- reCAPTCHA con callback personalizzato -->
     <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
     
@@ -13,6 +13,7 @@
         import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
         import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
         
         // 🔥 CONFIGURAZIONE FIREBASE - INIZIALIZZAZIONE SINGOLA
         const firebaseConfig = {
@@ -48,12 +49,14 @@
         
         const auth = useFirebase ? getAuth(app) : null;
         const database = useFirebase ? getDatabase(app) : null;
+        const storage = useFirebase ? getStorage(app) : null;
         const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
         
         // Esponi Firebase globalmente per compatibilità
         window.firebaseApp = app;
         window.firebaseAuth = auth;
         window.firebaseDatabase = database;
+        window.firebaseStorage = storage;
         window.useFirebase = useFirebase;
         window.firebaseImports = {
             signInWithEmailAndPassword,
@@ -72,7 +75,11 @@
             serverTimestamp,
             onDisconnect,
             child,
-            update
+            update,
+            storageRef,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
         };
         window.googleProvider = googleProvider;
         
@@ -206,7 +213,7 @@
 
     <div class="sidebar">
         <div class="logo">
-            <h1>🏰 Hustle Castle</h1>
+            <h1>🏰 Hustle Castle Council</h1>
         </div>
         
         <div class="user-info">
@@ -281,14 +288,14 @@
         <!-- Banner Hero -->
         <div class="banner">
             <div class="banner-content">
-                <div class="banner-title">⚔️ Hustle Castle ⚔️</div>
+                <div class="banner-title">⚔️ Hustle Castle Council ⚔️</div>
                 <div class="banner-subtitle">Il Forum Ufficiale della Community</div>
             </div>
         </div>
 
         <div class="header">
             <h2 id="section-title">🏠 Dashboard</h2>
-            <p id="section-description">Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità</p>
+            <p id="section-description">Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità</p>
         </div>
 
         <div class="content-area">
@@ -415,11 +422,27 @@
             <input type="text" id="thread-title-input" placeholder="Titolo del thread *" />
             <textarea id="thread-content-input" placeholder="Contenuto del thread *"></textarea>
             
+            <!-- Image Upload Section -->
+            <div class="image-upload-section">
+                <label for="thread-image-input" class="image-upload-label">
+                    📷 Aggiungi Immagine (opzionale)
+                </label>
+                <input type="file" id="thread-image-input" accept="image/*" class="image-upload-input" />
+                <div id="image-preview" class="image-preview"></div>
+                <div id="upload-progress" class="upload-progress"></div>
+            </div>
+            
             <div class="thread-creation-buttons">
                 <button class="btn-create-thread" onclick="createThread()">Crea Thread</button>
                 <button class="btn-cancel-thread" onclick="hideThreadCreationModal()">Annulla</button>
             </div>
         </div>
+    </div>
+
+    <!-- Image Modal for fullscreen view -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+        <span class="close-modal">&times;</span>
+        <img id="modalImage" src="" alt="Immagine a schermo intero">
     </div>
 
     <script>
@@ -465,7 +488,7 @@
         // Funzioni Firebase (saranno assegnate quando Firebase è pronto)
         let signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, 
             signOut, updateProfile, GoogleAuthProvider, signInWithPopup, ref, push, set, get, onValue, off, serverTimestamp, 
-            onDisconnect, child, update;
+            onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject;
 
         // Rendi le funzioni globali per gli onclick
         window.switchToLogin = switchToLogin;
@@ -491,6 +514,10 @@
         window.createNewClan = createNewClan;
         window.deleteClan = deleteClan;
         window.switchSection = switchSection;
+        window.handleImageSelect = handleImageSelect;
+        window.removeSelectedImage = removeSelectedImage;
+        window.openImageModal = openImageModal;
+        window.closeImageModal = closeImageModal;
 
         // Funzioni per la gestione dei ruoli
         function getCurrentUserRole() {
@@ -550,12 +577,12 @@
         const sectionConfig = {
             'home': {
                 title: '🏠 Dashboard',
-                description: 'Benvenuto nel Forum di Hustle Castle! Ecco le ultime novità',
+                description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
                 type: 'dashboard'
             },
             'eventi': {
                 title: '📅 Eventi',
-                description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle',
+                description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle Council',
                 type: 'forum'
             },
             'oggetti': {
@@ -640,7 +667,11 @@
                     serverTimestamp,
                     onDisconnect,
                     child,
-                    update
+                    update,
+                    storageRef,
+                    uploadBytes,
+                    getDownloadURL,
+                    deleteObject
                 } = window.firebaseImports);
                 firebaseReady = true;
             }
@@ -1440,8 +1471,34 @@
 
         function getExampleThreads(section) {
             const examples = {
-                'eventi': [],
-                'novita': []
+                'eventi': [
+                    {
+                        id: 'evt_demo_1',
+                        title: '🎃 Evento Halloween - Strategie e Premi',
+                        content: 'Discussione sulle migliori strategie per l\'evento Halloween! Condividete i vostri setup e le ricompense ottenute.',
+                        author: 'EventMaster',
+                        createdAt: Date.now() - 2*24*60*60*1000,
+                        replies: 15,
+                        views: 87,
+                        status: 'approved',
+                        imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmY2NjAwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfjoMgRXZlbnRvIEhhbGxvd2VlbiDwn46DPC90ZXh0Pjwvc3ZnPg==',
+                        imageName: 'halloween_event.jpg'
+                    }
+                ],
+                'novita': [
+                    {
+                        id: 'news_demo_1',
+                        title: '📢 Aggiornamento 1.58.0 - Nuove Features!',
+                        content: 'Ecco tutte le novità dell\'ultimo aggiornamento: nuovi eroi, dungeon migliorati e molto altro!',
+                        author: 'GameUpdater',
+                        createdAt: Date.now() - 1*24*60*60*1000,
+                        replies: 23,
+                        views: 145,
+                        status: 'approved',
+                        imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMDA4OGNjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfkKIgQWdnaW9ybmFtZW50byB2MS41OC4wIPCfkKI8L3RleHQ+PC9zdmc+',
+                        imageName: 'update_158.jpg'
+                    }
+                ]
             };
             return examples[section] || [];
         }
@@ -1694,7 +1751,7 @@
                             ${welcomeMessage}, ${userName}! ${roleDisplay}
                         </h2>
                         <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
-                            Benvenuto nel forum ufficiale di Hustle Castle! Qui puoi discutere strategie, 
+                            Benvenuto nel forum ufficiale di Hustle Castle Council! Qui puoi discutere strategie, 
                             condividere esperienze e rimanere aggiornato sugli ultimi eventi del gioco.
                         </p>
                         ${userClan !== 'Nessuno' ? `
@@ -2732,6 +2789,93 @@
 
             document.getElementById('threadCreationModal').style.display = 'flex';
             document.getElementById('thread-title-input').focus();
+            
+            // Setup image upload listener
+            setupImageUpload();
+        }
+
+        // Setup image upload
+        function setupImageUpload() {
+            const imageInput = document.getElementById('thread-image-input');
+            const imageLabel = document.querySelector('.image-upload-label');
+            
+            // Remove existing listeners
+            imageInput.removeEventListener('change', handleImageSelect);
+            imageLabel.removeEventListener('click', () => imageInput.click());
+            
+            // Add new listeners
+            imageInput.addEventListener('change', handleImageSelect);
+            imageLabel.addEventListener('click', () => imageInput.click());
+        }
+
+        // Handle image selection
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('image-preview');
+            const progressContainer = document.getElementById('upload-progress');
+            
+            if (!file) return;
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+                return;
+            }
+            
+            // Validate file size (max 5MB)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+                return;
+            }
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.innerHTML = `
+                    <img src="${e.target.result}" alt="Anteprima immagine">
+                    <button type="button" class="remove-image" onclick="removeSelectedImage()">
+                        🗑️ Rimuovi Immagine
+                    </button>
+                `;
+            };
+            reader.readAsDataURL(file);
+            
+            // Hide progress initially
+            progressContainer.style.display = 'none';
+        }
+
+        // Remove selected image
+        function removeSelectedImage() {
+            document.getElementById('thread-image-input').value = '';
+            document.getElementById('image-preview').innerHTML = '';
+            document.getElementById('upload-progress').style.display = 'none';
+        }
+		
+		 // Update upload progress
+        function updateUploadProgress(progress) {
+            const progressContainer = document.getElementById('upload-progress');
+            const progressPercent = Math.round(progress);
+            
+            progressContainer.innerHTML = `
+                <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
+                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
+                        <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
+                    </div>
+                </div>
+            `;
+            progressContainer.style.display = 'block';
+            
+            // Nascondi il progresso quando completato
+            if (progress >= 100) {
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1000);
+            }
         }
 
         // Nascondi modal creazione thread
@@ -2739,12 +2883,15 @@
             document.getElementById('threadCreationModal').style.display = 'none';
             document.getElementById('thread-title-input').value = '';
             document.getElementById('thread-content-input').value = '';
+            removeSelectedImage(); // Pulisci anche l'immagine selezionata
         }
 
         // Crea thread dalla modal
         async function createThread() {
             const title = document.getElementById('thread-title-input').value.trim();
             const content = document.getElementById('thread-content-input').value.trim();
+            const imageInput = document.getElementById('thread-image-input');
+            const imageFile = imageInput.files[0];
             
             if (!title || !content) {
                 alert('Inserisci sia il titolo che il contenuto del thread');
@@ -2752,6 +2899,8 @@
             }
 
             const createBtn = document.querySelector('.btn-create-thread');
+            const progressContainer = document.getElementById('upload-progress');
+            
             createBtn.disabled = true;
             createBtn.textContent = 'Creazione...';
 
@@ -2762,6 +2911,21 @@
                     author: currentUser.displayName || 'Utente',
                     authorId: currentUser.uid
                 };
+
+                // Upload immagine se presente
+                if (imageFile) {
+                    createBtn.textContent = 'Caricamento immagine...';
+                    progressContainer.style.display = 'block';
+                    
+                    const imageUrl = await uploadThreadImage(imageFile, (progress) => {
+                        updateUploadProgress(progress);
+                    });
+                    
+                    if (imageUrl) {
+                        threadData.imageUrl = imageUrl;
+                        threadData.imageName = imageFile.name;
+                    }
+                }
 
                 // Determina se il thread ha bisogno di approvazione
                 const needsApproval = currentSection.startsWith('clan-') && !canModerateSection(currentSection);
@@ -2774,6 +2938,8 @@
 
                 const dataPath = getDataPath(currentSection, 'threads');
                 if (!dataPath) return;
+
+                createBtn.textContent = 'Salvando thread...';
 
                 if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
                     // Salva su Firebase
@@ -2796,56 +2962,61 @@
                 }
             } catch (error) {
                 console.error('Errore creazione thread:', error);
-                alert('Errore nella creazione del thread');
+                alert('Errore nella creazione del thread: ' + (error.message || error));
             } finally {
                 createBtn.disabled = false;
                 createBtn.textContent = 'Crea Thread';
+                progressContainer.style.display = 'none';
             }
-			  loadThreads(currentSection); 
-			
-        }
-		
-		async function handleGoogleLogin() {
-    if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
-        alert("⚠️ Login con Google non disponibile in modalità demo");
-        return;
-    }
-
-    try {
-        const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
-        const user = result.user;
-
-        console.log("👤 Login Google OK:", user);
-
-        // dopo login, salva (se nuovo utente)
-        const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
-        const snapshot = await get(userRef);
-
-        if (!snapshot.exists()) {
-            // chiedi extra info se vuoi, per esempio clan
-            const username = user.displayName || prompt("Inserisci un username:");
-            const clan = prompt("Inserisci il tuo clan (opzionale):") || "Nessuno";
-
-            await set(userRef, {
-                username: username,
-                email: user.email,
-                clan: clan,
-                role: "user",
-                createdAt: serverTimestamp(),
-                lastSeen: serverTimestamp(),
-                provider: "google"
-            });
+			loadThreads(currentSection); 
         }
 
-        alert("✅ Login con Google completato!");
-        hideError();
-        showSuccess("Login effettuato!");
-    } catch (error) {
-        console.error("Errore login con Google:", error);
-        alert(error.message || "Errore login con Google");
-    }
-}
-
+        // Upload immagine thread
+        async function uploadThreadImage(file, progressCallback) {
+            if (!file) return null;
+            
+            try {
+                if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
+                    // Upload su Firebase Storage
+                    const timestamp = Date.now();
+                    const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
+                    const imageRef = storageRef(window.firebaseStorage, filename);
+                    
+                    // Upload con progress tracking
+                    const uploadTask = uploadBytes(imageRef, file);
+                    
+                    // Simula progress (Firebase v9 non ha onSnapshot per upload)
+                    let progress = 0;
+                    const progressInterval = setInterval(() => {
+                        progress += Math.random() * 30;
+                        if (progress > 90) progress = 90;
+                        progressCallback(progress);
+                    }, 200);
+                    
+                    const snapshot = await uploadTask;
+                    clearInterval(progressInterval);
+                    progressCallback(100);
+                    
+                    // Ottieni URL download
+                    const downloadURL = await getDownloadURL(snapshot.ref);
+                    return downloadURL;
+                    
+                } else {
+                    // Modalità locale - converte in base64
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            progressCallback(100);
+                            resolve(e.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                }
+            } catch (error) {
+                console.error('Errore upload immagine:', error);
+                throw new Error('Errore nel caricamento dell\'immagine');
+            }
+        }
 
         // Apri thread per visualizzazione
         async function openThread(threadId, section) {
@@ -2881,7 +3052,23 @@
                 document.getElementById('thread-author').textContent = thread.author;
                 document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
                 document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
-                document.getElementById('thread-content').textContent = thread.content || 'Nessun contenuto disponibile';
+                
+                // Contenuto del thread con immagine se presente
+                const threadContentEl = document.getElementById('thread-content');
+                let contentHtml = escapeHtml(thread.content || 'Nessun contenuto disponibile');
+                
+                if (thread.imageUrl) {
+                    contentHtml += `
+                        <div class="thread-image">
+                            <img src="${thread.imageUrl}" 
+                                 alt="${thread.imageName || 'Immagine del thread'}" 
+                                 onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
+                                 title="Clicca per ingrandire">
+                        </div>
+                    `;
+                }
+                
+                threadContentEl.innerHTML = contentHtml;
 
                 // Carica commenti
                 loadThreadComments(threadId, section);
@@ -3142,6 +3329,28 @@
             
             // Chiudi picker
             document.getElementById(`${type}-emoticon-panel`).classList.remove('show');
+        }
+
+        // Apri modal immagine a schermo intero
+        function openImageModal(imageUrl, imageName) {
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            
+            modalImage.src = imageUrl;
+            modalImage.alt = imageName || 'Immagine';
+            modal.style.display = 'flex';
+            
+            // Previeni scroll del body
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Chiudi modal immagine
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.style.display = 'none';
+            
+            // Ripristina scroll del body
+            document.body.style.overflow = 'auto';
         }
 
         // Chiudi emoticon picker quando si clicca fuori
@@ -3437,6 +3646,8 @@
                 if (e.key === 'Escape') {
                     if (document.getElementById('threadCreationModal').style.display === 'flex') {
                         hideThreadCreationModal();
+                    } else if (document.getElementById('imageModal').style.display === 'flex') {
+                        closeImageModal();
                     }
                 }
             });
@@ -3446,6 +3657,11 @@
                 if (e.target === document.getElementById('threadCreationModal')) {
                     hideThreadCreationModal();
                 }
+            });
+
+            // Previeni chiusura modal immagine cliccando sull'immagine
+            document.getElementById('modalImage').addEventListener('click', (e) => {
+                e.stopPropagation();
             });
         }
     </script>
