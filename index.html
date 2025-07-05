@@ -413,56 +413,56 @@
                     </div>
                     
                     <div class="comment-input">
-						<div class="comment-input-container">
-							<div class="comment-input-main">
-								<div class="comment-textarea-container">
-									<textarea id="comment-text" placeholder="Scrivi un commento..."></textarea>
-								</div>
-								<div class="comment-controls">
-									<div style="display: flex; gap: 5px;">
-										<button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
-										<div class="emoticon-picker">
-											<button class="emoticon-btn" onclick="toggleEmoticonPicker('comment')">😊</button>
-											<div class="emoticon-panel" id="comment-emoticon-panel">
-												<div class="emoticon-grid">
-													<button class="emoticon-item" onclick="addEmoticon('comment', '😊')">😊</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '😂')">😂</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🎉')">🎉</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '❤️')">❤️</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '👍')">👍</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '👎')">👎</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🔥')">🔥</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '💪')">💪</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🎯')">🎯</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '⚔️')">⚔️</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🏰')">🏰</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🛡️')">🛡️</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🏆')">🏆</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '💎')">💎</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '⭐')">⭐</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🚀')">🚀</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '💯')">💯</button>
-													<button class="emoticon-item" onclick="addEmoticon('comment', '🤔')">🤔</button>
-												</div>
-											</div>
-										</div>
-									</div>
-									<button onclick="addComment()" style="padding: 10px 20px; background: linear-gradient(45deg, #DAA520, #B8860B); border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer;">Commenta</button>
-								</div>
-							</div>
-							
-							<!-- Image Upload Section for Comments -->
-							<div id="comment-image-upload" class="comment-image-upload">
-								<label for="comment-image-input" class="image-upload-label">
-									📷 Seleziona Immagine
-								</label>
-								<input type="file" id="comment-image-input" accept="image/*" class="image-upload-input" />
-								<div id="comment-image-preview" class="image-preview"></div>
-								<div id="comment-upload-progress" class="upload-progress"></div>
-							</div>
-						</div>
-					</div>
-</div>
+                        <div class="comment-input-container">
+                            <div class="comment-input-main">
+                                <div class="comment-textarea-container">
+                                    <textarea id="comment-text" placeholder="Scrivi un commento..."></textarea>
+                                </div>
+                                <div class="comment-controls">
+                                    <div style="display: flex; gap: 5px;">
+                                        <button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
+                                        <div class="emoticon-picker">
+                                            <button class="emoticon-btn" onclick="toggleEmoticonPicker('comment')">😊</button>
+                                            <div class="emoticon-panel" id="comment-emoticon-panel">
+                                                <div class="emoticon-grid">
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😊')">😊</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😂')">😂</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎉')">🎉</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '❤️')">❤️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👍')">👍</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👎')">👎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🔥')">🔥</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💪')">💪</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎯')">🎯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⚔️')">⚔️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏰')">🏰</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🛡️')">🛡️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏆')">🏆</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💎')">💎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⭐')">⭐</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🚀')">🚀</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💯')">💯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🤔')">🤔</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onclick="addComment()" style="padding: 10px 20px; background: linear-gradient(45deg, #DAA520, #B8860B); border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer;">Commenta</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Image Upload Section for Comments -->
+                            <div id="comment-image-upload" class="comment-image-upload">
+                                <label for="comment-image-input" class="image-upload-label">
+                                    📷 Seleziona Immagine
+                                </label>
+                                <input type="file" id="comment-image-input" accept="image/*" class="image-upload-input" />
+                                <div id="comment-image-preview" class="image-preview"></div>
+                                <div id="comment-upload-progress" class="upload-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+				</div>
             </div>
         </div>
     </div>
