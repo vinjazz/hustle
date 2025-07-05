@@ -7,6 +7,163 @@
     <!-- reCAPTCHA con callback personalizzato -->
     <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
     
+    <!-- Firebase SDK v9 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+        import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
+        
+        // 🔥 CONFIGURAZIONE FIREBASE - INIZIALIZZAZIONE SINGOLA
+        const firebaseConfig = {
+            apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
+            authDomain: "hustlecastlecouncil.firebaseapp.com",
+            projectId: "hustlecastlecouncil",
+            storageBucket: "hustlecastlecouncil.firebasestorage.app",
+            messagingSenderId: "778970862600",
+            appId: "1:778970862600:web:ba81f607bb6792362eadbd",
+            measurementId: "G-N6XQ6W4PN7"
+        };
+        
+        // Inizializza Firebase UNA SOLA VOLTA
+        let useFirebase = true;
+        let app = null;
+        let appCheckEnabled = false;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            console.log('🔥 Firebase inizializzato con successo');
+            
+            // Prova ad inizializzare App Check, ma non bloccare se fallisce
+            try {
+                const appCheck = initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+                    isTokenAutoRefreshEnabled: true
+                });
+                appCheckEnabled = true;
+                console.log('🛡️ App Check inizializzato');
+            } catch (appCheckError) {
+                console.warn('⚠️ App Check non disponibile:', appCheckError.message);
+                console.log('📝 Il forum funzionerà senza App Check');
+            }
+            
+        } catch (error) {
+            console.error('❌ Errore inizializzazione Firebase:', error);
+            useFirebase = false;
+            alert('⚠️ Firebase non configurato. Il forum funzionerà in modalità demo locale.');
+        }
+        
+        const auth = useFirebase ? getAuth(app) : null;
+        const database = useFirebase ? getDatabase(app) : null;
+        const storage = useFirebase ? getStorage(app) : null;
+        const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
+        
+        // Esponi Firebase globalmente per compatibilità
+        window.firebaseApp = app;
+        window.firebaseAuth = auth;
+        window.firebaseDatabase = database;
+        window.firebaseStorage = storage;
+        window.useFirebase = useFirebase;
+        window.appCheckEnabled = appCheckEnabled;
+        window.firebaseImports = {
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut,
+            updateProfile,
+            GoogleAuthProvider,
+            signInWithPopup,
+            ref,
+            push,
+            set,
+            get,
+            onValue,
+            off,
+            serverTimestamp,
+            onDisconnect,
+            child,
+            update,
+            storageRef,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
+        };
+        window.googleProvider = googleProvider;
+        
+        // 🤖 FUNZIONI reCAPTCHA - GESTIONE MIGLIORATA
+        let recaptchaRendered = false;
+        
+        window.verifyRecaptcha = function() {
+            if (!recaptchaRendered || typeof grecaptcha === 'undefined') {
+                return true; // Permetti se reCAPTCHA non disponibile
+            }
+            const recaptchaResponse = grecaptcha.getResponse();
+            return recaptchaResponse && recaptchaResponse.length > 0;
+        };
+        
+        window.resetRecaptcha = function() {
+            if (recaptchaRendered && typeof grecaptcha !== 'undefined') {
+                try {
+                    grecaptcha.reset();
+                } catch (error) {
+                    console.log('Reset reCAPTCHA ignorato:', error.message);
+                }
+            }
+        };
+
+        // Render reCAPTCHA quando è pronto - CON CONTROLLO DOPPIO RENDERING
+        window.onRecaptchaLoad = function() {
+            if (!window.useFirebase || !appCheckEnabled) {
+                console.log('🤖 reCAPTCHA disabilitato - App Check non attivo');
+                return;
+            }
+            
+            if (recaptchaRendered) {
+                console.log('🤖 reCAPTCHA già renderizzato, skip');
+                return;
+            }
+            
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
+                try {
+                    const container = document.getElementById('recaptcha-container');
+                    if (container && container.innerHTML === '') {
+                        grecaptcha.render('recaptcha-container', {
+                            'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
+                            'theme': 'dark',
+                            'size': 'normal'
+                        });
+                        recaptchaRendered = true;
+                        console.log('✅ reCAPTCHA renderizzato');
+                    }
+                } catch (error) {
+                    console.log('⚠️ reCAPTCHA già presente o errore:', error.message);
+                }
+            }
+        };
+        
+        // Carica reCAPTCHA quando Google reCAPTCHA è pronto - SOLO SE NECESSARIO
+        window.addEventListener('load', () => {
+            if (!window.useFirebase || !appCheckEnabled) {
+                // Nascondi reCAPTCHA se App Check non è attivo
+                const container = document.getElementById('recaptcha-container');
+                if (container) {
+                    container.parentElement.style.display = 'none';
+                }
+                return;
+            }
+            
+            // Controlla periodicamente se reCAPTCHA è disponibile
+            const checkRecaptcha = () => {
+                if (typeof grecaptcha !== 'undefined' && grecaptcha.render && !recaptchaRendered) {
+                    setTimeout(window.onRecaptchaLoad, 100);
+                } else if (!recaptchaRendered) {
+                    setTimeout(checkRecaptcha, 500);
+                }
+            };
+            checkRecaptcha();
+        });
+    </script>
     
 
 </head>
@@ -19,15 +176,11 @@
     <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
     
     <!-- Connection Status -->
- <div id="connectionStatus" class="connection-status offline">🔴 Disconnesso</div>
+    <div id="connectionStatus" class="connection-status offline">🔴 Disconnesso</div>
     
     <!-- Message Counter -->
     <div id="messageCounter" class="message-counter">💬 0 messaggi</div>
 
-    <!-- Profile Settings Modal - Add this -->
-    <div id="profile-settings-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
     <!-- Login Modal -->
     <div id="loginModal" class="login-modal">
         <div class="login-form">
@@ -106,12 +259,6 @@
         <div class="user-info">
             <div class="user-avatar"></div>
             <div style="display: inline-block; vertical-align: middle;">
-                <img id="profile-photo" src="placeholder.png" alt="Profile Photo" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px; vertical-align: middle;">
-                <div style="display: inline-block; vertical-align: middle;">
-                    <div class="user-name">
-                        <span id="currentUsername">Ospite</span>
-                        <span id="userStatus" class="online-indicator" style="display: none;"></span>
-                    </div>
                 <div class="user-name">
                     <span id="currentUsername">Ospite</span>
                     <span id="userStatus" class="offline-indicator"></span>
@@ -120,8 +267,6 @@
                 <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
             </div>
         </div>
-        <button id="profile-settings-button" class="sidebar-btn">⚙️ Impostazioni Profilo</button>
-    </div>
 
         <div class="nav-section">
             <div class="nav-title">🏠 Home</div>
@@ -192,11 +337,14 @@
         </div>
 
         <div class="header">
- <h2 id="section-title">🏠 Dashboard</h2>
-            <p id="section-description">Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità.</p>
+            <h2 id="section-title">🏠 Dashboard</h2>
+            <p id="section-description">Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità</p>
         </div>
 
-        <div class="content-area active-content" id="dashboard-content">
+        <div class="content-area">
+            <!-- Forum Layout -->
+            <div class="forum-layout" id="forum-content">
+                <div class="thread-list" id="thread-list">
                     <!-- I thread verranno generati dinamicamente -->
                 </div>
             </div>
@@ -319,6 +467,7 @@
                         </div>
                     </div>
 				
+				</div>
             </div>
         </div>
     </div>
@@ -356,54 +505,6 @@
         <img id="modalImage" src="" alt="Immagine a schermo intero">
     </div>
 
-    <!-- Notifications Modal -->
-    <div id="notifications-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h3>Notifiche</h3>
-            <div id="notifications-list">
-                <!-- Notifications will be loaded here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Messages Modal -->
-    <div id="messages-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h3>Messaggi Privati</h3>
-            <div id="messages-area">
-                <div id="conversations-list">
-                    <h4>Conversazioni</h4>
-                    <!-- Conversations will be loaded here -->
-                </div>
-                <div id="chat-area" style="display: none;"> <!-- Initially hidden -->
-                     <div id="messages-list">
-                        <!-- Messages will be loaded here -->
-                    </div>
-                    <div id="message-input-area">
-                        <textarea id="message-textarea" placeholder="Invia un messaggio..."></textarea>
-                        <button id="send-message-button">Invia</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Profile Settings Modal -->
-    <div id="profile-settings-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h3>Impostazioni Profilo</h3>
-            <div id="profile-settings-form">
-                <label for="nickname-input">Nickname:</label>
-                <input type="text" id="nickname-input"><br><br>
-                <label for="profile-photo-input">Immagine Profilo:</label>
-                <input type="file" id="profile-photo-input" accept="image/*"><br><br>
-                <button id="save-profile-button">Salva Profilo</button>
-            </div>
-        </div>
-    </div>
     <script src="script.js"></script>
 </body>
 </html>
