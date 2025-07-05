@@ -412,6 +412,7 @@
                         </div>
                     </div>
                     
+                    
                     <div class="comment-input">
                         <div class="comment-input-container">
                             <div class="comment-input-main">
@@ -419,7 +420,7 @@
                                     <textarea id="comment-text" placeholder="Scrivi un commento..."></textarea>
                                 </div>
                                 <div class="comment-controls">
-                                    <div style="display: flex; gap: 5px;">
+                                    <div class="comment-buttons-row">
                                         <button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
                                         <div class="emoticon-picker">
                                             <button class="emoticon-btn" onclick="toggleEmoticonPicker('comment')">😊</button>
@@ -447,7 +448,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <button onclick="addComment()" style="padding: 10px 20px; background: linear-gradient(45deg, #DAA520, #B8860B); border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer;">Commenta</button>
+                                    <button id="submit-comment-btn" onclick="addComment()" class="submit-comment-btn">Commenta</button>
                                 </div>
                             </div>
                             
@@ -462,6 +463,7 @@
                             </div>
                         </div>
                     </div>
+				
 				</div>
             </div>
         </div>

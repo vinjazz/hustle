@@ -1474,12 +1474,35 @@ body::before {
     flex-direction: column;
     gap: 5px;
     align-items: flex-end;
-    min-height: 50px; /* Assicura altezza minima */
+    min-height: 50px;
 }
 
-.comment-controls > div:first-child {
-    display: flex !important; /* Forza la visualizzazione */
+.comment-buttons-row {
+    display: flex !important;
     gap: 5px;
+    align-items: center;
+}
+
+.submit-comment-btn {
+    padding: 10px 20px;
+    background: linear-gradient(45deg, #DAA520, #B8860B);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.submit-comment-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4);
+}
+
+.submit-comment-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
 }
 
 .comment-image-upload {
