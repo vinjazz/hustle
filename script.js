@@ -467,7 +467,6 @@ function hideMentionAutocomplete() {
 // ==============================================
 // GESTIONE NOTIFICHE - CREAZIONE E INVIO
 // ==============================================
-
 async function createNotification(type, targetUserId, data) {
     if (!currentUser || targetUserId === currentUser.uid)
         return;
