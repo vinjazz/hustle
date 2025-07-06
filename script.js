@@ -224,18 +224,47 @@ const sectionConfig = {
     }
 };
 
+function ensureNotificationsBellExists() {
+    let bell = document.getElementById('notificationsBell');
+    
+    if (!bell) {
+        console.log('🚨 Campanella non trovata, creando elemento di emergenza...');
+        
+        // Crea l'elemento
+        bell = document.createElement('button');
+        bell.id = 'notificationsBell';
+        bell.className = 'notifications-bell';
+        bell.innerHTML = '🔔<span id="notificationBadge" class="notification-badge hidden">0</span>';
+        bell.onclick = toggleNotificationsPanel;
+        
+        // Aggiungi al body
+        document.body.appendChild(bell);
+        
+        console.log('✅ Campanella di emergenza creata!');
+    }
+    
+    return bell;
+}
+
 function initializeNotifications() {
     console.log('🔔 Inizializzazione sistema notifiche...');
+
+    // Assicurati che la campanella esista
+    ensureNotificationsBellExists();
 
     // Forza visibilità della campanella
     const notificationsBell = document.getElementById('notificationsBell');
     if (notificationsBell) {
-        notificationsBell.style.display = 'block';
+        notificationsBell.style.display = 'flex';
         notificationsBell.style.visibility = 'visible';
         notificationsBell.style.opacity = '1';
+        notificationsBell.style.position = 'fixed';
+        notificationsBell.style.top = '20px';
+        notificationsBell.style.right = '180px';
+        notificationsBell.style.zIndex = '9999';
         console.log('🔔 Campanella notifiche forzata visibile');
     } else {
-        console.error('❌ Elemento notificationsBell non trovato!');
+        console.error('❌ Elemento notificationsBell non trovato anche dopo creazione di emergenza!');
     }
 
     // Carica notifiche esistenti
@@ -252,7 +281,6 @@ function initializeNotifications() {
 
     console.log('✅ Sistema notifiche inizializzato');
 }
-
 function detectMentions(text) {
     // Regex per trovare @username
     const mentionRegex = /@([a-zA-Z0-9_]+)/g;

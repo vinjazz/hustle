@@ -160,7 +160,6 @@ body::before {
     opacity: 1 !important;
     z-index: 9999 !important;
 }
-
 .notification-badge {
     position: absolute;
     top: -5px;
