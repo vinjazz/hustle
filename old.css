@@ -128,7 +128,7 @@ body::before {
 .notifications-bell {
     position: fixed;
     top: 20px;
-    right: 20px;
+    right: 340px;
     background: var(--gradient-secondary);
     color: white;
     border: none;
