@@ -560,6 +560,7 @@ function loadNotifications() {
         const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
         notificationsData = notifications;
         updateNotificationsUI();
+		console.log('📥 notifiche caricate da Firebase:', notificationsData);
     }
 }
 
