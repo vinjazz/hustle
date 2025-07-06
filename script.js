@@ -485,6 +485,33 @@ async function createNotification(type, targetUserId, data) {
 
     try {
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            // Salva su Firebase - usa timestamp locale per compatibilità
+            const notificationData = {
+                ...notification,
+                timestamp: Date.now() // Usa timestamp locale invece di serverTimestamp per evitare problemi
+            };
+            const notifRef = ref(window.firebaseDatabase, `notifications/${targetUserId}/${notification.id}`);
+            await set(notifRef, notificationData);
+            console.log('📨 Notifica salvata su Firebase:', notificationData);
+        } else {
+            // Salva in localStorage
+            saveLocalNotification(targetUserId, notification);
+        }
+
+        console.log('📨 Notifica creata:', notification);
+
+        // Mostra toast se è per l'utente corrente (per test)
+        if (targetUserId === currentUser.uid) {
+            showMentionToast(notification);
+        }
+
+    } catch (error) {
+        console.error('Errore creazione notifica:', error);
+    }
+}
+
+    try {
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
             // Salva su Firebase
             const notifRef = ref(window.firebaseDatabase, `notifications/${targetUserId}/${notification.id}`);
             await set(notifRef, notification);
