@@ -2048,6 +2048,11 @@ body::before {
     }
 }
 
+
+#notificationsBell {
+    display: block !important;
+}
+
 /* AUTOCOMPLETE MENZIONI */
 .mention-autocomplete {
     position: absolute;
