@@ -509,27 +509,6 @@ async function createNotification(type, targetUserId, data) {
         console.error('Errore creazione notifica:', error);
     }
 }
-
-    try {
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // Salva su Firebase
-            const notifRef = ref(window.firebaseDatabase, `notifications/${targetUserId}/${notification.id}`);
-            await set(notifRef, notification);
-        } else {
-            // Salva in localStorage
-            saveLocalNotification(targetUserId, notification);
-        }
-
-        console.log('📨 Notifica creata:', notification);
-
-        // Se l'utente target è online, mostra toast (simulazione)
-        showMentionToast(notification);
-
-    } catch (error) {
-        console.error('Errore creazione notifica:', error);
-    }
-}
-
 function saveLocalNotification(targetUserId, notification) {
     const storageKey = `hc_notifications_${targetUserId}`;
     const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
