@@ -1,250 +1,255 @@
 // Aspetta che Firebase sia caricato
-        window.addEventListener('load', async () => {
-            // Attendi che i moduli Firebase siano pronti
-            await new Promise(resolve => {
-                const checkFirebase = () => {
-                    if (window.firebaseApp && window.firebaseAuth && window.firebaseDatabase) {
-                        resolve();
-                    } else {
-                        setTimeout(checkFirebase, 100);
-                    }
-                };
-                checkFirebase();
-            });
-
-            // Inizializza l'app
-            initializeApp();
-        });
-
-        // Variabili globali
-        let currentUser = null;
-        let currentSection = 'home';
-        let messageListeners = {};
-        let threadListeners = {};
-        let messageCount = 0;
-        let isConnected = false;
-        let firebaseReady = false;
-        let isLoginMode = true; // true = login, false = register
-        let currentUserData = null; // Dati completi dell'utente corrente
-        let currentThread = null;
-        let currentThreadId = null;
-        let currentThreadSection = null;
-		// Flag per evitare listener multipli
-		let commentImageUploadInitialized = false;
-		let notificationsData = [];
-		let unreadNotificationsCount = 0;
-		let allUsers = []; // Cache degli utenti per autocomplete
-		let mentionAutocompleteVisible = false;
-		let currentMentionInput = null;
-		let currentMentionPosition = 0;
-
-        // Ruoli utente - DEVE essere definito prima di tutto
-        const USER_ROLES = {
-            SUPERUSER: 'superuser',
-            CLAN_MOD: 'clan_mod',
-            USER: 'user'
-        };
-
-        // Funzioni Firebase (saranno assegnate quando Firebase è pronto)
-        let signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, 
-            signOut, updateProfile, GoogleAuthProvider, signInWithPopup, ref, push, set, get, onValue, off, serverTimestamp, 
-            onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject;
-
-        // Rendi le funzioni globali per gli onclick
-        window.switchToLogin = switchToLogin;
-        window.switchToRegister = switchToRegister;
-        window.handleSubmit = handleSubmit;
-        window.handleGoogleLogin = handleGoogleLogin;
-        window.sendMessage = sendMessage;
-        window.showThreadCreationModal = showThreadCreationModal;
-        window.hideThreadCreationModal = hideThreadCreationModal;
-        window.createThread = createThread;
-        window.openThread = openThread;
-        window.backToForum = backToForum;
-        window.addComment = addComment;
-        window.toggleEmoticonPicker = toggleEmoticonPicker;
-        window.addEmoticon = addEmoticon;
-        window.toggleMobileMenu = toggleMobileMenu;
-        window.closeMobileMenu = closeMobileMenu;
-        window.approveThread = approveThread;
-        window.rejectThread = rejectThread;
-        window.assignClan = assignClan;
-        window.changeUserRole = changeUserRole;
-        window.removFromClan = removFromClan;
-        window.createNewClan = createNewClan;
-        window.deleteClan = deleteClan;
-        window.switchSection = switchSection;
-        window.handleImageSelect = handleImageSelect;
-        window.removeSelectedImage = removeSelectedImage;
-        window.openImageModal = openImageModal;
-        window.closeImageModal = closeImageModal;
-		window.toggleCommentImageUpload = toggleCommentImageUpload;
-		window.handleCommentImageSelect = handleCommentImageSelect;
-		window.removeCommentSelectedImage = removeCommentSelectedImage;
-		window.handleCommentImageSelect = handleCommentImageSelect;
-		window.removeCommentSelectedImage = removeCommentSelectedImage;
-		window.cleanupCommentImageUpload = cleanupCommentImageUpload;
-		window.toggleNotificationsPanel = toggleNotificationsPanel;
-		window.markAllNotificationsAsRead = markAllNotificationsAsRead;
-		window.handleNotificationClick = handleNotificationClick;
-		window.selectMentionSuggestion = selectMentionSuggestion;
-		window.dismissToast = dismissToast;
-		window.handleToastAction = handleToastAction;
-
-        // Funzioni per la gestione dei ruoli
-        function getCurrentUserRole() {
-            return currentUserData?.role || USER_ROLES.USER;
-        }
-
-        function getCurrentUserClan() {
-            const clanElement = document.getElementById('currentClan');
-            return clanElement ? clanElement.textContent : 'Nessuno';
-        }
-
-        function hasRole(requiredRole) {
-            const currentRole = getCurrentUserRole();
-            if (currentRole === USER_ROLES.SUPERUSER) return true;
-            if (requiredRole === USER_ROLES.CLAN_MOD && currentRole === USER_ROLES.CLAN_MOD) return true;
-            if (requiredRole === USER_ROLES.USER) return true;
-            return false;
-        }
-
-        function isClanModerator() {
-            const currentRole = getCurrentUserRole();
-            const userClan = getCurrentUserClan();
-            return (currentRole === USER_ROLES.CLAN_MOD || currentRole === USER_ROLES.SUPERUSER) && userClan !== 'Nessuno';
-        }
-
-        function canModerateSection(sectionKey) {
-            const currentRole = getCurrentUserRole();
-            const userClan = getCurrentUserClan();
-            
-            if (currentRole === USER_ROLES.SUPERUSER) return true;
-            
-            if (sectionKey.startsWith('clan-') && currentRole === USER_ROLES.CLAN_MOD) {
-                return userClan !== 'Nessuno';
-            }
-            
-            return false;
-        }
-
-        function canAccessSection(sectionKey) {
-            const section = sectionConfig[sectionKey];
-            if (!section) return false;
-            
-            // Controllo accesso clan
-            if (sectionKey.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
-                return false;
-            }
-            
-            // Controllo accesso admin (solo superuser)
-            if (section.requiredRole === USER_ROLES.SUPERUSER && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
-                return false;
-            }
-            
-            return true;
-        }
-
-        // Configurazione sezioni - DEVE essere definito dopo USER_ROLES
-        const sectionConfig = {
-            'home': {
-                title: '🏠 Dashboard',
-                description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
-                type: 'dashboard'
-            },
-            'eventi': {
-                title: '📅 Eventi',
-                description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle Council',
-                type: 'forum'
-            },
-            'oggetti': {
-                title: '⚔️ Oggetti',
-                description: 'Discussioni su armi, armature e oggetti del gioco',
-                type: 'forum'
-            },
-            'novita': {
-                title: '🆕 Novità',
-                description: 'Ultime notizie e aggiornamenti del gioco',
-                type: 'forum'
-            },
-            'chat-generale': {
-                title: '💬 Chat Generale',
-                description: 'Chiacchiere libere tra tutti i giocatori',
-                type: 'chat'
-            },
-			'associa-clan': {
-                title: '🏠 Associa Clan',
-                description: 'Richiedi di essere associato ad un clan',
-                type: 'forum'
-            },
-            'admin-users': {
-                title: '👥 Gestione Utenti',
-                description: 'Pannello amministrativo per gestire utenti e clan',
-                type: 'admin',
-                requiredRole: USER_ROLES.SUPERUSER
-            },
-            'admin-clans': {
-                title: '🏰 Gestione Clan',
-                description: 'Creazione e gestione dei clan',
-                type: 'admin',
-                requiredRole: USER_ROLES.SUPERUSER
-            },
-            'clan-moderation': {
-                title: '🛡️ Moderazione Clan',
-                description: 'Gestione e approvazione contenuti del clan',
-                type: 'clan-admin'
-            },
-            'clan-chat': {
-                title: '💬 Chat Clan',
-                description: 'Chat privata del tuo clan',
-                type: 'chat'
-            },
-            'clan-war': {
-                title: '⚔️ Guerra Clan',
-                description: 'Strategie e coordinamento per le guerre tra clan',
-                type: 'forum'
-            },
-            'clan-premi': {
-                title: '🏆 Premi Clan',
-                description: 'Ricompense e achievement del clan',
-                type: 'forum'
-            },
-            'clan-consigli': {
-                title: '💡 Consigli Clan',
-                description: 'Suggerimenti e guide per i membri del clan',
-                type: 'forum'
-            },
-			'clan-bacheca': {
-                title: '🏰 Bacheca Clan',
-                description: 'Messaggi importanti per i membri del clan',
-                type: 'forum'
+window.addEventListener('load', async() => {
+    // Attendi che i moduli Firebase siano pronti
+    await new Promise(resolve => {
+        const checkFirebase = () => {
+            if (window.firebaseApp && window.firebaseAuth && window.firebaseDatabase) {
+                resolve();
+            } else {
+                setTimeout(checkFirebase, 100);
             }
         };
-		
-		function initializeNotifications() {
-			console.log('🔔 Inizializzazione sistema notifiche...');
-			
-			// Carica notifiche esistenti
-			loadNotifications();
-			
-			// Setup listeners per le menzioni
-			setupMentionListeners();
-			
-			// Carica lista utenti per autocomplete
-			loadUsersList();
-			
-			// Setup click outside per chiudere pannelli
-			document.addEventListener('click', handleClickOutside);
-			
-			console.log('✅ Sistema notifiche inizializzato');
-		}
-		
-		function detectMentions(text) {
+        checkFirebase();
+    });
+
+    // Inizializza l'app
+    initializeApp();
+});
+
+// Variabili globali
+let currentUser = null;
+let currentSection = 'home';
+let messageListeners = {};
+let threadListeners = {};
+let messageCount = 0;
+let isConnected = false;
+let firebaseReady = false;
+let isLoginMode = true; // true = login, false = register
+let currentUserData = null; // Dati completi dell'utente corrente
+let currentThread = null;
+let currentThreadId = null;
+let currentThreadSection = null;
+// Flag per evitare listener multipli
+let commentImageUploadInitialized = false;
+let notificationsData = [];
+let unreadNotificationsCount = 0;
+let allUsers = []; // Cache degli utenti per autocomplete
+let mentionAutocompleteVisible = false;
+let currentMentionInput = null;
+let currentMentionPosition = 0;
+
+// Ruoli utente - DEVE essere definito prima di tutto
+const USER_ROLES = {
+    SUPERUSER: 'superuser',
+    CLAN_MOD: 'clan_mod',
+    USER: 'user'
+};
+
+// Funzioni Firebase (saranno assegnate quando Firebase è pronto)
+let signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged,
+signOut, updateProfile, GoogleAuthProvider, signInWithPopup, ref, push, set, get, onValue, off, serverTimestamp,
+onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject;
+
+// Rendi le funzioni globali per gli onclick
+window.switchToLogin = switchToLogin;
+window.switchToRegister = switchToRegister;
+window.handleSubmit = handleSubmit;
+window.handleGoogleLogin = handleGoogleLogin;
+window.sendMessage = sendMessage;
+window.showThreadCreationModal = showThreadCreationModal;
+window.hideThreadCreationModal = hideThreadCreationModal;
+window.createThread = createThread;
+window.openThread = openThread;
+window.backToForum = backToForum;
+window.addComment = addComment;
+window.toggleEmoticonPicker = toggleEmoticonPicker;
+window.addEmoticon = addEmoticon;
+window.toggleMobileMenu = toggleMobileMenu;
+window.closeMobileMenu = closeMobileMenu;
+window.approveThread = approveThread;
+window.rejectThread = rejectThread;
+window.assignClan = assignClan;
+window.changeUserRole = changeUserRole;
+window.removFromClan = removFromClan;
+window.createNewClan = createNewClan;
+window.deleteClan = deleteClan;
+window.switchSection = switchSection;
+window.handleImageSelect = handleImageSelect;
+window.removeSelectedImage = removeSelectedImage;
+window.openImageModal = openImageModal;
+window.closeImageModal = closeImageModal;
+window.toggleCommentImageUpload = toggleCommentImageUpload;
+window.handleCommentImageSelect = handleCommentImageSelect;
+window.removeCommentSelectedImage = removeCommentSelectedImage;
+window.handleCommentImageSelect = handleCommentImageSelect;
+window.removeCommentSelectedImage = removeCommentSelectedImage;
+window.cleanupCommentImageUpload = cleanupCommentImageUpload;
+window.toggleNotificationsPanel = toggleNotificationsPanel;
+window.markAllNotificationsAsRead = markAllNotificationsAsRead;
+window.handleNotificationClick = handleNotificationClick;
+window.selectMentionSuggestion = selectMentionSuggestion;
+window.dismissToast = dismissToast;
+window.handleToastAction = handleToastAction;
+
+// Funzioni per la gestione dei ruoli
+function getCurrentUserRole() {
+    return currentUserData?.role || USER_ROLES.USER;
+}
+
+function getCurrentUserClan() {
+    const clanElement = document.getElementById('currentClan');
+    return clanElement ? clanElement.textContent : 'Nessuno';
+}
+
+function hasRole(requiredRole) {
+    const currentRole = getCurrentUserRole();
+    if (currentRole === USER_ROLES.SUPERUSER)
+        return true;
+    if (requiredRole === USER_ROLES.CLAN_MOD && currentRole === USER_ROLES.CLAN_MOD)
+        return true;
+    if (requiredRole === USER_ROLES.USER)
+        return true;
+    return false;
+}
+
+function isClanModerator() {
+    const currentRole = getCurrentUserRole();
+    const userClan = getCurrentUserClan();
+    return (currentRole === USER_ROLES.CLAN_MOD || currentRole === USER_ROLES.SUPERUSER) && userClan !== 'Nessuno';
+}
+
+function canModerateSection(sectionKey) {
+    const currentRole = getCurrentUserRole();
+    const userClan = getCurrentUserClan();
+
+    if (currentRole === USER_ROLES.SUPERUSER)
+        return true;
+
+    if (sectionKey.startsWith('clan-') && currentRole === USER_ROLES.CLAN_MOD) {
+        return userClan !== 'Nessuno';
+    }
+
+    return false;
+}
+
+function canAccessSection(sectionKey) {
+    const section = sectionConfig[sectionKey];
+    if (!section)
+        return false;
+
+    // Controllo accesso clan
+    if (sectionKey.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
+        return false;
+    }
+
+    // Controllo accesso admin (solo superuser)
+    if (section.requiredRole === USER_ROLES.SUPERUSER && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
+        return false;
+    }
+
+    return true;
+}
+
+// Configurazione sezioni - DEVE essere definito dopo USER_ROLES
+const sectionConfig = {
+    'home': {
+        title: '🏠 Dashboard',
+        description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
+        type: 'dashboard'
+    },
+    'eventi': {
+        title: '📅 Eventi',
+        description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle Council',
+        type: 'forum'
+    },
+    'oggetti': {
+        title: '⚔️ Oggetti',
+        description: 'Discussioni su armi, armature e oggetti del gioco',
+        type: 'forum'
+    },
+    'novita': {
+        title: '🆕 Novità',
+        description: 'Ultime notizie e aggiornamenti del gioco',
+        type: 'forum'
+    },
+    'chat-generale': {
+        title: '💬 Chat Generale',
+        description: 'Chiacchiere libere tra tutti i giocatori',
+        type: 'chat'
+    },
+    'associa-clan': {
+        title: '🏠 Associa Clan',
+        description: 'Richiedi di essere associato ad un clan',
+        type: 'forum'
+    },
+    'admin-users': {
+        title: '👥 Gestione Utenti',
+        description: 'Pannello amministrativo per gestire utenti e clan',
+        type: 'admin',
+        requiredRole: USER_ROLES.SUPERUSER
+    },
+    'admin-clans': {
+        title: '🏰 Gestione Clan',
+        description: 'Creazione e gestione dei clan',
+        type: 'admin',
+        requiredRole: USER_ROLES.SUPERUSER
+    },
+    'clan-moderation': {
+        title: '🛡️ Moderazione Clan',
+        description: 'Gestione e approvazione contenuti del clan',
+        type: 'clan-admin'
+    },
+    'clan-chat': {
+        title: '💬 Chat Clan',
+        description: 'Chat privata del tuo clan',
+        type: 'chat'
+    },
+    'clan-war': {
+        title: '⚔️ Guerra Clan',
+        description: 'Strategie e coordinamento per le guerre tra clan',
+        type: 'forum'
+    },
+    'clan-premi': {
+        title: '🏆 Premi Clan',
+        description: 'Ricompense e achievement del clan',
+        type: 'forum'
+    },
+    'clan-consigli': {
+        title: '💡 Consigli Clan',
+        description: 'Suggerimenti e guide per i membri del clan',
+        type: 'forum'
+    },
+    'clan-bacheca': {
+        title: '🏰 Bacheca Clan',
+        description: 'Messaggi importanti per i membri del clan',
+        type: 'forum'
+    }
+};
+
+function initializeNotifications() {
+    console.log('🔔 Inizializzazione sistema notifiche...');
+
+    // Carica notifiche esistenti
+    loadNotifications();
+
+    // Setup listeners per le menzioni
+    setupMentionListeners();
+
+    // Carica lista utenti per autocomplete
+    loadUsersList();
+
+    // Setup click outside per chiudere pannelli
+    document.addEventListener('click', handleClickOutside);
+
+    console.log('✅ Sistema notifiche inizializzato');
+}
+
+function detectMentions(text) {
     // Regex per trovare @username
     const mentionRegex = /@([a-zA-Z0-9_]+)/g;
     const mentions = [];
     let match;
-    
+
     while ((match = mentionRegex.exec(text)) !== null) {
         const username = match[1];
         // Verifica che l'utente esista
@@ -258,7 +263,7 @@
             });
         }
     }
-    
+
     return mentions;
 }
 
@@ -266,15 +271,15 @@ function handleClickOutside(event) {
     // Chiudi notifications panel
     const notifPanel = document.getElementById('notificationsPanel');
     const notifBell = document.getElementById('notificationsBell');
-    
+
     if (!notifPanel.contains(event.target) && !notifBell.contains(event.target)) {
         notifPanel.classList.remove('show');
     }
-    
+
     // Chiudi mention autocomplete
     const mentionAutocomplete = document.getElementById('mentionAutocomplete');
     const isInputFocused = ['message-input', 'comment-text', 'thread-content-input'].includes(event.target.id);
-    
+
     if (!mentionAutocomplete.contains(event.target) && !isInputFocused) {
         hideMentionAutocomplete();
     }
@@ -282,7 +287,7 @@ function handleClickOutside(event) {
 
 function highlightMentions(text, currentUserId = null) {
     const mentionRegex = /@([a-zA-Z0-9_]+)/g;
-    
+
     return text.replace(mentionRegex, (match, username) => {
         const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (user) {
@@ -305,14 +310,14 @@ function setupMentionListeners() {
         messageInput.addEventListener('input', handleMentionInput);
         messageInput.addEventListener('keydown', handleMentionKeydown);
     }
-    
+
     // Comment textarea
     const commentTextarea = document.getElementById('comment-text');
     if (commentTextarea) {
         commentTextarea.addEventListener('input', handleMentionInput);
         commentTextarea.addEventListener('keydown', handleMentionKeydown);
     }
-    
+
     // Thread content textarea
     const threadTextarea = document.getElementById('thread-content-input');
     if (threadTextarea) {
@@ -325,11 +330,11 @@ function handleMentionInput(event) {
     const input = event.target;
     const text = input.value;
     const cursorPos = input.selectionStart;
-    
+
     // Trova l'ultima @ prima del cursore
     const textBeforeCursor = text.substring(0, cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    
+
     if (lastAtIndex !== -1) {
         // Verifica che non ci sia uno spazio tra @ e cursore
         const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
@@ -341,59 +346,59 @@ function handleMentionInput(event) {
             return;
         }
     }
-    
+
     // Nascondi autocomplete
     hideMentionAutocomplete();
 }
 
 function handleMentionKeydown(event) {
-    if (!mentionAutocompleteVisible) return;
-    
+    if (!mentionAutocompleteVisible)
+        return;
+
     const autocomplete = document.getElementById('mentionAutocomplete');
     const suggestions = autocomplete.querySelectorAll('.mention-suggestion');
     let selectedIndex = Array.from(suggestions).findIndex(s => s.classList.contains('selected'));
-    
+
     switch (event.key) {
-        case 'ArrowDown':
-            event.preventDefault();
-            selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
-            updateAutocompleteSelection(suggestions, selectedIndex);
-            break;
-            
-        case 'ArrowUp':
-            event.preventDefault();
-            selectedIndex = Math.max(selectedIndex - 1, 0);
-            updateAutocompleteSelection(suggestions, selectedIndex);
-            break;
-            
-        case 'Enter':
-        case 'Tab':
-            event.preventDefault();
-            if (selectedIndex >= 0 && suggestions[selectedIndex]) {
-                selectMentionSuggestion(suggestions[selectedIndex]);
-            }
-            break;
-            
-        case 'Escape':
-            hideMentionAutocomplete();
-            break;
+    case 'ArrowDown':
+        event.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+        updateAutocompleteSelection(suggestions, selectedIndex);
+        break;
+
+    case 'ArrowUp':
+        event.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, 0);
+        updateAutocompleteSelection(suggestions, selectedIndex);
+        break;
+
+    case 'Enter':
+    case 'Tab':
+        event.preventDefault();
+        if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+            selectMentionSuggestion(suggestions[selectedIndex]);
+        }
+        break;
+
+    case 'Escape':
+        hideMentionAutocomplete();
+        break;
     }
 }
 
 function showMentionAutocomplete(query, inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
-    
+
     // Filtra utenti in base alla query
-    const filteredUsers = allUsers.filter(user => 
-        user.username.toLowerCase().includes(query.toLowerCase()) &&
-        user.uid !== currentUser?.uid
-    ).slice(0, 8); // Massimo 8 suggerimenti
-    
+    const filteredUsers = allUsers.filter(user =>
+            user.username.toLowerCase().includes(query.toLowerCase()) &&
+            user.uid !== currentUser?.uid).slice(0, 8); // Massimo 8 suggerimenti
+
     if (filteredUsers.length === 0) {
         hideMentionAutocomplete();
         return;
     }
-    
+
     // Genera HTML suggerimenti
     autocomplete.innerHTML = filteredUsers.map((user, index) => `
         <div class="mention-suggestion ${index === 0 ? 'selected' : ''}" 
@@ -409,10 +414,10 @@ function showMentionAutocomplete(query, inputElement) {
             </div>
         </div>
     `).join('');
-    
+
     // Posiziona autocomplete
     positionAutocomplete(inputElement);
-    
+
     autocomplete.classList.add('show');
     mentionAutocompleteVisible = true;
 }
@@ -420,7 +425,7 @@ function showMentionAutocomplete(query, inputElement) {
 function positionAutocomplete(inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
     const rect = inputElement.getBoundingClientRect();
-    
+
     autocomplete.style.position = 'fixed';
     autocomplete.style.left = rect.left + 'px';
     autocomplete.style.top = (rect.bottom + 5) + 'px';
@@ -436,21 +441,21 @@ function updateAutocompleteSelection(suggestions, selectedIndex) {
 function selectMentionSuggestion(suggestion) {
     const username = suggestion.dataset.username;
     const input = currentMentionInput;
-    
+
     if (input && username) {
         const text = input.value;
         const beforeMention = text.substring(0, currentMentionPosition);
         const afterCursor = text.substring(input.selectionStart);
-        
+
         const newText = beforeMention + '@' + username + ' ' + afterCursor;
         input.value = newText;
-        
+
         // Posiziona cursore dopo la menzione
         const newCursorPos = beforeMention.length + username.length + 2;
         input.setSelectionRange(newCursorPos, newCursorPos);
         input.focus();
     }
-    
+
     hideMentionAutocomplete();
 }
 
@@ -466,8 +471,9 @@ function hideMentionAutocomplete() {
 // ==============================================
 
 async function createNotification(type, targetUserId, data) {
-    if (!currentUser || targetUserId === currentUser.uid) return;
-    
+    if (!currentUser || targetUserId === currentUser.uid)
+        return;
+
     const notification = {
         id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
         type: type,
@@ -478,7 +484,7 @@ async function createNotification(type, targetUserId, data) {
         read: false,
         ...data
     };
-    
+
     try {
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
             // Salva su Firebase
@@ -488,12 +494,12 @@ async function createNotification(type, targetUserId, data) {
             // Salva in localStorage
             saveLocalNotification(targetUserId, notification);
         }
-        
+
         console.log('📨 Notifica creata:', notification);
-        
+
         // Se l'utente target è online, mostra toast (simulazione)
         showMentionToast(notification);
-        
+
     } catch (error) {
         console.error('Errore creazione notifica:', error);
     }
@@ -503,14 +509,14 @@ function saveLocalNotification(targetUserId, notification) {
     const storageKey = `hc_notifications_${targetUserId}`;
     const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
     notifications.unshift(notification); // Aggiungi in cima
-    
+
     // Mantieni solo le ultime 50 notifiche
     if (notifications.length > 50) {
         notifications.splice(50);
     }
-    
+
     localStorage.setItem(storageKey, JSON.stringify(notifications));
-    
+
     // Se è l'utente corrente, aggiorna la UI
     if (targetUserId === currentUser?.uid) {
         loadNotifications();
@@ -522,8 +528,9 @@ function saveLocalNotification(targetUserId, notification) {
 // ==============================================
 
 function loadNotifications() {
-    if (!currentUser) return;
-    
+    if (!currentUser)
+        return;
+
     if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
         // Carica da Firebase
         const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}`);
@@ -537,10 +544,10 @@ function loadNotifications() {
                     });
                 });
             }
-            
+
             // Ordina per timestamp (più recenti prima)
             notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            
+
             notificationsData = notifications;
             updateNotificationsUI();
         });
@@ -556,7 +563,7 @@ function loadNotifications() {
 function updateNotificationsUI() {
     const unreadCount = notificationsData.filter(n => !n.read).length;
     unreadNotificationsCount = unreadCount;
-    
+
     // Aggiorna badge
     const badge = document.getElementById('notificationBadge');
     if (unreadCount > 0) {
@@ -565,7 +572,7 @@ function updateNotificationsUI() {
     } else {
         badge.classList.add('hidden');
     }
-    
+
     // Aggiorna lista se pannello è aperto
     if (document.getElementById('notificationsPanel').classList.contains('show')) {
         displayNotificationsList();
@@ -574,7 +581,7 @@ function updateNotificationsUI() {
 
 function displayNotificationsList() {
     const listContainer = document.getElementById('notificationsList');
-    
+
     if (notificationsData.length === 0) {
         listContainer.innerHTML = `
             <div class="notifications-empty">
@@ -584,7 +591,7 @@ function displayNotificationsList() {
         `;
         return;
     }
-    
+
     listContainer.innerHTML = notificationsData.map(notification => `
         <div class="notification-item ${!notification.read ? 'unread' : ''}" 
              onclick="handleNotificationClick('${notification.id}')">
@@ -605,21 +612,25 @@ function displayNotificationsList() {
 
 function getNotificationIcon(type) {
     switch (type) {
-        case 'mention': return '💬';
-        case 'reply': return '↩️';
-        case 'like': return '❤️';
-        default: return '🔔';
+    case 'mention':
+        return '💬';
+    case 'reply':
+        return '↩️';
+    case 'like':
+        return '❤️';
+    default:
+        return '🔔';
     }
 }
 
 function getNotificationMessage(notification) {
     switch (notification.type) {
-        case 'mention':
-            return `ti ha menzionato: "${notification.message || 'Messaggio'}"`;
-        case 'reply':
-            return `ha risposto al tuo thread: "${notification.message || 'Risposta'}"`;
-        default:
-            return notification.message || 'Nuova notifica';
+    case 'mention':
+        return `ti ha menzionato: "${notification.message || 'Messaggio'}"`;
+    case 'reply':
+        return `ha risposto al tuo thread: "${notification.message || 'Risposta'}"`;
+    default:
+        return notification.message || 'Nuova notifica';
     }
 }
 
@@ -630,13 +641,13 @@ function getNotificationMessage(notification) {
 function toggleNotificationsPanel() {
     const panel = document.getElementById('notificationsPanel');
     const isVisible = panel.classList.contains('show');
-    
+
     if (isVisible) {
         panel.classList.remove('show');
     } else {
         panel.classList.add('show');
         displayNotificationsList();
-        
+
         // Segna come lette quelle visibili dopo un delay
         setTimeout(() => {
             markVisibleNotificationsAsRead();
@@ -646,14 +657,15 @@ function toggleNotificationsPanel() {
 
 async function handleNotificationClick(notificationId) {
     const notification = notificationsData.find(n => n.id === notificationId);
-    if (!notification) return;
-    
+    if (!notification)
+        return;
+
     // Segna come letta
     await markNotificationAsRead(notificationId);
-    
+
     // Naviga al contenuto
     navigateToNotificationContent(notification);
-    
+
     // Chiudi pannello
     document.getElementById('notificationsPanel').classList.remove('show');
 }
@@ -661,7 +673,7 @@ async function handleNotificationClick(notificationId) {
 function navigateToNotificationContent(notification) {
     // Chiudi menu mobile se aperto
     closeMobileMenu();
-    
+
     if (notification.threadId && notification.section) {
         // Vai al thread
         switchSection(notification.section);
@@ -676,8 +688,9 @@ function navigateToNotificationContent(notification) {
 
 async function markNotificationAsRead(notificationId) {
     const notification = notificationsData.find(n => n.id === notificationId);
-    if (!notification || notification.read) return;
-    
+    if (!notification || notification.read)
+        return;
+
     try {
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
             // Aggiorna su Firebase
@@ -701,7 +714,7 @@ async function markNotificationAsRead(notificationId) {
 
 async function markAllNotificationsAsRead() {
     const unreadNotifications = notificationsData.filter(n => !n.read);
-    
+
     for (const notification of unreadNotifications) {
         await markNotificationAsRead(notification.id);
     }
@@ -709,7 +722,7 @@ async function markAllNotificationsAsRead() {
 
 function markVisibleNotificationsAsRead() {
     const unreadNotifications = notificationsData.filter(n => !n.read).slice(0, 10);
-    
+
     unreadNotifications.forEach(notification => {
         markNotificationAsRead(notification.id);
     });
@@ -721,36 +734,35 @@ function markVisibleNotificationsAsRead() {
 
 function showMentionToast(notification) {
     // Mostra toast solo se l'utente target è quello corrente (simulazione)
-    if (notification.targetUserId !== currentUser?.uid) return;
-    
+    if (notification.targetUserId !== currentUser?.uid)
+        return;
+
     const toast = createToast({
         type: 'mention',
         title: 'Nuova menzione',
         message: `${notification.fromUser} ti ha menzionato`,
         duration: 5000,
-        actions: [
-            {
+        actions: [{
                 text: 'Vai al messaggio',
                 action: () => navigateToNotificationContent(notification)
-            },
-            {
+            }, {
                 text: 'Ignora',
                 action: () => {},
                 secondary: true
             }
         ]
     });
-    
+
     showToast(toast);
 }
 
 function createToast(options) {
     const toastId = 'toast_' + Date.now();
-    
+
     const toast = document.createElement('div');
     toast.className = `toast ${options.type || ''}`;
     toast.id = toastId;
-    
+
     toast.innerHTML = `
         <div class="toast-header">
             <div class="toast-icon">${getNotificationIcon(options.type || 'notification')}</div>
@@ -771,22 +783,22 @@ function createToast(options) {
             </div>
         ` : ''}
     `;
-    
+
     // Salva azioni per riferimento
     toast._actions = options.actions || [];
-    
+
     return toast;
 }
 
 function showToast(toastElement) {
     const container = document.getElementById('toastContainer');
     container.appendChild(toastElement);
-    
+
     // Trigger animation
     setTimeout(() => {
         toastElement.classList.add('show');
     }, 100);
-    
+
     // Auto dismiss dopo durata specificata
     const duration = 5000; // Default 5 secondi
     setTimeout(() => {
@@ -821,12 +833,12 @@ function handleToastAction(toastId, actionIndex) {
 async function loadUsersList() {
     try {
         let users = [];
-        
+
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
             // Carica da Firebase
             const usersRef = ref(window.firebaseDatabase, 'users');
             const snapshot = await get(usersRef);
-            
+
             if (snapshot.exists()) {
                 snapshot.forEach((childSnapshot) => {
                     users.push({
@@ -840,505 +852,505 @@ async function loadUsersList() {
             const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
             users = Object.values(localUsers);
         }
-        
+
         allUsers = users;
         console.log('👥 Caricati', users.length, 'utenti per autocomplete');
-        
+
     } catch (error) {
         console.error('Errore caricamento utenti:', error);
     }
 }
 
-        // Inizializza l'applicazione
-        function initializeApp() {
-            console.log('🔥 Inizializzazione applicazione...');
-            
-            // Assegna funzioni Firebase se disponibili
-            if (window.firebaseImports) {
-                ({
-                    signInWithEmailAndPassword,
-                    createUserWithEmailAndPassword,
-                    onAuthStateChanged,
-                    signOut,
-                    updateProfile,
-                    GoogleAuthProvider,
-                    signInWithPopup,
-                    ref,
-                    push,
-                    set,
-                    get,
-                    onValue,
-                    off,
-                    serverTimestamp,
-                    onDisconnect,
-                    child,
-                    update,
-                    storageRef,
-                    uploadBytes,
-                    getDownloadURL,
-                    deleteObject
-                } = window.firebaseImports);
-                firebaseReady = true;
-            }
-            
-            // Aggiorna status Firebase nella modal
-            const statusEl = document.getElementById('firebase-status');
-            const hintEl = document.getElementById('demo-hint');
-            
-            if (window.useFirebase && window.firebaseAuth && firebaseReady) {
-                console.log('✅ Modalità Firebase attiva');
-                statusEl.style.background = 'rgba(0, 255, 0, 0.1)';
-                statusEl.style.color = '#008800';
-                
-                if (window.appCheckEnabled) {
-                    statusEl.textContent = '🔥 Firebase + App Check attivi - Sistema completo';
-                } else {
-                    statusEl.textContent = '🔥 Firebase attivo - App Check disabilitato (funzionalità ridotte)';
-                }
-                
-                hintEl.innerHTML = `🔐 <strong>Primo accesso?</strong><br>
+// Inizializza l'applicazione
+function initializeApp() {
+    console.log('🔥 Inizializzazione applicazione...');
+
+    // Assegna funzioni Firebase se disponibili
+    if (window.firebaseImports) {
+        ({
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut,
+            updateProfile,
+            GoogleAuthProvider,
+            signInWithPopup,
+            ref,
+            push,
+            set,
+            get,
+            onValue,
+            off,
+            serverTimestamp,
+            onDisconnect,
+            child,
+            update,
+            storageRef,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
+        } = window.firebaseImports);
+        firebaseReady = true;
+    }
+
+    // Aggiorna status Firebase nella modal
+    const statusEl = document.getElementById('firebase-status');
+    const hintEl = document.getElementById('demo-hint');
+
+    if (window.useFirebase && window.firebaseAuth && firebaseReady) {
+        console.log('✅ Modalità Firebase attiva');
+        statusEl.style.background = 'rgba(0, 255, 0, 0.1)';
+        statusEl.style.color = '#008800';
+
+        if (window.appCheckEnabled) {
+            statusEl.textContent = '🔥 Firebase + App Check attivi - Sistema completo';
+        } else {
+            statusEl.textContent = '🔥 Firebase attivo - App Check disabilitato (funzionalità ridotte)';
+        }
+
+        hintEl.innerHTML = `🔐 <strong>Primo accesso?</strong><br>
                     1. Registrati normalmente (sarai USER)<br>
                     2. Configura regole Firebase o usa admin@hustlecastle.com / admin123 (SUPER)<br>
                     3. Usa il pannello admin per promuovere il tuo account`;
-                
-                // Monitora stato autenticazione
-                onAuthStateChanged(window.firebaseAuth, (user) => {
-                    if (user) {
-                        currentUser = user;
-                        handleUserLogin(user);
-                    } else {
-                        currentUser = null;
-                        handleUserLogout();
-                    }
-                });
 
-                // Monitora connessione
-                const connectedRef = ref(window.firebaseDatabase, '.info/connected');
-                onValue(connectedRef, (snapshot) => {
-                    isConnected = snapshot.val() === true;
-                    updateConnectionStatus();
-                });
+        // Monitora stato autenticazione
+        onAuthStateChanged(window.firebaseAuth, (user) => {
+            if (user) {
+                currentUser = user;
+                handleUserLogin(user);
             } else {
-                console.log('⚠️ Modalità locale attiva');
-                statusEl.style.background = 'rgba(255, 165, 0, 0.1)';
-                statusEl.style.color = '#ff8800';
-                statusEl.textContent = '⚠️ Modalità Demo - Login Google non disponibile';
-                hintEl.textContent = '💡 Demo: SuperUser (admin@hustlecastle.com / admin123), Clan Mod (mod@draghi.com / mod123), User (player@leoni.com / player123)';
-                
-                // Nascondi pulsante Google e reCAPTCHA in modalità demo
-                document.getElementById('googleLoginBtn').style.display = 'none';
-                document.getElementById('recaptcha-container').style.display = 'none';
-                
-                // Inizializza dati di esempio per la demo
-                initializeLocalData();
-                // In modalità locale, mostra sempre il login
+                currentUser = null;
                 handleUserLogout();
-                // Simula connessione locale
-                isConnected = true;
-                updateConnectionStatus();
             }
+        });
 
-            // Setup UI
-            setupEventListeners();
-			initializeNotifications();
-            switchSection('home');
-        }
+        // Monitora connessione
+        const connectedRef = ref(window.firebaseDatabase, '.info/connected');
+        onValue(connectedRef, (snapshot) => {
+            isConnected = snapshot.val() === true;
+            updateConnectionStatus();
+        });
+    } else {
+        console.log('⚠️ Modalità locale attiva');
+        statusEl.style.background = 'rgba(255, 165, 0, 0.1)';
+        statusEl.style.color = '#ff8800';
+        statusEl.textContent = '⚠️ Modalità Demo - Login Google non disponibile';
+        hintEl.textContent = '💡 Demo: SuperUser (admin@hustlecastle.com / admin123), Clan Mod (mod@draghi.com / mod123), User (player@leoni.com / player123)';
 
-        // Gestione login utente
-        function handleUserLogin(user) {
-            console.log('👤 Utente loggato:', user.email);
-            
-            // Nascondi modal login
-            document.getElementById('loginModal').style.display = 'none';
-            
-            // Aggiorna UI
-            updateUserInterface();
-            
-            // Setup presenza utente
-            setupUserPresence();
-            
-            // Carica dati utente
-            loadUserProfile();
-            
-            // Aggiorna dashboard se è la sezione corrente
-            if (currentSection === 'home') {
-                setTimeout(() => {
-                    loadDashboard();
-                }, 500); // Piccolo delay per permettere il caricamento dei dati utente
-            }
-        }
+        // Nascondi pulsante Google e reCAPTCHA in modalità demo
+        document.getElementById('googleLoginBtn').style.display = 'none';
+        document.getElementById('recaptcha-container').style.display = 'none';
 
-        // Gestione logout utente
-        function handleUserLogout() {
-            console.log('👤 Utente disconnesso');
-            
-            // Pulisci listeners
-            cleanupListeners();
-            
-            // Reset dati utente
-            currentUserData = null;
-            
-            // Reset UI
-            document.getElementById('currentUsername').textContent = 'Ospite';
-            document.getElementById('currentClan').textContent = 'Nessuno';
-            document.getElementById('sidebarClan').textContent = 'Nessuno';
-            document.getElementById('userStatus').className = 'offline-indicator';
-            document.getElementById('logoutBtn').style.display = 'none';
-            
-            // Rimuovi badge ruolo
-            const userNameElement = document.getElementById('currentUsername');
-            const existingBadge = userNameElement.querySelector('.user-role');
-            if (existingBadge) {
-                existingBadge.remove();
-            }
-            
-            // Aggiorna accesso clan e admin
-            updateClanSectionsAccess();
-            updateAdminSectionsAccess();
-            
-            // Se si è in una sezione clan o admin, torna alla home
-            if (currentSection.startsWith('clan-') || currentSection.startsWith('admin-')) {
-                switchSection('home');
-            }
-            
-            // Torna al forum se si è in vista thread
-            if (document.getElementById('thread-view').style.display === 'flex') {
-                backToForum();
-            }
-            
-            // Mostra modal login
-            document.getElementById('loginModal').style.display = 'flex';
-        }
+        // Inizializza dati di esempio per la demo
+        initializeLocalData();
+        // In modalità locale, mostra sempre il login
+        handleUserLogout();
+        // Simula connessione locale
+        isConnected = true;
+        updateConnectionStatus();
+    }
 
-        // Carica profilo utente
-        async function loadUserProfile() {
-            if (!currentUser) {
-                // In modalità locale, aggiorna comunque l'accesso clan
-                updateClanSectionsAccess();
-                return;
-            }
+    // Setup UI
+    setupEventListeners();
+    initializeNotifications();
+    switchSection('home');
+}
 
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
-                try {
-                    const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}`);
-                    const snapshot = await get(userRef);
-                    
-                    if (snapshot.exists()) {
-                        currentUserData = snapshot.val();
-                        document.getElementById('currentUsername').textContent = currentUserData.username || 'Utente';
-                        document.getElementById('currentClan').textContent = currentUserData.clan || 'Nessuno';
-                        document.getElementById('sidebarClan').textContent = currentUserData.clan || 'Nessuno';
-                        
-                        // Aggiorna badge ruolo
-                        updateUserRoleBadge();
-                        
-                        // Aggiorna dashboard se è la sezione corrente
-                        if (currentSection === 'home') {
-                            loadDashboard();
-                        }
-                    }
-                } catch (error) {
-                    console.error('Errore caricamento profilo:', error);
-                }
-            } else {
-                // Modalità locale - carica da localStorage
-                loadLocalUserProfile();
-            }
-            
-            // Aggiorna accesso clan e admin in ogni caso
-            updateClanSectionsAccess();
-            updateAdminSectionsAccess();
-        }
+// Gestione login utente
+function handleUserLogin(user) {
+    console.log('👤 Utente loggato:', user.email);
 
-        // Carica profilo locale
-        function loadLocalUserProfile() {
-            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            const userData = users[currentUser.email];
-            
-            if (userData) {
-                // Controlla se questo utente dovrebbe essere superuser
-                const realUsers = Object.values(users).filter(user => 
-                    !user.uid.startsWith('super_admin_') && 
-                    !user.uid.startsWith('clan_mod_') && 
-                    !user.uid.startsWith('user_')
-                );
-                
-                // Se è il primo utente reale e non ha ruolo superuser, assegnaglielo
-                if (realUsers.length > 0 && realUsers[0].uid === userData.uid) {
-                    if (!userData.role || userData.role === USER_ROLES.USER) {
-                        userData.role = USER_ROLES.SUPERUSER;
-                        users[currentUser.email] = userData;
-                        localStorage.setItem('hc_local_users', JSON.stringify(users));
-                        console.log('🎉 Utente promosso a SUPERUSER:', currentUser.email);
-                        
-                        // Mostra notifica
-                        setTimeout(() => {
-                            alert('🎉 Congratulazioni! Sei stato promosso a SUPERUSER come primo utente registrato!');
-                        }, 1000);
-                    }
-                }
-                
-                currentUserData = userData;
-                document.getElementById('currentUsername').textContent = userData.username;
-                document.getElementById('currentClan').textContent = userData.clan || 'Nessuno';
-                document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
+    // Nascondi modal login
+    document.getElementById('loginModal').style.display = 'none';
+
+    // Aggiorna UI
+    updateUserInterface();
+
+    // Setup presenza utente
+    setupUserPresence();
+
+    // Carica dati utente
+    loadUserProfile();
+
+    // Aggiorna dashboard se è la sezione corrente
+    if (currentSection === 'home') {
+        setTimeout(() => {
+            loadDashboard();
+        }, 500); // Piccolo delay per permettere il caricamento dei dati utente
+    }
+}
+
+// Gestione logout utente
+function handleUserLogout() {
+    console.log('👤 Utente disconnesso');
+
+    // Pulisci listeners
+    cleanupListeners();
+
+    // Reset dati utente
+    currentUserData = null;
+
+    // Reset UI
+    document.getElementById('currentUsername').textContent = 'Ospite';
+    document.getElementById('currentClan').textContent = 'Nessuno';
+    document.getElementById('sidebarClan').textContent = 'Nessuno';
+    document.getElementById('userStatus').className = 'offline-indicator';
+    document.getElementById('logoutBtn').style.display = 'none';
+
+    // Rimuovi badge ruolo
+    const userNameElement = document.getElementById('currentUsername');
+    const existingBadge = userNameElement.querySelector('.user-role');
+    if (existingBadge) {
+        existingBadge.remove();
+    }
+
+    // Aggiorna accesso clan e admin
+    updateClanSectionsAccess();
+    updateAdminSectionsAccess();
+
+    // Se si è in una sezione clan o admin, torna alla home
+    if (currentSection.startsWith('clan-') || currentSection.startsWith('admin-')) {
+        switchSection('home');
+    }
+
+    // Torna al forum se si è in vista thread
+    if (document.getElementById('thread-view').style.display === 'flex') {
+        backToForum();
+    }
+
+    // Mostra modal login
+    document.getElementById('loginModal').style.display = 'flex';
+}
+
+// Carica profilo utente
+async function loadUserProfile() {
+    if (!currentUser) {
+        // In modalità locale, aggiorna comunque l'accesso clan
+        updateClanSectionsAccess();
+        return;
+    }
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
+        try {
+            const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}`);
+            const snapshot = await get(userRef);
+
+            if (snapshot.exists()) {
+                currentUserData = snapshot.val();
+                document.getElementById('currentUsername').textContent = currentUserData.username || 'Utente';
+                document.getElementById('currentClan').textContent = currentUserData.clan || 'Nessuno';
+                document.getElementById('sidebarClan').textContent = currentUserData.clan || 'Nessuno';
+
+                // Aggiorna badge ruolo
                 updateUserRoleBadge();
-                
+
                 // Aggiorna dashboard se è la sezione corrente
                 if (currentSection === 'home') {
                     loadDashboard();
                 }
             }
+        } catch (error) {
+            console.error('Errore caricamento profilo:', error);
         }
+    } else {
+        // Modalità locale - carica da localStorage
+        loadLocalUserProfile();
+    }
 
-        // Aggiorna badge ruolo utente
-        function updateUserRoleBadge() {
-            const userNameElement = document.getElementById('currentUsername');
-            const existingBadge = userNameElement.querySelector('.user-role');
-            
-            if (existingBadge) {
-                existingBadge.remove();
-            }
-            
-            const role = getCurrentUserRole();
-            const badge = document.createElement('span');
-            badge.className = `user-role role-${role.replace('_', '-')}`;
-            
-            switch (role) {
-                case USER_ROLES.SUPERUSER:
-                    badge.textContent = 'SUPER';
-                    badge.className = 'user-role role-superuser';
-                    break;
-                case USER_ROLES.CLAN_MOD:
-                    badge.textContent = 'MOD';
-                    badge.className = 'user-role role-moderator';
-                    break;
-                default:
-                    badge.textContent = 'USER';
-                    badge.className = 'user-role role-user';
-                    break;
-            }
-            
-            userNameElement.appendChild(badge);
-        }
+    // Aggiorna accesso clan e admin in ogni caso
+    updateClanSectionsAccess();
+    updateAdminSectionsAccess();
+}
 
-        // Aggiorna accesso alle sezioni admin
-        function updateAdminSectionsAccess() {
-            const adminSection = document.getElementById('adminSection');
-            const clanModerationItem = document.getElementById('clanModerationItem');
-            
-            // Mostra sezioni admin globali solo al superuser
-            const canAccessGlobalAdmin = getCurrentUserRole() === USER_ROLES.SUPERUSER;
-            
-            if (canAccessGlobalAdmin) {
-                adminSection.style.display = 'block';
-            } else {
-                adminSection.style.display = 'none';
-                // Se si è in una sezione admin, torna agli eventi
-                if (currentSection.startsWith('admin-')) {
-                    switchSection('eventi');
-                }
-            }
-            
-            // Mostra moderazione clan se è moderatore o superuser del clan
-            const canModerateClan = isClanModerator();
-            
-            if (canModerateClan) {
-                clanModerationItem.style.display = 'block';
-            } else {
-                clanModerationItem.style.display = 'none';
-                // Se si è nella sezione moderazione, torna alla chat clan
-                if (currentSection === 'clan-moderation') {
-                    switchSection('clan-chat');
-                }
+// Carica profilo locale
+function loadLocalUserProfile() {
+    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+    const userData = users[currentUser.email];
+
+    if (userData) {
+        // Controlla se questo utente dovrebbe essere superuser
+        const realUsers = Object.values(users).filter(user =>
+                !user.uid.startsWith('super_admin_') &&
+                !user.uid.startsWith('clan_mod_') &&
+                !user.uid.startsWith('user_'));
+
+        // Se è il primo utente reale e non ha ruolo superuser, assegnaglielo
+        if (realUsers.length > 0 && realUsers[0].uid === userData.uid) {
+            if (!userData.role || userData.role === USER_ROLES.USER) {
+                userData.role = USER_ROLES.SUPERUSER;
+                users[currentUser.email] = userData;
+                localStorage.setItem('hc_local_users', JSON.stringify(users));
+                console.log('🎉 Utente promosso a SUPERUSER:', currentUser.email);
+
+                // Mostra notifica
+                setTimeout(() => {
+                    alert('🎉 Congratulazioni! Sei stato promosso a SUPERUSER come primo utente registrato!');
+                }, 1000);
             }
         }
 
-        // Setup presenza utente
-        function setupUserPresence() {
-            if (!currentUser || !window.useFirebase || !window.firebaseDatabase || !firebaseReady || !ref || !onDisconnect || !set || !child || !serverTimestamp) return;
-            
-            try {
-                const userStatusRef = ref(window.firebaseDatabase, `presence/${currentUser.uid}`);
-                const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}`);
-                
-                // Quando l'utente si disconnette, imposta offline
-                onDisconnect(userStatusRef).set({
-                    state: 'offline',
-                    lastSeen: serverTimestamp()
-                });
-                
-                // Aggiorna ultima visita
-                set(child(userRef, 'lastSeen'), serverTimestamp());
-                
-                // Imposta online
-                set(userStatusRef, {
-                    state: 'online',
-                    lastSeen: serverTimestamp()
-                });
-            } catch (error) {
-                console.error('Errore setup presenza:', error);
-            }
+        currentUserData = userData;
+        document.getElementById('currentUsername').textContent = userData.username;
+        document.getElementById('currentClan').textContent = userData.clan || 'Nessuno';
+        document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
+        updateUserRoleBadge();
+
+        // Aggiorna dashboard se è la sezione corrente
+        if (currentSection === 'home') {
+            loadDashboard();
         }
+    }
+}
 
-        // Aggiorna interfaccia utente
-        function updateUserInterface() {
-            if (currentUser) {
-                document.getElementById('userStatus').className = 'online-indicator';
-                document.getElementById('logoutBtn').style.display = 'inline-block';
-            }
-            updateClanSectionsAccess();
+// Aggiorna badge ruolo utente
+function updateUserRoleBadge() {
+    const userNameElement = document.getElementById('currentUsername');
+    const existingBadge = userNameElement.querySelector('.user-role');
+
+    if (existingBadge) {
+        existingBadge.remove();
+    }
+
+    const role = getCurrentUserRole();
+    const badge = document.createElement('span');
+    badge.className = `user-role role-${role.replace('_', '-')}`;
+
+    switch (role) {
+    case USER_ROLES.SUPERUSER:
+        badge.textContent = 'SUPER';
+        badge.className = 'user-role role-superuser';
+        break;
+    case USER_ROLES.CLAN_MOD:
+        badge.textContent = 'MOD';
+        badge.className = 'user-role role-moderator';
+        break;
+    default:
+        badge.textContent = 'USER';
+        badge.className = 'user-role role-user';
+        break;
+    }
+
+    userNameElement.appendChild(badge);
+}
+
+// Aggiorna accesso alle sezioni admin
+function updateAdminSectionsAccess() {
+    const adminSection = document.getElementById('adminSection');
+    const clanModerationItem = document.getElementById('clanModerationItem');
+
+    // Mostra sezioni admin globali solo al superuser
+    const canAccessGlobalAdmin = getCurrentUserRole() === USER_ROLES.SUPERUSER;
+
+    if (canAccessGlobalAdmin) {
+        adminSection.style.display = 'block';
+    } else {
+        adminSection.style.display = 'none';
+        // Se si è in una sezione admin, torna agli eventi
+        if (currentSection.startsWith('admin-')) {
+            switchSection('eventi');
         }
+    }
 
-        // Aggiorna accesso alle sezioni clan
-        function updateClanSectionsAccess() {
-            const userClan = getCurrentUserClan();
-            const clanItems = document.querySelectorAll('.nav-item.clan-only');
-            
-            clanItems.forEach(item => {
-                if (userClan === 'Nessuno') {
-                    item.classList.add('disabled');
-                    item.style.pointerEvents = 'none';
-                } else {
-                    item.classList.remove('disabled');
-                    item.style.pointerEvents = 'auto';
-                }
-            });
+    // Mostra moderazione clan se è moderatore o superuser del clan
+    const canModerateClan = isClanModerator();
+
+    if (canModerateClan) {
+        clanModerationItem.style.display = 'block';
+    } else {
+        clanModerationItem.style.display = 'none';
+        // Se si è nella sezione moderazione, torna alla chat clan
+        if (currentSection === 'clan-moderation') {
+            switchSection('clan-chat');
         }
+    }
+}
 
-        // Aggiorna stato connessione
-        function updateConnectionStatus() {
-            const statusEl = document.getElementById('connectionStatus');
-            if (window.useFirebase) {
-                if (isConnected) {
-                    statusEl.className = 'connection-status online';
-                    statusEl.textContent = '🟢 Firebase Connesso';
-                } else {
-                    statusEl.className = 'connection-status offline';
-                    statusEl.textContent = '🔴 Firebase Disconnesso';
-                }
-            } else {
-                statusEl.className = 'connection-status online';
-                statusEl.textContent = '🟡 Modalità Demo Locale';
-            }
+// Setup presenza utente
+function setupUserPresence() {
+    if (!currentUser || !window.useFirebase || !window.firebaseDatabase || !firebaseReady || !ref || !onDisconnect || !set || !child || !serverTimestamp)
+        return;
+
+    try {
+        const userStatusRef = ref(window.firebaseDatabase, `presence/${currentUser.uid}`);
+        const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}`);
+
+        // Quando l'utente si disconnette, imposta offline
+        onDisconnect(userStatusRef).set({
+            state: 'offline',
+            lastSeen: serverTimestamp()
+        });
+
+        // Aggiorna ultima visita
+        set(child(userRef, 'lastSeen'), serverTimestamp());
+
+        // Imposta online
+        set(userStatusRef, {
+            state: 'online',
+            lastSeen: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Errore setup presenza:', error);
+    }
+}
+
+// Aggiorna interfaccia utente
+function updateUserInterface() {
+    if (currentUser) {
+        document.getElementById('userStatus').className = 'online-indicator';
+        document.getElementById('logoutBtn').style.display = 'inline-block';
+    }
+    updateClanSectionsAccess();
+}
+
+// Aggiorna accesso alle sezioni clan
+function updateClanSectionsAccess() {
+    const userClan = getCurrentUserClan();
+    const clanItems = document.querySelectorAll('.nav-item.clan-only');
+
+    clanItems.forEach(item => {
+        if (userClan === 'Nessuno') {
+            item.classList.add('disabled');
+            item.style.pointerEvents = 'none';
+        } else {
+            item.classList.remove('disabled');
+            item.style.pointerEvents = 'auto';
         }
+    });
+}
 
-        // 🤖 GESTIONE INTERFACCIA LOGIN/REGISTRAZIONE CON reCAPTCHA
-        function switchToLogin() {
-            isLoginMode = true;
-            document.getElementById('loginTab').classList.add('active');
-            document.getElementById('registerTab').classList.remove('active');
-            document.getElementById('registrationFields').classList.remove('show');
-            document.getElementById('submitBtn').textContent = 'Accedi';
-            document.getElementById('googleBtnText').textContent = 'Continua con Google';
-            
-            // Pulisci campi opzionali
-            document.getElementById('username').value = '';
-            
-            // Reset reCAPTCHA
-            if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
-                window.resetRecaptcha();
-            }
-            
-            hideError();
+// Aggiorna stato connessione
+function updateConnectionStatus() {
+    const statusEl = document.getElementById('connectionStatus');
+    if (window.useFirebase) {
+        if (isConnected) {
+            statusEl.className = 'connection-status online';
+            statusEl.textContent = '🟢 Firebase Connesso';
+        } else {
+            statusEl.className = 'connection-status offline';
+            statusEl.textContent = '🔴 Firebase Disconnesso';
         }
+    } else {
+        statusEl.className = 'connection-status online';
+        statusEl.textContent = '🟡 Modalità Demo Locale';
+    }
+}
 
-        function switchToRegister() {
-            isLoginMode = false;
-            document.getElementById('registerTab').classList.add('active');
-            document.getElementById('loginTab').classList.remove('active');
-            document.getElementById('registrationFields').classList.add('show');
-            document.getElementById('submitBtn').textContent = 'Registrati';
-            document.getElementById('googleBtnText').textContent = 'Registrati con Google';
-            
-            // Reset reCAPTCHA
-            if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
-                window.resetRecaptcha();
-            }
-            
-            hideError();
-        }
+// 🤖 GESTIONE INTERFACCIA LOGIN/REGISTRAZIONE CON reCAPTCHA
+function switchToLogin() {
+    isLoginMode = true;
+    document.getElementById('loginTab').classList.add('active');
+    document.getElementById('registerTab').classList.remove('active');
+    document.getElementById('registrationFields').classList.remove('show');
+    document.getElementById('submitBtn').textContent = 'Accedi';
+    document.getElementById('googleBtnText').textContent = 'Continua con Google';
 
-        // Gestione form submit
-        function handleSubmit() {
-            if (isLoginMode) {
-                handleLogin();
-            } else {
-                handleRegister();
-            }
-        }
+    // Pulisci campi opzionali
+    document.getElementById('username').value = '';
 
-        // Login con Google
-        async function handleGoogleLogin() {
-            if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
-                alert('Login con Google non disponibile in modalità demo');
-                return;
-            }
+    // Reset reCAPTCHA
+    if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
+        window.resetRecaptcha();
+    }
 
-            const googleBtn = document.getElementById('googleLoginBtn');
-            googleBtn.disabled = true;
-            googleBtn.innerHTML = `
+    hideError();
+}
+
+function switchToRegister() {
+    isLoginMode = false;
+    document.getElementById('registerTab').classList.add('active');
+    document.getElementById('loginTab').classList.remove('active');
+    document.getElementById('registrationFields').classList.add('show');
+    document.getElementById('submitBtn').textContent = 'Registrati';
+    document.getElementById('googleBtnText').textContent = 'Registrati con Google';
+
+    // Reset reCAPTCHA
+    if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
+        window.resetRecaptcha();
+    }
+
+    hideError();
+}
+
+// Gestione form submit
+function handleSubmit() {
+    if (isLoginMode) {
+        handleLogin();
+    } else {
+        handleRegister();
+    }
+}
+
+// Login con Google
+async function handleGoogleLogin() {
+    if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
+        alert('Login con Google non disponibile in modalità demo');
+        return;
+    }
+
+    const googleBtn = document.getElementById('googleLoginBtn');
+    googleBtn.disabled = true;
+    googleBtn.innerHTML = `
                 <div style="width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                 Connessione...
             `;
 
-            try {
-                const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
-                const user = result.user;
-                
-                // Verifica se l'utente esiste già nel database
-                const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
-                const snapshot = await get(userRef);
-                
-                if (!snapshot.exists()) {
-                    // Nuovo utente Google - chiedi dati aggiuntivi
-                    const username = user.displayName || prompt('Inserisci il tuo username:');
-                    const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
-                    
-                    if (!username) {
-                        throw new Error('Username richiesto');
-                    }
-                    
-                    // Determina ruolo per nuovo utente
-                    const userRole = await determineUserRole();
-                    
-                    // Salva i dati utente
-                    await set(userRef, {
-                        username: username,
-                        email: user.email,
-                        clan: clan,
-                        role: userRole,
-                        createdAt: serverTimestamp(),
-                        lastSeen: serverTimestamp(),
-                        provider: 'google'
-                    });
-                    
-                    const roleMessage = userRole === USER_ROLES.SUPERUSER ? 
-                        ' Ti sono stati assegnati i privilegi di SUPERUSER!' : '';
-                    showSuccess(`Account Google creato con successo!${roleMessage}`);
-                } else {
-                    showSuccess('Login con Google effettuato con successo!');
-                }
-                
-            } catch (error) {
-                console.error('Errore login Google:', error);
-                
-                // Gestione errori specifici di Google Auth
-                let errorMessage = 'Errore nel login con Google';
-                if (error.code === 'auth/popup-closed-by-user') {
-                    errorMessage = 'Login annullato dall\'utente';
-                } else if (error.code === 'auth/popup-blocked') {
-                    errorMessage = 'Popup bloccato dal browser. Abilita i popup per questo sito.';
-                } else if (error.code === 'auth/network-request-failed') {
-                    errorMessage = 'Errore di connessione. Controlla la tua connessione internet.';
-                } else if (error.message) {
-                    errorMessage = error.message;
-                }
-                
-                showError(errorMessage);
-            } finally {
-                googleBtn.disabled = false;
-                googleBtn.innerHTML = `
+    try {
+        const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
+        const user = result.user;
+
+        // Verifica se l'utente esiste già nel database
+        const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+
+        if (!snapshot.exists()) {
+            // Nuovo utente Google - chiedi dati aggiuntivi
+            const username = user.displayName || prompt('Inserisci il tuo username:');
+            const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
+
+            if (!username) {
+                throw new Error('Username richiesto');
+            }
+
+            // Determina ruolo per nuovo utente
+            const userRole = await determineUserRole();
+
+            // Salva i dati utente
+            await set(userRef, {
+                username: username,
+                email: user.email,
+                clan: clan,
+                role: userRole,
+                createdAt: serverTimestamp(),
+                lastSeen: serverTimestamp(),
+                provider: 'google'
+            });
+
+            const roleMessage = userRole === USER_ROLES.SUPERUSER ?
+                ' Ti sono stati assegnati i privilegi di SUPERUSER!' : '';
+            showSuccess(`Account Google creato con successo!${roleMessage}`);
+        } else {
+            showSuccess('Login con Google effettuato con successo!');
+        }
+
+    } catch (error) {
+        console.error('Errore login Google:', error);
+
+        // Gestione errori specifici di Google Auth
+        let errorMessage = 'Errore nel login con Google';
+        if (error.code === 'auth/popup-closed-by-user') {
+            errorMessage = 'Login annullato dall\'utente';
+        } else if (error.code === 'auth/popup-blocked') {
+            errorMessage = 'Popup bloccato dal browser. Abilita i popup per questo sito.';
+        } else if (error.code === 'auth/network-request-failed') {
+            errorMessage = 'Errore di connessione. Controlla la tua connessione internet.';
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        showError(errorMessage);
+    } finally {
+        googleBtn.disabled = false;
+        googleBtn.innerHTML = `
                     <svg width="20" height="20" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -1347,636 +1359,641 @@ async function loadUsersList() {
                     </svg>
                     <span>${isLoginMode ? 'Continua con Google' : 'Registrati con Google'}</span>
                 `;
-            }
+    }
+}
+
+// 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
+async function handleLogin() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+
+    if (!email || !password) {
+        showError('Inserisci email e password');
+        return;
+    }
+
+    // Verifica reCAPTCHA solo se App Check è attivo
+    if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
+        if (!window.verifyRecaptcha()) {
+            showError('🤖 Completa la verifica reCAPTCHA');
+            return;
+        }
+    }
+
+    showLoading(true);
+    hideError();
+
+    try {
+        if (window.useFirebase && firebaseReady && signInWithEmailAndPassword) {
+            // Autenticazione Firebase
+            await signInWithEmailAndPassword(window.firebaseAuth, email, password);
+            showSuccess('Login effettuato con successo!');
+        } else {
+            // Autenticazione locale (demo)
+            await simulateLogin(email, password);
         }
 
-        // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
-        async function handleLogin() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            if (!email || !password) {
-                showError('Inserisci email e password');
-                return;
-            }
-
-            // Verifica reCAPTCHA solo se App Check è attivo
-            if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
-                if (!window.verifyRecaptcha()) {
-                    showError('🤖 Completa la verifica reCAPTCHA');
-                    return;
-                }
-            }
-
-            showLoading(true);
-            hideError();
-
-            try {
-                if (window.useFirebase && firebaseReady && signInWithEmailAndPassword) {
-                    // Autenticazione Firebase
-                    await signInWithEmailAndPassword(window.firebaseAuth, email, password);
-                    showSuccess('Login effettuato con successo!');
-                } else {
-                    // Autenticazione locale (demo)
-                    await simulateLogin(email, password);
-                }
-                
-                // Reset reCAPTCHA dopo successo (solo se attivo)
-                if (window.useFirebase && window.appCheckEnabled) {
-                    window.resetRecaptcha();
-                }
-            } catch (error) {
-                console.error('Errore login:', error);
-                showError(getErrorMessage(error));
-                
-                // Reset reCAPTCHA in caso di errore (solo se attivo)
-                if (window.useFirebase && window.appCheckEnabled) {
-                    window.resetRecaptcha();
-                }
-            } finally {
-                showLoading(false);
-            }
+        // Reset reCAPTCHA dopo successo (solo se attivo)
+        if (window.useFirebase && window.appCheckEnabled) {
+            window.resetRecaptcha();
         }
+    } catch (error) {
+        console.error('Errore login:', error);
+        showError(getErrorMessage(error));
 
-        async function handleRegister() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const username = document.getElementById('username').value;
-
-            if (!email || !password || !username) {
-                showError('Inserisci email, password e username');
-                return;
-            }
-
-            // Verifica reCAPTCHA solo se App Check è attivo
-            if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
-                if (!window.verifyRecaptcha()) {
-                    showError('🤖 Completa la verifica reCAPTCHA');
-                    return;
-                }
-            }
-
-            showLoading(true);
-            hideError();
-
-            try {
-                // Determina il ruolo del nuovo utente
-                const userRole = await determineUserRole();
-                
-                if (window.useFirebase && firebaseReady && createUserWithEmailAndPassword) {
-                    // Registrazione Firebase
-                    const userCredential = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
-                    const user = userCredential.user;
-
-                    await updateProfile(user, { displayName: username });
-
-                    await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
-                        username: username,
-                        email: email,
-                        clan:  'Nessuno',
-                        role: userRole,
-                        createdAt: serverTimestamp(),
-                        lastSeen: serverTimestamp(),
-                        provider: 'email'
-                    });
-                } else {
-                    // Registrazione locale (demo)
-                    await simulateRegister(email, password, username, 'Nessuno', userRole);
-                }
-                
-                const roleMessage = userRole === USER_ROLES.SUPERUSER ? 
-                    '\n🎉 Sei il primo utente! Ti sono stati assegnati i privilegi di SUPERUSER.' : '';
-                
-                showSuccess(`Account creato con successo!${roleMessage}`);
-                
-                // Reset reCAPTCHA dopo successo (solo se attivo)
-                if (window.useFirebase && window.appCheckEnabled) {
-                    window.resetRecaptcha();
-                }
-            } catch (error) {
-                console.error('Errore registrazione:', error);
-                showError(getErrorMessage(error));
-                
-                // Reset reCAPTCHA in caso di errore (solo se attivo)
-                if (window.useFirebase && window.appCheckEnabled) {
-                    window.resetRecaptcha();
-                }
-            } finally {
-                showLoading(false);
-            }
+        // Reset reCAPTCHA in caso di errore (solo se attivo)
+        if (window.useFirebase && window.appCheckEnabled) {
+            window.resetRecaptcha();
         }
+    } finally {
+        showLoading(false);
+    }
+}
 
+async function handleRegister() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const username = document.getElementById('username').value;
+
+    if (!email || !password || !username) {
+        showError('Inserisci email, password e username');
+        return;
+    }
+
+    // Verifica reCAPTCHA solo se App Check è attivo
+    if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
+        if (!window.verifyRecaptcha()) {
+            showError('🤖 Completa la verifica reCAPTCHA');
+            return;
+        }
+    }
+
+    showLoading(true);
+    hideError();
+
+    try {
         // Determina il ruolo del nuovo utente
-        async function determineUserRole() {
-            try {
-                if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                    // In Firebase, per sicurezza, assumiamo sempre USER come ruolo di default
-                    return USER_ROLES.USER;
-                } else {
-                    // Modalità locale - controlla se ci sono utenti reali (non di esempio)
-                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    
-                    // Filtra solo utenti reali (non quelli di esempio)
-                    const realUsers = Object.values(users).filter(user => 
-                        !user.uid.startsWith('super_admin_') && 
-                        !user.uid.startsWith('clan_mod_') && 
-                        !user.uid.startsWith('user_')
-                    );
-                    
-                    if (realUsers.length === 0) {
-                        return USER_ROLES.SUPERUSER;
-                    }
-                }
-                
-                return USER_ROLES.USER;
-            } catch (error) {
-                console.error('Errore determinazione ruolo:', error);
-                return USER_ROLES.USER;
-            }
-        }
+        const userRole = await determineUserRole();
 
-        // Simulazione autenticazione locale
-        async function simulateLogin(email, password) {
-            return new Promise((resolve, reject) => {
-                setTimeout(() => {
-                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    const user = users[email];
-                    
-                    if (user && user.password === password) {
-                        currentUser = {
-                            uid: user.uid,
-                            email: email,
-                            displayName: user.username
-                        };
-                        
-                        // Salva i dati utente correnti
-                        currentUserData = user;
-                        
-                        // Aggiorna UI con i dati del clan
-                        document.getElementById('currentUsername').textContent = user.username;
-                        document.getElementById('currentClan').textContent = user.clan || 'Nessuno';
-                        document.getElementById('sidebarClan').textContent = user.clan || 'Nessuno';
-                        
-                        handleUserLogin(currentUser);
-                        resolve();
-                    } else {
-                        reject(new Error('Email o password non validi'));
-                    }
-                }, 1000);
+        if (window.useFirebase && firebaseReady && createUserWithEmailAndPassword) {
+            // Registrazione Firebase
+            const userCredential = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
+            const user = userCredential.user;
+
+            await updateProfile(user, {
+                displayName: username
             });
-        }
 
-        async function simulateRegister(email, password, username, clan, role) {
-            return new Promise((resolve, reject) => {
-                setTimeout(() => {
-                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    
-                    if (users[email]) {
-                        reject(new Error('Utente già esistente'));
-                        return;
-                    }
-                    
-                    const userId = 'local_' + Date.now();
-                    users[email] = {
-                        uid: userId,
-                        username: username,
-                        email: email,
-                        password: password,
-                        clan: clan || 'Nessuno',
-                        role: role || USER_ROLES.USER,
-                        createdAt: Date.now()
-                    };
-                    
-                    localStorage.setItem('hc_local_users', JSON.stringify(users));
-                    
-                    currentUser = {
-                        uid: userId,
-                        email: email,
-                        displayName: username
-                    };
-                    
-                    // Salva i dati utente correnti
-                    currentUserData = users[email];
-                    
-                    // Aggiorna UI con i dati del clan
-                    document.getElementById('currentUsername').textContent = username;
-                    document.getElementById('currentClan').textContent = clan || 'Nessuno';
-                    document.getElementById('sidebarClan').textContent = clan || 'Nessuno';
-                    
-                    handleUserLogin(currentUser);
-                    resolve();
-                }, 1000);
+            await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
+                username: username,
+                email: email,
+                clan: 'Nessuno',
+                role: userRole,
+                createdAt: serverTimestamp(),
+                lastSeen: serverTimestamp(),
+                provider: 'email'
             });
+        } else {
+            // Registrazione locale (demo)
+            await simulateRegister(email, password, username, 'Nessuno', userRole);
         }
 
-        async function handleLogout() {
-            try {
-                if (window.useFirebase && window.firebaseAuth && firebaseReady && signOut) {
-                    await signOut(window.firebaseAuth);
-                } else {
-                    // Logout locale
-                    currentUser = null;
-                    handleUserLogout();
-                }
-            } catch (error) {
-                console.error('Errore logout:', error);
-            }
-        }
+        const roleMessage = userRole === USER_ROLES.SUPERUSER ?
+            '\n🎉 Sei il primo utente! Ti sono stati assegnati i privilegi di SUPERUSER.' : '';
 
-        // Inizializza dati di esempio per modalità locale
-        function initializeLocalData() {
-            // Crea utenti di esempio se non esistono
+        showSuccess(`Account creato con successo!${roleMessage}`);
+
+        // Reset reCAPTCHA dopo successo (solo se attivo)
+        if (window.useFirebase && window.appCheckEnabled) {
+            window.resetRecaptcha();
+        }
+    } catch (error) {
+        console.error('Errore registrazione:', error);
+        showError(getErrorMessage(error));
+
+        // Reset reCAPTCHA in caso di errore (solo se attivo)
+        if (window.useFirebase && window.appCheckEnabled) {
+            window.resetRecaptcha();
+        }
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Determina il ruolo del nuovo utente
+async function determineUserRole() {
+    try {
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            // In Firebase, per sicurezza, assumiamo sempre USER come ruolo di default
+            return USER_ROLES.USER;
+        } else {
+            // Modalità locale - controlla se ci sono utenti reali (non di esempio)
             const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            
-            // Controlla se ci sono utenti reali
-            const realUsers = Object.values(users).filter(user => 
-                !user.uid.startsWith('super_admin_') && 
-                !user.uid.startsWith('clan_mod_') && 
-                !user.uid.startsWith('user_')
-            );
-            
-            // Se c'è già un utente reale ma non ha ruolo superuser, assegnaglielo
-            if (realUsers.length > 0) {
-                const firstRealUser = realUsers[0];
-                if (!firstRealUser.role || firstRealUser.role === USER_ROLES.USER) {
-                    firstRealUser.role = USER_ROLES.SUPERUSER;
-                    // Trova l'email corrispondente e aggiorna
-                    for (const email in users) {
-                        if (users[email].uid === firstRealUser.uid) {
-                            users[email].role = USER_ROLES.SUPERUSER;
-                            localStorage.setItem('hc_local_users', JSON.stringify(users));
-                            console.log('🎉 Primo utente reale promosso a SUPERUSER:', email);
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            // Crea utenti di esempio solo se non ci sono utenti reali
+
+            // Filtra solo utenti reali (non quelli di esempio)
+            const realUsers = Object.values(users).filter(user =>
+                    !user.uid.startsWith('super_admin_') &&
+                    !user.uid.startsWith('clan_mod_') &&
+                    !user.uid.startsWith('user_'));
+
             if (realUsers.length === 0) {
-                // Superuser di default
-                const defaultSuperUser = {
-                    uid: 'super_admin_001',
-                    username: 'SuperAdmin',
-                    email: 'admin@hustlecastle.com',
-                    password: 'admin123',
-                    clan: 'Nessuno',
-                    role: USER_ROLES.SUPERUSER,
-                    createdAt: Date.now()
-                };
-                
-                // Moderatore clan di esempio
-                const clanMod = {
-                    uid: 'clan_mod_001',
-                    username: 'ModeratoreDraghi',
-                    email: 'mod@draghi.com',
-                    password: 'mod123',
-                    clan: 'Draghi Rossi',
-                    role: USER_ROLES.CLAN_MOD,
-                    createdAt: Date.now()
-                };
-                
-                // Utente normale di esempio
-                const normalUser = {
-                    uid: 'user_001',
-                    username: 'GiocatoreLeoni',
-                    email: 'player@leoni.com',
-                    password: 'player123',
-                    clan: 'Leoni Neri',
-                    role: USER_ROLES.USER,
-                    createdAt: Date.now()
-                };
-                
-                users['admin@hustlecastle.com'] = defaultSuperUser;
-                users['mod@draghi.com'] = clanMod;
-                users['player@leoni.com'] = normalUser;
-                
-                localStorage.setItem('hc_local_users', JSON.stringify(users));
-                
-                console.log('🔧 Utenti di esempio creati:', {
-                    superuser: { email: 'admin@hustlecastle.com', password: 'admin123' },
-                    clanMod: { email: 'mod@draghi.com', password: 'mod123' },
-                    user: { email: 'player@leoni.com', password: 'player123' }
-                });
-            }
-            
-            // Aggiungi thread di esempio per sezioni generali se non esistono
-            const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
-            sections.forEach(section => {
-                const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
-                if (threads.length === 0) {
-                    const exampleThreads = getExampleThreads(section);
-                    localStorage.setItem(`hc_threads_${section}`, JSON.stringify(exampleThreads));
-                }
-            });
-
-            // Aggiungi messaggi di esempio per chat generale se non esistono
-            const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
-            if (messages.length === 0) {
-                const exampleMessages = getExampleMessages('chat-generale');
-                localStorage.setItem(`hc_messages_chat-generale`, JSON.stringify(exampleMessages));
-            }
-
-            // Inizializza dati di esempio per clan specifici
-            const exampleClans = ['Draghi Rossi', 'Leoni Neri', 'Aquile Bianche'];
-            exampleClans.forEach(clan => {
-                const safeClanName = clan.replace(/[.#$[\]]/g, '_');
-                
-                // Thread clan (alcuni pending per testare moderazione)
-                const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
-                clanSections.forEach(section => {
-                    const storageKey = `hc_threads_clan_${safeClanName}_${section}`;
-                    const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                    if (threads.length === 0) {
-                        const exampleThreads = getExampleClanThreads(section, clan);
-                        localStorage.setItem(storageKey, JSON.stringify(exampleThreads));
-                    }
-                });
-
-                // Messaggi clan chat
-                const chatStorageKey = `hc_messages_clan_${safeClanName}_clan-chat`;
-                const chatMessages = JSON.parse(localStorage.getItem(chatStorageKey) || '[]');
-                if (chatMessages.length === 0) {
-                    const exampleMessages = getExampleClanMessages(clan);
-                    localStorage.setItem(chatStorageKey, JSON.stringify(exampleMessages));
-                }
-            });
-        }
-
-        function getExampleThreads(section) {
-            const examples = {
-                'eventi': [
-                    {
-                        id: 'evt_demo_1',
-                        title: '🎃 Evento Halloween - Strategie e Premi',
-                        content: 'Discussione sulle migliori strategie per l\'evento Halloween! Condividete i vostri setup e le ricompense ottenute.',
-                        author: 'EventMaster',
-                        createdAt: Date.now() - 2*24*60*60*1000,
-                        replies: 15,
-                        views: 87,
-                        status: 'approved',
-                        imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmY2NjAwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfjoMgRXZlbnRvIEhhbGxvd2VlbiDwn46DPC90ZXh0Pjwvc3ZnPg==',
-                        imageName: 'halloween_event.jpg'
-                    }
-                ],
-                'novita': [
-                    {
-                        id: 'news_demo_1',
-                        title: '📢 Aggiornamento 1.58.0 - Nuove Features!',
-                        content: 'Ecco tutte le novità dell\'ultimo aggiornamento: nuovi eroi, dungeon migliorati e molto altro!',
-                        author: 'GameUpdater',
-                        createdAt: Date.now() - 1*24*60*60*1000,
-                        replies: 23,
-                        views: 145,
-                        status: 'approved',
-                        imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMDA4OGNjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfkKIgQWdnaW9ybmFtZW50byB2MS41OC4wIPCfkKI8L3RleHQ+PC9zdmc+',
-                        imageName: 'update_158.jpg'
-                    }
-                ]
-            };
-            return examples[section] || [];
-        }
-
-        function getExampleClanThreads(section, clanName) {
-            const examples = {
-                'clan-war': [],
-                'clan-premi': [],
-                'clan-consigli': [],
-				'clan-bacheca': []
-            };
-            return examples[section] || [];
-        }
-
-        function getExampleMessages(section) {
-            const examples = {
-                'chat-generale': []
-            };
-            return examples[section] || [];
-        }
-
-        function getExampleClanMessages(clanName) {
-            return [
-                {
-                    id: 'cmsg1',
-                    author: `Leader${clanName.replace(' ', '')}`,
-                    message: `Benvenuti nel clan ${clanName}! Preparatevi per la guerra di domani!`,
-                    timestamp: Date.now() - 15*60*1000
-                },
-                {
-                    id: 'cmsg2',
-                    author: 'WarriorClan',
-                    message: 'Le mie truppe sono pronte! ⚔️',
-                    timestamp: Date.now() - 10*60*1000
-                },
-                {
-                    id: 'cmsg3',
-                    author: 'DefenderMaster',
-                    message: 'Chi ha bisogno di aiuto per il setup delle difese?',
-                    timestamp: Date.now() - 5*60*1000
-                }
-            ];
-        }
-
-        // 🤖 GESTIONE MESSAGGI ERRORE CON reCAPTCHA
-        function getErrorMessage(error) {
-            switch (error.code) {
-                case 'auth/invalid-email':
-                    return 'Email non valida';
-                case 'auth/user-disabled':
-                    return 'Account disabilitato';
-                case 'auth/user-not-found':
-                    return 'Utente non trovato';
-                case 'auth/wrong-password':
-                    return 'Password errata';
-                case 'auth/email-already-in-use':
-                    return 'Email già in uso';
-                case 'auth/weak-password':
-                    return 'Password troppo debole';
-                case 'auth/popup-closed-by-user':
-                    return 'Login annullato dall\'utente';
-                case 'auth/popup-blocked':
-                    return 'Popup bloccato dal browser. Abilita i popup per questo sito.';
-                case 'auth/cancelled-popup-request':
-                    return 'Popup di login cancellato';
-                case 'auth/network-request-failed':
-                    return 'Errore di connessione. Controlla la tua connessione internet.';
-                case 'auth/recaptcha-not-enabled':
-                    return 'reCAPTCHA non abilitato. Contatta l\'amministratore.';
-                case 'auth/too-many-requests':
-                    return 'Troppi tentativi. Riprova più tardi o completa la verifica reCAPTCHA.';
-                default:
-                    if (error.message && error.message.includes('recaptcha')) {
-                        return 'Errore nella verifica reCAPTCHA. Riprova.';
-                    }
-                    return error.message || 'Errore sconosciuto';
+                return USER_ROLES.SUPERUSER;
             }
         }
 
-        // Utility UI
-        function showError(message) {
-            const errorEl = document.getElementById('loginError');
-            errorEl.textContent = message;
-            errorEl.classList.add('show');
-            setTimeout(() => errorEl.classList.remove('show'), 5000);
-        }
+        return USER_ROLES.USER;
+    } catch (error) {
+        console.error('Errore determinazione ruolo:', error);
+        return USER_ROLES.USER;
+    }
+}
 
-        function showSuccess(message) {
-            const successEl = document.getElementById('loginSuccess');
-            successEl.textContent = message;
-            successEl.classList.add('show');
-            setTimeout(() => successEl.classList.remove('show'), 3000);
-        }
+// Simulazione autenticazione locale
+async function simulateLogin(email, password) {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            const user = users[email];
 
-        function hideError() {
-            document.getElementById('loginError').classList.remove('show');
-        }
+            if (user && user.password === password) {
+                currentUser = {
+                    uid: user.uid,
+                    email: email,
+                    displayName: user.username
+                };
 
-        function showLoading(show) {
-            const loadingEl = document.getElementById('loading');
-            loadingEl.classList.toggle('show', show);
-        }
+                // Salva i dati utente correnti
+                currentUserData = user;
 
-        // Gestione sezioni
-        function switchSection(sectionKey) {
-            const section = sectionConfig[sectionKey];
-            if (!section) return;
+                // Aggiorna UI con i dati del clan
+                document.getElementById('currentUsername').textContent = user.username;
+                document.getElementById('currentClan').textContent = user.clan || 'Nessuno';
+                document.getElementById('sidebarClan').textContent = user.clan || 'Nessuno';
 
-            // Controlla accesso alla sezione
-            if (!canAccessSection(sectionKey)) {
-                if (sectionKey.startsWith('clan-')) {
-                    if (sectionKey === 'clan-moderation' && !isClanModerator()) {
-                        alert('Solo i moderatori del clan possono accedere a questa sezione!');
-                    } else {
-                        alert('Devi appartenere a un clan per accedere a questa sezione!');
-                    }
-                } else if (sectionKey.startsWith('admin-')) {
-                    alert('Non hai i permessi per accedere a questa sezione!');
-                }
+                handleUserLogin(currentUser);
+                resolve();
+            } else {
+                reject(new Error('Email o password non validi'));
+            }
+        }, 1000);
+    });
+}
+
+async function simulateRegister(email, password, username, clan, role) {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+
+            if (users[email]) {
+                reject(new Error('Utente già esistente'));
                 return;
             }
 
-            // Pulisci listeners precedenti
-            cleanupListeners();
-			cleanupCommentImageUpload();
+            const userId = 'local_' + Date.now();
+            users[email] = {
+                uid: userId,
+                username: username,
+                email: email,
+                password: password,
+                clan: clan || 'Nessuno',
+                role: role || USER_ROLES.USER,
+                createdAt: Date.now()
+            };
 
-            currentSection = sectionKey;
+            localStorage.setItem('hc_local_users', JSON.stringify(users));
 
-            // Aggiorna header
-            document.getElementById('section-title').textContent = section.title;
-            document.getElementById('section-description').textContent = section.description;
+            currentUser = {
+                uid: userId,
+                email: email,
+                displayName: username
+            };
 
-            // Mostra contenuto appropriato
-            const forumContent = document.getElementById('forum-content');
-            const chatContent = document.getElementById('chat-content');
-            const threadView = document.getElementById('thread-view');
-            const newThreadBtn = document.getElementById('new-thread-btn');
+            // Salva i dati utente correnti
+            currentUserData = users[email];
 
-            // Nascondi tutto inizialmente
-            forumContent.style.display = 'none';
-            chatContent.style.display = 'none';
-            threadView.style.display = 'none';
-            newThreadBtn.style.display = 'none';
+            // Aggiorna UI con i dati del clan
+            document.getElementById('currentUsername').textContent = username;
+            document.getElementById('currentClan').textContent = clan || 'Nessuno';
+            document.getElementById('sidebarClan').textContent = clan || 'Nessuno';
 
-            if (section.type === 'forum') {
-                forumContent.style.display = 'block';
-                newThreadBtn.style.display = 'block';
-                loadThreads(sectionKey);
-            } else if (section.type === 'chat') {
-                chatContent.style.display = 'flex';
-                loadMessages(sectionKey);
-            } else if (section.type === 'admin') {
-                forumContent.style.display = 'block';
-                loadAdminContent(sectionKey);
-            } else if (section.type === 'clan-admin') {
-                forumContent.style.display = 'block';
-                loadClanModerationContent();
-            } else if (section.type === 'dashboard') {
-                forumContent.style.display = 'block';
-                loadDashboard();
-            }
+            handleUserLogin(currentUser);
+            resolve();
+        }, 1000);
+    });
+}
 
-            // Chiudi menu mobile se aperto
-            closeMobileMenu();
-
-            // Aggiorna navigazione
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            document.querySelector(`[data-section="${sectionKey}"]`).classList.add('active');
+async function handleLogout() {
+    try {
+        if (window.useFirebase && window.firebaseAuth && firebaseReady && signOut) {
+            await signOut(window.firebaseAuth);
+        } else {
+            // Logout locale
+            currentUser = null;
+            handleUserLogout();
         }
+    } catch (error) {
+        console.error('Errore logout:', error);
+    }
+}
 
-        // Funzioni per gestione mobile
-        function toggleMobileMenu() {
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.getElementById('mobileOverlay');
-            
-            if (sidebar.classList.contains('open')) {
-                closeMobileMenu();
+// Inizializza dati di esempio per modalità locale
+function initializeLocalData() {
+    // Crea utenti di esempio se non esistono
+    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+
+    // Controlla se ci sono utenti reali
+    const realUsers = Object.values(users).filter(user =>
+            !user.uid.startsWith('super_admin_') &&
+            !user.uid.startsWith('clan_mod_') &&
+            !user.uid.startsWith('user_'));
+
+    // Se c'è già un utente reale ma non ha ruolo superuser, assegnaglielo
+    if (realUsers.length > 0) {
+        const firstRealUser = realUsers[0];
+        if (!firstRealUser.role || firstRealUser.role === USER_ROLES.USER) {
+            firstRealUser.role = USER_ROLES.SUPERUSER;
+            // Trova l'email corrispondente e aggiorna
+            for (const email in users) {
+                if (users[email].uid === firstRealUser.uid) {
+                    users[email].role = USER_ROLES.SUPERUSER;
+                    localStorage.setItem('hc_local_users', JSON.stringify(users));
+                    console.log('🎉 Primo utente reale promosso a SUPERUSER:', email);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Crea utenti di esempio solo se non ci sono utenti reali
+    if (realUsers.length === 0) {
+        // Superuser di default
+        const defaultSuperUser = {
+            uid: 'super_admin_001',
+            username: 'SuperAdmin',
+            email: 'admin@hustlecastle.com',
+            password: 'admin123',
+            clan: 'Nessuno',
+            role: USER_ROLES.SUPERUSER,
+            createdAt: Date.now()
+        };
+
+        // Moderatore clan di esempio
+        const clanMod = {
+            uid: 'clan_mod_001',
+            username: 'ModeratoreDraghi',
+            email: 'mod@draghi.com',
+            password: 'mod123',
+            clan: 'Draghi Rossi',
+            role: USER_ROLES.CLAN_MOD,
+            createdAt: Date.now()
+        };
+
+        // Utente normale di esempio
+        const normalUser = {
+            uid: 'user_001',
+            username: 'GiocatoreLeoni',
+            email: 'player@leoni.com',
+            password: 'player123',
+            clan: 'Leoni Neri',
+            role: USER_ROLES.USER,
+            createdAt: Date.now()
+        };
+
+        users['admin@hustlecastle.com'] = defaultSuperUser;
+        users['mod@draghi.com'] = clanMod;
+        users['player@leoni.com'] = normalUser;
+
+        localStorage.setItem('hc_local_users', JSON.stringify(users));
+
+        console.log('🔧 Utenti di esempio creati:', {
+            superuser: {
+                email: 'admin@hustlecastle.com',
+                password: 'admin123'
+            },
+            clanMod: {
+                email: 'mod@draghi.com',
+                password: 'mod123'
+            },
+            user: {
+                email: 'player@leoni.com',
+                password: 'player123'
+            }
+        });
+    }
+
+    // Aggiungi thread di esempio per sezioni generali se non esistono
+    const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+    sections.forEach(section => {
+        const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
+        if (threads.length === 0) {
+            const exampleThreads = getExampleThreads(section);
+            localStorage.setItem(`hc_threads_${section}`, JSON.stringify(exampleThreads));
+        }
+    });
+
+    // Aggiungi messaggi di esempio per chat generale se non esistono
+    const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
+    if (messages.length === 0) {
+        const exampleMessages = getExampleMessages('chat-generale');
+        localStorage.setItem(`hc_messages_chat-generale`, JSON.stringify(exampleMessages));
+    }
+
+    // Inizializza dati di esempio per clan specifici
+    const exampleClans = ['Draghi Rossi', 'Leoni Neri', 'Aquile Bianche'];
+    exampleClans.forEach(clan => {
+        const safeClanName = clan.replace(/[.#$[\]]/g, '_');
+
+        // Thread clan (alcuni pending per testare moderazione)
+        const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
+        clanSections.forEach(section => {
+            const storageKey = `hc_threads_clan_${safeClanName}_${section}`;
+            const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            if (threads.length === 0) {
+                const exampleThreads = getExampleClanThreads(section, clan);
+                localStorage.setItem(storageKey, JSON.stringify(exampleThreads));
+            }
+        });
+
+        // Messaggi clan chat
+        const chatStorageKey = `hc_messages_clan_${safeClanName}_clan-chat`;
+        const chatMessages = JSON.parse(localStorage.getItem(chatStorageKey) || '[]');
+        if (chatMessages.length === 0) {
+            const exampleMessages = getExampleClanMessages(clan);
+            localStorage.setItem(chatStorageKey, JSON.stringify(exampleMessages));
+        }
+    });
+}
+
+function getExampleThreads(section) {
+    const examples = {
+        'eventi': [{
+                id: 'evt_demo_1',
+                title: '🎃 Evento Halloween - Strategie e Premi',
+                content: 'Discussione sulle migliori strategie per l\'evento Halloween! Condividete i vostri setup e le ricompense ottenute.',
+                author: 'EventMaster',
+                createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
+                replies: 15,
+                views: 87,
+                status: 'approved',
+                imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmY2NjAwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfjoMgRXZlbnRvIEhhbGxvd2VlbiDwn46DPC90ZXh0Pjwvc3ZnPg==',
+                imageName: 'halloween_event.jpg'
+            }
+        ],
+        'novita': [{
+                id: 'news_demo_1',
+                title: '📢 Aggiornamento 1.58.0 - Nuove Features!',
+                content: 'Ecco tutte le novità dell\'ultimo aggiornamento: nuovi eroi, dungeon migliorati e molto altro!',
+                author: 'GameUpdater',
+                createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
+                replies: 23,
+                views: 145,
+                status: 'approved',
+                imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMDA4OGNjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfkKIgQWdnaW9ybmFtZW50byB2MS41OC4wIPCfkKI8L3RleHQ+PC9zdmc+',
+                imageName: 'update_158.jpg'
+            }
+        ]
+    };
+    return examples[section] || [];
+}
+
+function getExampleClanThreads(section, clanName) {
+    const examples = {
+        'clan-war': [],
+        'clan-premi': [],
+        'clan-consigli': [],
+        'clan-bacheca': []
+    };
+    return examples[section] || [];
+}
+
+function getExampleMessages(section) {
+    const examples = {
+        'chat-generale': []
+    };
+    return examples[section] || [];
+}
+
+function getExampleClanMessages(clanName) {
+    return [{
+            id: 'cmsg1',
+            author: `Leader${clanName.replace(' ', '')}`,
+            message: `Benvenuti nel clan ${clanName}! Preparatevi per la guerra di domani!`,
+            timestamp: Date.now() - 15 * 60 * 1000
+        }, {
+            id: 'cmsg2',
+            author: 'WarriorClan',
+            message: 'Le mie truppe sono pronte! ⚔️',
+            timestamp: Date.now() - 10 * 60 * 1000
+        }, {
+            id: 'cmsg3',
+            author: 'DefenderMaster',
+            message: 'Chi ha bisogno di aiuto per il setup delle difese?',
+            timestamp: Date.now() - 5 * 60 * 1000
+        }
+    ];
+}
+
+// 🤖 GESTIONE MESSAGGI ERRORE CON reCAPTCHA
+function getErrorMessage(error) {
+    switch (error.code) {
+    case 'auth/invalid-email':
+        return 'Email non valida';
+    case 'auth/user-disabled':
+        return 'Account disabilitato';
+    case 'auth/user-not-found':
+        return 'Utente non trovato';
+    case 'auth/wrong-password':
+        return 'Password errata';
+    case 'auth/email-already-in-use':
+        return 'Email già in uso';
+    case 'auth/weak-password':
+        return 'Password troppo debole';
+    case 'auth/popup-closed-by-user':
+        return 'Login annullato dall\'utente';
+    case 'auth/popup-blocked':
+        return 'Popup bloccato dal browser. Abilita i popup per questo sito.';
+    case 'auth/cancelled-popup-request':
+        return 'Popup di login cancellato';
+    case 'auth/network-request-failed':
+        return 'Errore di connessione. Controlla la tua connessione internet.';
+    case 'auth/recaptcha-not-enabled':
+        return 'reCAPTCHA non abilitato. Contatta l\'amministratore.';
+    case 'auth/too-many-requests':
+        return 'Troppi tentativi. Riprova più tardi o completa la verifica reCAPTCHA.';
+    default:
+        if (error.message && error.message.includes('recaptcha')) {
+            return 'Errore nella verifica reCAPTCHA. Riprova.';
+        }
+        return error.message || 'Errore sconosciuto';
+    }
+}
+
+// Utility UI
+function showError(message) {
+    const errorEl = document.getElementById('loginError');
+    errorEl.textContent = message;
+    errorEl.classList.add('show');
+    setTimeout(() => errorEl.classList.remove('show'), 5000);
+}
+
+function showSuccess(message) {
+    const successEl = document.getElementById('loginSuccess');
+    successEl.textContent = message;
+    successEl.classList.add('show');
+    setTimeout(() => successEl.classList.remove('show'), 3000);
+}
+
+function hideError() {
+    document.getElementById('loginError').classList.remove('show');
+}
+
+function showLoading(show) {
+    const loadingEl = document.getElementById('loading');
+    loadingEl.classList.toggle('show', show);
+}
+
+// Gestione sezioni
+function switchSection(sectionKey) {
+    const section = sectionConfig[sectionKey];
+    if (!section)
+        return;
+
+    // Controlla accesso alla sezione
+    if (!canAccessSection(sectionKey)) {
+        if (sectionKey.startsWith('clan-')) {
+            if (sectionKey === 'clan-moderation' && !isClanModerator()) {
+                alert('Solo i moderatori del clan possono accedere a questa sezione!');
             } else {
-                openMobileMenu();
+                alert('Devi appartenere a un clan per accedere a questa sezione!');
             }
+        } else if (sectionKey.startsWith('admin-')) {
+            alert('Non hai i permessi per accedere a questa sezione!');
         }
+        return;
+    }
 
-        function openMobileMenu() {
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.getElementById('mobileOverlay');
-            
-            sidebar.classList.add('open');
-            overlay.classList.add('show');
-            document.body.style.overflow = 'hidden';
-        }
+    // Pulisci listeners precedenti
+    cleanupListeners();
+    cleanupCommentImageUpload();
 
-        function closeMobileMenu() {
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.getElementById('mobileOverlay');
-            
-            sidebar.classList.remove('open');
-            overlay.classList.remove('show');
-            document.body.style.overflow = 'auto';
-        }
-        // Carica dashboard
-        function loadDashboard() {
-            const threadList = document.getElementById('thread-list');
-            
-            // Se l'utente non è ancora loggato, mostra messaggio di caricamento
-            if (!currentUser) {
-                threadList.innerHTML = `
+    currentSection = sectionKey;
+
+    // Aggiorna header
+    document.getElementById('section-title').textContent = section.title;
+    document.getElementById('section-description').textContent = section.description;
+
+    // Mostra contenuto appropriato
+    const forumContent = document.getElementById('forum-content');
+    const chatContent = document.getElementById('chat-content');
+    const threadView = document.getElementById('thread-view');
+    const newThreadBtn = document.getElementById('new-thread-btn');
+
+    // Nascondi tutto inizialmente
+    forumContent.style.display = 'none';
+    chatContent.style.display = 'none';
+    threadView.style.display = 'none';
+    newThreadBtn.style.display = 'none';
+
+    if (section.type === 'forum') {
+        forumContent.style.display = 'block';
+        newThreadBtn.style.display = 'block';
+        loadThreads(sectionKey);
+    } else if (section.type === 'chat') {
+        chatContent.style.display = 'flex';
+        loadMessages(sectionKey);
+    } else if (section.type === 'admin') {
+        forumContent.style.display = 'block';
+        loadAdminContent(sectionKey);
+    } else if (section.type === 'clan-admin') {
+        forumContent.style.display = 'block';
+        loadClanModerationContent();
+    } else if (section.type === 'dashboard') {
+        forumContent.style.display = 'block';
+        loadDashboard();
+    }
+
+    // Chiudi menu mobile se aperto
+    closeMobileMenu();
+
+    // Aggiorna navigazione
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector(`[data-section="${sectionKey}"]`).classList.add('active');
+}
+
+// Funzioni per gestione mobile
+function toggleMobileMenu() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('mobileOverlay');
+
+    if (sidebar.classList.contains('open')) {
+        closeMobileMenu();
+    } else {
+        openMobileMenu();
+    }
+}
+
+function openMobileMenu() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('mobileOverlay');
+
+    sidebar.classList.add('open');
+    overlay.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileMenu() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('mobileOverlay');
+
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+    document.body.style.overflow = 'auto';
+}
+// Carica dashboard
+function loadDashboard() {
+    const threadList = document.getElementById('thread-list');
+
+    // Se l'utente non è ancora loggato, mostra messaggio di caricamento
+    if (!currentUser) {
+        threadList.innerHTML = `
                     <div style="text-align: center; padding: 60px; color: #666;">
                         <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
                         <h2 style="color: #8B4513; margin-bottom: 10px;">Caricamento Dashboard...</h2>
                         <p>Preparazione della tua area personale</p>
                     </div>
                 `;
-                return;
-            }
-            
-            const userName = currentUser.displayName || 'Guerriero';
-            const userClan = getCurrentUserClan();
-            const userRole = getCurrentUserRole();
-            
-            let welcomeMessage = '';
-            const currentHour = new Date().getHours();
-            if (currentHour < 12) {
-                welcomeMessage = '🌅 Buongiorno';
-            } else if (currentHour < 18) {
-                welcomeMessage = '☀️ Buon pomeriggio';
-            } else {
-                welcomeMessage = '🌙 Buonasera';
-            }
+        return;
+    }
 
-            let roleDisplay = '';
-            switch (userRole) {
-                case USER_ROLES.SUPERUSER:
-                    roleDisplay = '<span class="user-role role-superuser">👑 SUPER ADMIN</span>';
-                    break;
-                case USER_ROLES.CLAN_MOD:
-                    roleDisplay = '<span class="user-role role-moderator">🛡️ MODERATORE</span>';
-                    break;
-                default:
-                    roleDisplay = '<span class="user-role role-user">⚔️ GUERRIERO</span>';
-            }
+    const userName = currentUser.displayName || 'Guerriero';
+    const userClan = getCurrentUserClan();
+    const userRole = getCurrentUserRole();
 
-            threadList.innerHTML = `
+    let welcomeMessage = '';
+    const currentHour = new Date().getHours();
+    if (currentHour < 12) {
+        welcomeMessage = '🌅 Buongiorno';
+    } else if (currentHour < 18) {
+        welcomeMessage = '☀️ Buon pomeriggio';
+    } else {
+        welcomeMessage = '🌙 Buonasera';
+    }
+
+    let roleDisplay = '';
+    switch (userRole) {
+    case USER_ROLES.SUPERUSER:
+        roleDisplay = '<span class="user-role role-superuser">👑 SUPER ADMIN</span>';
+        break;
+    case USER_ROLES.CLAN_MOD:
+        roleDisplay = '<span class="user-role role-moderator">🛡️ MODERATORE</span>';
+        break;
+    default:
+        roleDisplay = '<span class="user-role role-user">⚔️ GUERRIERO</span>';
+    }
+
+    threadList.innerHTML = `
                 <div style="display: grid; gap: 25px;">
                     <!-- Welcome Section -->
                     <div style="background: linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(244, 164, 96, 0.1) 100%); border-radius: 15px; padding: 25px; border: 2px solid rgba(218, 165, 32, 0.3); position: relative; overflow: hidden;">
@@ -2171,133 +2188,124 @@ async function loadUsersList() {
                 </div>
             `;
 
-            // Aggiungi stili hover per le dashboard cards
-            const style = document.createElement('style');
-            style.textContent = `
+    // Aggiungi stili hover per le dashboard cards
+    const style = document.createElement('style');
+    style.textContent = `
                 .dashboard-card:hover {
                     transform: translateY(-5px) scale(1.02);
                     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
                 }
             `;
-            document.head.appendChild(style);
+    document.head.appendChild(style);
 
-            // Carica consigli del giorno dopo un breve delay
-            setTimeout(loadDailyTip, 300);
-        }
+    // Carica consigli del giorno dopo un breve delay
+    setTimeout(loadDailyTip, 300);
+}
 
-        // Ottieni statistiche del forum
-        function getForumStats() {
-            let totalThreads = 0;
-            let totalMessages = 0;
-            let totalUsers = 0;
-            let totalClans = 0;
+// Ottieni statistiche del forum
+function getForumStats() {
+    let totalThreads = 0;
+    let totalMessages = 0;
+    let totalUsers = 0;
+    let totalClans = 0;
 
-            try {
-                if (window.useFirebase) {
-                    // In modalità Firebase, restituisci valori placeholder
-                    return {
-                        totalThreads: '50+',
-                        totalMessages: '200+', 
-                        totalUsers: '15+',
-                        totalClans: '5+'
-                    };
-                } else {
-                    // Modalità locale - conta i dati reali
-                    const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
-                    sections.forEach(section => {
-                        const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
-                        totalThreads += threads.length;
-                    });
-
-                    const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
-                    totalMessages += messages.length;
-
-                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    totalUsers = Object.keys(users).length;
-
-                    const clanSet = new Set();
-                    Object.values(users).forEach(user => {
-                        if (user.clan && user.clan !== 'Nessuno') {
-                            clanSet.add(user.clan);
-                        }
-                    });
-                    totalClans = clanSet.size;
-                }
-            } catch (error) {
-                console.error('Errore calcolo statistiche:', error);
-            }
-
+    try {
+        if (window.useFirebase) {
+            // In modalità Firebase, restituisci valori placeholder
             return {
-                totalThreads: totalThreads || 0,
-                totalMessages: totalMessages || 0,
-                totalUsers: totalUsers || 0,
-                totalClans: totalClans || 0
+                totalThreads: '50+',
+                totalMessages: '200+',
+                totalUsers: '15+',
+                totalClans: '5+'
             };
-        }
+        } else {
+            // Modalità locale - conta i dati reali
+            const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+            sections.forEach(section => {
+                const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
+                totalThreads += threads.length;
+            });
 
-        // Carica consiglio del giorno
-        function loadDailyTip() {
-            const tipContainer = document.getElementById('daily-tip');
-            if (!tipContainer) return;
+            const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
+            totalMessages += messages.length;
 
-            const tips = [
-                {
-                    icon: '⚔️',
-                    title: 'Strategia di Combattimento',
-                    content: 'Bilancia sempre la tua formazione: un tank robusto, DPS equilibrati e un supporto possono fare la differenza in arena!'
-                },
-                {
-                    icon: '🏰',
-                    title: 'Gestione del Castello',
-                    content: 'Aggiorna sempre la sala del trono prima di potenziare altre stanze per massimizzare l\'efficienza delle risorse.'
-                },
-                {
-                    icon: '💎',
-                    title: 'Gemme e Equipaggiamento',
-                    content: 'Non vendere mai le gemme leggendarie! Anche se sembrano deboli ora, potrebbero essere utili per upgrade futuri.'
-                },
-                {
-                    icon: '🎯',
-                    title: 'Eventi Speciali',
-                    content: 'Partecipa sempre agli eventi temporanei: spesso offrono ricompense uniche che non puoi ottenere altrove!'
-                },
-                {
-                    icon: '👥',
-                    title: 'Vita di Clan',
-                    content: 'Coordina sempre con il tuo clan prima delle guerre. La comunicazione è la chiave per la vittoria!'
-                },
-                {
-                    icon: '📈',
-                    title: 'Progressione Intelligente',
-                    content: 'Non avere fretta di salire di Throne Room. Assicurati di avere equipaggiamento e truppe adeguate al tuo livello.'
-                },
-                {
-                    icon: '🛡️',
-                    title: 'Difesa del Castello',
-                    content: 'Posiziona strategicamente le tue difese: mescola danni fisici e magici per contrastare diversi tipi di attacco.'
-                },
-                {
-                    icon: '⏰',
-                    title: 'Gestione del Tempo',
-                    content: 'Ottimizza i tempi di training: inizia sempre con le truppe che richiedono più tempo prima di andare offline.'
-                },
-                {
-                    icon: '🏆',
-                    title: 'Arena e PvP',
-                    content: 'Studia sempre gli avversari prima di attaccare. Una strategia ben pianificata vale più della forza bruta!'
-                },
-                {
-                    icon: '💰',
-                    title: 'Economia del Gioco',
-                    content: 'Investi le gemme saggiamente: priorità a slot di barracks, mastro e velocizzazione di upgrade critici.'
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            totalUsers = Object.keys(users).length;
+
+            const clanSet = new Set();
+            Object.values(users).forEach(user => {
+                if (user.clan && user.clan !== 'Nessuno') {
+                    clanSet.add(user.clan);
                 }
-            ];
+            });
+            totalClans = clanSet.size;
+        }
+    } catch (error) {
+        console.error('Errore calcolo statistiche:', error);
+    }
 
-            // Seleziona un consiglio basato sul giorno corrente per consistenza
-            const today = new Date().getDate();
-            const selectedTip = tips[today % tips.length];
+    return {
+        totalThreads: totalThreads || 0,
+        totalMessages: totalMessages || 0,
+        totalUsers: totalUsers || 0,
+        totalClans: totalClans || 0
+    };
+}
 
-            tipContainer.innerHTML = `
+// Carica consiglio del giorno
+function loadDailyTip() {
+    const tipContainer = document.getElementById('daily-tip');
+    if (!tipContainer)
+        return;
+
+    const tips = [{
+            icon: '⚔️',
+            title: 'Strategia di Combattimento',
+            content: 'Bilancia sempre la tua formazione: un tank robusto, DPS equilibrati e un supporto possono fare la differenza in arena!'
+        }, {
+            icon: '🏰',
+            title: 'Gestione del Castello',
+            content: 'Aggiorna sempre la sala del trono prima di potenziare altre stanze per massimizzare l\'efficienza delle risorse.'
+        }, {
+            icon: '💎',
+            title: 'Gemme e Equipaggiamento',
+            content: 'Non vendere mai le gemme leggendarie! Anche se sembrano deboli ora, potrebbero essere utili per upgrade futuri.'
+        }, {
+            icon: '🎯',
+            title: 'Eventi Speciali',
+            content: 'Partecipa sempre agli eventi temporanei: spesso offrono ricompense uniche che non puoi ottenere altrove!'
+        }, {
+            icon: '👥',
+            title: 'Vita di Clan',
+            content: 'Coordina sempre con il tuo clan prima delle guerre. La comunicazione è la chiave per la vittoria!'
+        }, {
+            icon: '📈',
+            title: 'Progressione Intelligente',
+            content: 'Non avere fretta di salire di Throne Room. Assicurati di avere equipaggiamento e truppe adeguate al tuo livello.'
+        }, {
+            icon: '🛡️',
+            title: 'Difesa del Castello',
+            content: 'Posiziona strategicamente le tue difese: mescola danni fisici e magici per contrastare diversi tipi di attacco.'
+        }, {
+            icon: '⏰',
+            title: 'Gestione del Tempo',
+            content: 'Ottimizza i tempi di training: inizia sempre con le truppe che richiedono più tempo prima di andare offline.'
+        }, {
+            icon: '🏆',
+            title: 'Arena e PvP',
+            content: 'Studia sempre gli avversari prima di attaccare. Una strategia ben pianificata vale più della forza bruta!'
+        }, {
+            icon: '💰',
+            title: 'Economia del Gioco',
+            content: 'Investi le gemme saggiamente: priorità a slot di barracks, mastro e velocizzazione di upgrade critici.'
+        }
+    ];
+
+    // Seleziona un consiglio basato sul giorno corrente per consistenza
+    const today = new Date().getDate();
+    const selectedTip = tips[today % tips.length];
+
+    tipContainer.innerHTML = `
                 <div style="display: flex; align-items: flex-start; gap: 15px;">
                     <div style="font-size: 32px; flex-shrink: 0;">${selectedTip.icon}</div>
                     <div>
@@ -2306,32 +2314,32 @@ async function loadUsersList() {
                     </div>
                 </div>
             `;
-        }
+}
 
-        // Rendi la funzione globale
-        window.loadDailyTip = loadDailyTip;
+// Rendi la funzione globale
+window.loadDailyTip = loadDailyTip;
 
-        // Carica contenuto amministrativo
-        function loadAdminContent(sectionKey) {
-            const threadList = document.getElementById('thread-list');
-            
-            switch (sectionKey) {
-                case 'admin-users':
-                    loadUsersManagement();
-                    break;
-                case 'admin-clans':
-                    loadClansManagement();
-                    break;
-                default:
-                    threadList.innerHTML = '<div style="text-align: center; padding: 40px;">Sezione non trovata</div>';
-            }
-        }
+// Carica contenuto amministrativo
+function loadAdminContent(sectionKey) {
+    const threadList = document.getElementById('thread-list');
 
-        // Carica contenuto moderazione clan
-        function loadClanModerationContent() {
-            const threadList = document.getElementById('thread-list');
-            
-            threadList.innerHTML = `
+    switch (sectionKey) {
+    case 'admin-users':
+        loadUsersManagement();
+        break;
+    case 'admin-clans':
+        loadClansManagement();
+        break;
+    default:
+        threadList.innerHTML = '<div style="text-align: center; padding: 40px;">Sezione non trovata</div>';
+    }
+}
+
+// Carica contenuto moderazione clan
+function loadClanModerationContent() {
+    const threadList = document.getElementById('thread-list');
+
+    threadList.innerHTML = `
                 <div class="admin-panel">
                     <h3>🛡️ Moderazione Clan ${getCurrentUserClan()}</h3>
                     <div id="moderation-content">
@@ -2342,27 +2350,27 @@ async function loadUsersList() {
                 </div>
             `;
 
-            loadPendingThreads();
-        }
+    loadPendingThreads();
+}
 
-        // Carica thread in attesa di approvazione
-        async function loadPendingThreads() {
-            const moderationContent = document.getElementById('moderation-content');
-            
-            try {
-                const userClan = getCurrentUserClan();
-                const pendingThreads = await getPendingThreadsForClan(userClan);
-                
-                if (pendingThreads.length === 0) {
-                    moderationContent.innerHTML = `
+// Carica thread in attesa di approvazione
+async function loadPendingThreads() {
+    const moderationContent = document.getElementById('moderation-content');
+
+    try {
+        const userClan = getCurrentUserClan();
+        const pendingThreads = await getPendingThreadsForClan(userClan);
+
+        if (pendingThreads.length === 0) {
+            moderationContent.innerHTML = `
                         <div style="text-align: center; padding: 20px; color: #666;">
                             ✅ Nessun contenuto in attesa di approvazione
                         </div>
                     `;
-                    return;
-                }
+            return;
+        }
 
-                moderationContent.innerHTML = `
+        moderationContent.innerHTML = `
                     <div style="margin-bottom: 20px;">
                         <h4>📋 Thread in attesa di approvazione (${pendingThreads.length})</h4>
                     </div>
@@ -2388,134 +2396,142 @@ async function loadUsersList() {
                         </div>
                     `).join('')}
                 `;
-            } catch (error) {
-                console.error('Errore caricamento thread pending:', error);
-                moderationContent.innerHTML = `
+    } catch (error) {
+        console.error('Errore caricamento thread pending:', error);
+        moderationContent.innerHTML = `
                     <div style="text-align: center; color: red;">
                         Errore nel caricamento dei contenuti da moderare
                     </div>
                 `;
-            }
-        }
+    }
+}
 
-        // Ottieni thread in attesa per un clan
-        async function getPendingThreadsForClan(clanName) {
-            const pendingThreads = [];
-            const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
-            
-            for (const section of clanSections) {
-                try {
-                    const dataPath = getDataPath(section, 'threads');
-                    if (!dataPath) continue;
-                    
-                    let threads = [];
-                    
-                    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                        const threadsRef = ref(window.firebaseDatabase, dataPath);
-                        const snapshot = await get(threadsRef);
-                        
-                        if (snapshot.exists()) {
-                            snapshot.forEach((childSnapshot) => {
-                                const threadData = childSnapshot.val();
-                                if (threadData.status === 'pending') {
-                                    threads.push({
-                                        id: childSnapshot.key,
-                                        section: section,
-                                        ...threadData
-                                    });
-                                }
+// Ottieni thread in attesa per un clan
+async function getPendingThreadsForClan(clanName) {
+    const pendingThreads = [];
+    const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
+
+    for (const section of clanSections) {
+        try {
+            const dataPath = getDataPath(section, 'threads');
+            if (!dataPath)
+                continue;
+
+            let threads = [];
+
+            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+                const threadsRef = ref(window.firebaseDatabase, dataPath);
+                const snapshot = await get(threadsRef);
+
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        const threadData = childSnapshot.val();
+                        if (threadData.status === 'pending') {
+                            threads.push({
+                                id: childSnapshot.key,
+                                section: section,
+                                ...threadData
                             });
                         }
-                    } else {
-                        // Modalità locale
-                        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                        const localThreads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                        threads = localThreads.filter(t => t.status === 'pending').map(t => ({
+                    });
+                }
+            } else {
+                // Modalità locale
+                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+                const localThreads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                threads = localThreads.filter(t => t.status === 'pending').map(t => ({
                             ...t,
                             section: section
                         }));
-                    }
-                    
-                    pendingThreads.push(...threads);
-                } catch (error) {
-                    console.error(`Errore caricamento thread pending per ${section}:`, error);
-                }
             }
-            
-            // Ordina per data (più recenti prima)
-            return pendingThreads.sort((a, b) => b.createdAt - a.createdAt);
+
+            pendingThreads.push(...threads);
+        } catch (error) {
+            console.error(`Errore caricamento thread pending per ${section}:`, error);
         }
+    }
 
-        // Approva thread
-        async function approveThread(threadId, section) {
-            try {
-                await updateThreadStatus(threadId, section, 'approved');
-                alert('Thread approvato con successo!');
-                loadPendingThreads(); // Ricarica lista
-            } catch (error) {
-                console.error('Errore approvazione thread:', error);
-                alert('Errore nell\'approvazione del thread');
-            }
-        }
+    // Ordina per data (più recenti prima)
+    return pendingThreads.sort((a, b) => b.createdAt - a.createdAt);
+}
 
-        // Rifiuta thread
-        async function rejectThread(threadId, section) {
-            const reason = prompt('Motivo del rifiuto (opzionale):');
-            
-            try {
-                await updateThreadStatus(threadId, section, 'rejected', reason);
-                alert('Thread rifiutato');
-                loadPendingThreads(); // Ricarica lista
-            } catch (error) {
-                console.error('Errore rifiuto thread:', error);
-                alert('Errore nel rifiuto del thread');
-            }
-        }
+// Approva thread
+async function approveThread(threadId, section) {
+    try {
+        await updateThreadStatus(threadId, section, 'approved');
+        alert('Thread approvato con successo!');
+        loadPendingThreads(); // Ricarica lista
+    } catch (error) {
+        console.error('Errore approvazione thread:', error);
+        alert('Errore nell\'approvazione del thread');
+    }
+}
 
-        // Aggiorna status thread
-        async function updateThreadStatus(threadId, section, status, reason = null) {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath) return;
+// Rifiuta thread
+async function rejectThread(threadId, section) {
+    const reason = prompt('Motivo del rifiuto (opzionale):');
 
-            const updateData = {
-                status: status,
-                moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
-                moderatedBy: currentUser.displayName || 'Moderatore'
+    try {
+        await updateThreadStatus(threadId, section, 'rejected', reason);
+        alert('Thread rifiutato');
+        loadPendingThreads(); // Ricarica lista
+    } catch (error) {
+        console.error('Errore rifiuto thread:', error);
+        alert('Errore nel rifiuto del thread');
+    }
+}
+
+// Aggiorna status thread
+async function updateThreadStatus(threadId, section, status, reason = null) {
+    const dataPath = getDataPath(section, 'threads');
+    if (!dataPath)
+        return;
+
+    const updateData = {
+        status: status,
+        moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
+        moderatedBy: currentUser.displayName || 'Moderatore'
+    };
+
+    if (reason) {
+        updateData.rejectionReason = reason;
+    }
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        // leggi i dati esistenti del thread
+        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+        const snapshot = await get(threadRef);
+        if (snapshot.exists()) {
+            const existingData = snapshot.val();
+            // mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
+            const updatedThread = {
+                ...existingData,
+                ...updateData
             };
-
-            if (reason) {
-                updateData.rejectionReason = reason;
-            }
-
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                // leggi i dati esistenti del thread
-                const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-                const snapshot = await get(threadRef);
-                if (snapshot.exists()) {
-                    const existingData = snapshot.val();
-                    // mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
-                    const updatedThread = { ...existingData, ...updateData };
-                    await set(threadRef, updatedThread);
-                } else {
-                    console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
-                }
-            } else {
-                // modalità locale
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                const threadIndex = threads.findIndex(t => t.id === threadId);
-                if (threadIndex !== -1) {
-                    threads[threadIndex] = { ...threads[threadIndex], ...updateData };
-                    localStorage.setItem(storageKey, JSON.stringify(threads));
-                }
-            }
+            await set(threadRef, updatedThread);
+        } else {
+            console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
         }
+    } else {
+        // modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const threadIndex = threads.findIndex(t => t.id === threadId);
+        if (threadIndex !== -1) {
+            threads[threadIndex] = {
+                ...threads[threadIndex],
+                ...updateData
+            };
+            localStorage.setItem(storageKey, JSON.stringify(threads));
+        }
+    }
+}
 
-        // Carica gestione utenti
-        async function loadUsersManagement() {
-            const threadList = document.getElementById('thread-list');
-            
-            threadList.innerHTML = `
+// Carica gestione utenti
+async function loadUsersManagement() {
+    const threadList = document.getElementById('thread-list');
+
+    threadList.innerHTML = `
                 <div class="admin-panel">
                     <h3>👥 Gestione Utenti</h3>
                     <div id="users-grid" class="users-grid">
@@ -2526,59 +2542,59 @@ async function loadUsersList() {
                 </div>
             `;
 
-            // Carica lista utenti
-            loadUsersList();
+    // Carica lista utenti
+    loadUsersList();
+}
+
+// Carica lista utenti
+async function loadUsersList() {
+    const usersGrid = document.getElementById('users-grid');
+
+    try {
+        let users = [];
+
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            // Carica da Firebase
+            const usersRef = ref(window.firebaseDatabase, 'users');
+            const snapshot = await get(usersRef);
+
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    users.push({
+                        id: childSnapshot.key,
+                        ...childSnapshot.val()
+                    });
+                });
+            }
+        } else {
+            // Carica da localStorage
+            const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            users = Object.values(localUsers);
         }
 
-        // Carica lista utenti
-        async function loadUsersList() {
-            const usersGrid = document.getElementById('users-grid');
-            
-            try {
-                let users = [];
-                
-                if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                    // Carica da Firebase
-                    const usersRef = ref(window.firebaseDatabase, 'users');
-                    const snapshot = await get(usersRef);
-                    
-                    if (snapshot.exists()) {
-                        snapshot.forEach((childSnapshot) => {
-                            users.push({
-                                id: childSnapshot.key,
-                                ...childSnapshot.val()
-                            });
-                        });
-                    }
-                } else {
-                    // Carica da localStorage
-                    const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    users = Object.values(localUsers);
-                }
+        displayUsersList(users);
+    } catch (error) {
+        console.error('Errore caricamento utenti:', error);
+        usersGrid.innerHTML = '<div style="text-align: center; color: red;">Errore nel caricamento degli utenti</div>';
+    }
+}
 
-                displayUsersList(users);
-            } catch (error) {
-                console.error('Errore caricamento utenti:', error);
-                usersGrid.innerHTML = '<div style="text-align: center; color: red;">Errore nel caricamento degli utenti</div>';
-            }
-        }
+// Visualizza lista utenti
+function displayUsersList(users) {
+    const usersGrid = document.getElementById('users-grid');
 
-        // Visualizza lista utenti
-        function displayUsersList(users) {
-            const usersGrid = document.getElementById('users-grid');
-            
-            if (users.length === 0) {
-                usersGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun utente trovato</div>';
-                return;
-            }
+    if (users.length === 0) {
+        usersGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun utente trovato</div>';
+        return;
+    }
 
-            usersGrid.innerHTML = users.map(user => {
-                const roleText = user.role === 'superuser' ? 'SUPER' : 
-                                user.role === 'clan_mod' ? 'CLAN MOD' : 'USER';
-                const roleClass = user.role === 'superuser' ? 'role-superuser' : 
-                                 user.role === 'clan_mod' ? 'role-moderator' : 'role-user';
-                
-                return `
+    usersGrid.innerHTML = users.map(user => {
+        const roleText = user.role === 'superuser' ? 'SUPER' :
+            user.role === 'clan_mod' ? 'CLAN MOD' : 'USER';
+        const roleClass = user.role === 'superuser' ? 'role-superuser' :
+            user.role === 'clan_mod' ? 'role-moderator' : 'role-user';
+
+        return `
                     <div class="user-card">
                         <div class="user-card-header">
                             <div class="user-card-name">
@@ -2613,103 +2629,104 @@ async function loadUsersList() {
                         </div>
                     </div>
                 `;
-            }).join('');
-        }
+    }).join('');
+}
 
-        // Funzioni amministrative
-        async function assignClan(userId, username) {
-            const availableClans = await getAvailableClans();
-            const clanList = availableClans.length > 0 ? availableClans.join('\n') : 'Nessun clan disponibile';
-            
-            const clanName = prompt(`Assegna un clan a ${username}:\n\nClan disponibili:\n${clanList}\n\nInserisci il nome del clan:`);
-            if (!clanName || clanName.trim() === '') return;
-            
-            try {
-                await updateUserClan(userId, clanName.trim());
-                alert(`${username} è stato assegnato al clan "${clanName}"`);
-                loadUsersList(); // Ricarica lista
-            } catch (error) {
-                console.error('Errore assegnazione clan:', error);
-                alert('Errore nell\'assegnazione del clan');
-            }
-        }
+// Funzioni amministrative
+async function assignClan(userId, username) {
+    const availableClans = await getAvailableClans();
+    const clanList = availableClans.length > 0 ? availableClans.join('\n') : 'Nessun clan disponibile';
 
-        async function changeUserRole(userId, username, currentRole) {
-            if (getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
-                alert('Solo i superuser possono modificare i ruoli');
-                return;
-            }
-            
-            const newRole = prompt(`Cambia il ruolo di ${username}:\n\nRuolo attuale: ${currentRole}\n\nOpzioni:\n- user (utente normale)\n- clan_mod (moderatore di clan)\n- superuser (super amministratore)\n\nInserisci il nuovo ruolo:`);
-            
-            if (!newRole || !Object.values(USER_ROLES).includes(newRole)) {
-                alert('Ruolo non valido');
-                return;
-            }
-            
-            try {
-                await updateUserRole(userId, newRole);
-                alert(`Ruolo di ${username} cambiato in "${newRole}"`);
-                loadUsersList(); // Ricarica lista
-            } catch (error) {
-                console.error('Errore cambio ruolo:', error);
-                alert('Errore nel cambio del ruolo');
-            }
-        }
+    const clanName = prompt(`Assegna un clan a ${username}:\n\nClan disponibili:\n${clanList}\n\nInserisci il nome del clan:`);
+    if (!clanName || clanName.trim() === '')
+        return;
 
-        async function removFromClan(userId, username) {
-            if (confirm(`Rimuovere ${username} dal clan?`)) {
-                try {
-                    await updateUserClan(userId, 'Nessuno');
-                    alert(`${username} è stato rimosso dal clan`);
-                    loadUsersList(); // Ricarica lista
-                } catch (error) {
-                    console.error('Errore rimozione clan:', error);
-                    alert('Errore nella rimozione dal clan');
-                }
-            }
-        }
+    try {
+        await updateUserClan(userId, clanName.trim());
+        alert(`${username} è stato assegnato al clan "${clanName}"`);
+        loadUsersList(); // Ricarica lista
+    } catch (error) {
+        console.error('Errore assegnazione clan:', error);
+        alert('Errore nell\'assegnazione del clan');
+    }
+}
 
-        // Funzioni di aggiornamento database
-        async function updateUserClan(userId, clanName) {
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const userRef = ref(window.firebaseDatabase, `users/${userId}/clan`);
-                await set(userRef, clanName);
-            } else {
-                // Aggiorna localStorage
-                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                for (const email in users) {
-                    if (users[email].uid === userId) {
-                        users[email].clan = clanName;
-                        localStorage.setItem('hc_local_users', JSON.stringify(users));
-                        break;
-                    }
-                }
-            }
-        }
+async function changeUserRole(userId, username, currentRole) {
+    if (getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
+        alert('Solo i superuser possono modificare i ruoli');
+        return;
+    }
 
-        async function updateUserRole(userId, newRole) {
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const userRef = ref(window.firebaseDatabase, `users/${userId}/role`);
-                await set(userRef, newRole);
-            } else {
-                // Aggiorna localStorage
-                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                for (const email in users) {
-                    if (users[email].uid === userId) {
-                        users[email].role = newRole;
-                        localStorage.setItem('hc_local_users', JSON.stringify(users));
-                        break;
-                    }
-                }
+    const newRole = prompt(`Cambia il ruolo di ${username}:\n\nRuolo attuale: ${currentRole}\n\nOpzioni:\n- user (utente normale)\n- clan_mod (moderatore di clan)\n- superuser (super amministratore)\n\nInserisci il nuovo ruolo:`);
+
+    if (!newRole || !Object.values(USER_ROLES).includes(newRole)) {
+        alert('Ruolo non valido');
+        return;
+    }
+
+    try {
+        await updateUserRole(userId, newRole);
+        alert(`Ruolo di ${username} cambiato in "${newRole}"`);
+        loadUsersList(); // Ricarica lista
+    } catch (error) {
+        console.error('Errore cambio ruolo:', error);
+        alert('Errore nel cambio del ruolo');
+    }
+}
+
+async function removFromClan(userId, username) {
+    if (confirm(`Rimuovere ${username} dal clan?`)) {
+        try {
+            await updateUserClan(userId, 'Nessuno');
+            alert(`${username} è stato rimosso dal clan`);
+            loadUsersList(); // Ricarica lista
+        } catch (error) {
+            console.error('Errore rimozione clan:', error);
+            alert('Errore nella rimozione dal clan');
+        }
+    }
+}
+
+// Funzioni di aggiornamento database
+async function updateUserClan(userId, clanName) {
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        const userRef = ref(window.firebaseDatabase, `users/${userId}/clan`);
+        await set(userRef, clanName);
+    } else {
+        // Aggiorna localStorage
+        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+        for (const email in users) {
+            if (users[email].uid === userId) {
+                users[email].clan = clanName;
+                localStorage.setItem('hc_local_users', JSON.stringify(users));
+                break;
             }
         }
+    }
+}
 
-        // Gestione clan
-        async function loadClansManagement() {
-            const threadList = document.getElementById('thread-list');
-            
-            threadList.innerHTML = `
+async function updateUserRole(userId, newRole) {
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        const userRef = ref(window.firebaseDatabase, `users/${userId}/role`);
+        await set(userRef, newRole);
+    } else {
+        // Aggiorna localStorage
+        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+        for (const email in users) {
+            if (users[email].uid === userId) {
+                users[email].role = newRole;
+                localStorage.setItem('hc_local_users', JSON.stringify(users));
+                break;
+            }
+        }
+    }
+}
+
+// Gestione clan
+async function loadClansManagement() {
+    const threadList = document.getElementById('thread-list');
+
+    threadList.innerHTML = `
                 <div class="clan-management">
                     <h3>🏰 Gestione Clan</h3>
                     <button class="create-clan-btn" onclick="createNewClan()">
@@ -2723,22 +2740,22 @@ async function loadUsersList() {
                 </div>
             `;
 
-            loadClansList();
+    loadClansList();
+}
+
+async function loadClansList() {
+    const clansGrid = document.getElementById('clans-grid');
+
+    try {
+        const clans = await getAvailableClans();
+        const clanStats = await getClanStats(clans);
+
+        if (clans.length === 0) {
+            clansGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun clan trovato</div>';
+            return;
         }
 
-        async function loadClansList() {
-            const clansGrid = document.getElementById('clans-grid');
-            
-            try {
-                const clans = await getAvailableClans();
-                const clanStats = await getClanStats(clans);
-                
-                if (clans.length === 0) {
-                    clansGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun clan trovato</div>';
-                    return;
-                }
-
-                clansGrid.innerHTML = clans.map(clan => `
+        clansGrid.innerHTML = clans.map(clan => `
                     <div class="clan-card">
                         <h4>${clan}</h4>
                         <div class="clan-members">
@@ -2751,228 +2768,231 @@ async function loadUsersList() {
                         </div>
                     </div>
                 `).join('');
-            } catch (error) {
-                console.error('Errore caricamento clan:', error);
-                clansGrid.innerHTML = '<div style="text-align: center; color: red;">Errore nel caricamento dei clan</div>';
-            }
-        }
+    } catch (error) {
+        console.error('Errore caricamento clan:', error);
+        clansGrid.innerHTML = '<div style="text-align: center; color: red;">Errore nel caricamento dei clan</div>';
+    }
+}
 
-        async function getAvailableClans() {
-            let clans = [];
-            
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const usersRef = ref(window.firebaseDatabase, 'users');
-                const snapshot = await get(usersRef);
-                
-                if (snapshot.exists()) {
-                    const clanSet = new Set();
-                    snapshot.forEach((childSnapshot) => {
-                        const userData = childSnapshot.val();
-                        if (userData.clan && userData.clan !== 'Nessuno') {
-                            clanSet.add(userData.clan);
-                        }
-                    });
-                    clans = Array.from(clanSet);
+async function getAvailableClans() {
+    let clans = [];
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        const usersRef = ref(window.firebaseDatabase, 'users');
+        const snapshot = await get(usersRef);
+
+        if (snapshot.exists()) {
+            const clanSet = new Set();
+            snapshot.forEach((childSnapshot) => {
+                const userData = childSnapshot.val();
+                if (userData.clan && userData.clan !== 'Nessuno') {
+                    clanSet.add(userData.clan);
                 }
-            } else {
-                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                const clanSet = new Set();
-                Object.values(users).forEach(user => {
-                    if (user.clan && user.clan !== 'Nessuno') {
-                        clanSet.add(user.clan);
+            });
+            clans = Array.from(clanSet);
+        }
+    } else {
+        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+        const clanSet = new Set();
+        Object.values(users).forEach(user => {
+            if (user.clan && user.clan !== 'Nessuno') {
+                clanSet.add(user.clan);
+            }
+        });
+        clans = Array.from(clanSet);
+    }
+
+    return clans.sort();
+}
+
+async function getClanStats(clans) {
+    const stats = {};
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        const usersRef = ref(window.firebaseDatabase, 'users');
+        const snapshot = await get(usersRef);
+
+        if (snapshot.exists()) {
+            clans.forEach(clan => stats[clan] = 0);
+
+            snapshot.forEach((childSnapshot) => {
+                const userData = childSnapshot.val();
+                if (userData.clan && stats.hasOwnProperty(userData.clan)) {
+                    stats[userData.clan]++;
+                }
+            });
+        }
+    } else {
+        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+        clans.forEach(clan => stats[clan] = 0);
+
+        Object.values(users).forEach(user => {
+            if (user.clan && stats.hasOwnProperty(user.clan)) {
+                stats[user.clan]++;
+            }
+        });
+    }
+
+    return stats;
+}
+
+async function createNewClan() {
+    const clanName = prompt('Nome del nuovo clan:');
+    if (!clanName || clanName.trim() === '')
+        return;
+
+    const trimmedName = clanName.trim();
+    const existingClans = await getAvailableClans();
+
+    if (existingClans.includes(trimmedName)) {
+        alert('Questo clan esiste già!');
+        return;
+    }
+
+    alert(`Clan "${trimmedName}" creato! Ora puoi assegnare utenti a questo clan.`);
+    loadClansList();
+}
+
+async function deleteClan(clanName) {
+    if (!confirm(`Sei sicuro di voler eliminare il clan "${clanName}"?\n\nTutti i membri verranno rimossi dal clan.`)) {
+        return;
+    }
+
+    try {
+        // Rimuovi tutti gli utenti dal clan
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            const usersRef = ref(window.firebaseDatabase, 'users');
+            const snapshot = await get(usersRef);
+
+            if (snapshot.exists()) {
+                const updates = {};
+                snapshot.forEach((childSnapshot) => {
+                    const userData = childSnapshot.val();
+                    if (userData.clan === clanName) {
+                        updates[`users/${childSnapshot.key}/clan`] = 'Nessuno';
                     }
                 });
-                clans = Array.from(clanSet);
-            }
-            
-            return clans.sort();
-        }
 
-        async function getClanStats(clans) {
-            const stats = {};
-            
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const usersRef = ref(window.firebaseDatabase, 'users');
-                const snapshot = await get(usersRef);
-                
-                if (snapshot.exists()) {
-                    clans.forEach(clan => stats[clan] = 0);
-                    
-                    snapshot.forEach((childSnapshot) => {
-                        const userData = childSnapshot.val();
-                        if (userData.clan && stats.hasOwnProperty(userData.clan)) {
-                            stats[userData.clan]++;
-                        }
-                    });
+                await update(ref(window.firebaseDatabase), updates);
+            }
+        } else {
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            Object.values(users).forEach(user => {
+                if (user.clan === clanName) {
+                    user.clan = 'Nessuno';
                 }
-            } else {
-                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                clans.forEach(clan => stats[clan] = 0);
-                
-                Object.values(users).forEach(user => {
-                    if (user.clan && stats.hasOwnProperty(user.clan)) {
-                        stats[user.clan]++;
-                    }
-                });
-            }
-            
-            return stats;
+            });
+            localStorage.setItem('hc_local_users', JSON.stringify(users));
         }
 
-        async function createNewClan() {
-            const clanName = prompt('Nome del nuovo clan:');
-            if (!clanName || clanName.trim() === '') return;
-            
-            const trimmedName = clanName.trim();
-            const existingClans = await getAvailableClans();
-            
-            if (existingClans.includes(trimmedName)) {
-                alert('Questo clan esiste già!');
-                return;
-            }
-            
-            alert(`Clan "${trimmedName}" creato! Ora puoi assegnare utenti a questo clan.`);
-            loadClansList();
-        }
+        alert(`Clan "${clanName}" eliminato con successo`);
+        loadClansList();
+    } catch (error) {
+        console.error('Errore eliminazione clan:', error);
+        alert('Errore nell\'eliminazione del clan');
+    }
+}
 
-        async function deleteClan(clanName) {
-            if (!confirm(`Sei sicuro di voler eliminare il clan "${clanName}"?\n\nTutti i membri verranno rimossi dal clan.`)) {
-                return;
-            }
-            
+// Genera il path corretto per messaggi/thread in base alla sezione e clan
+function getDataPath(sectionKey, dataType) {
+    if (sectionKey.startsWith('clan-')) {
+        const userClan = getCurrentUserClan();
+        if (userClan === 'Nessuno') {
+            return null;
+        }
+        // Sostituisci caratteri speciali nel nome del clan per Firebase
+        const safeClanName = userClan.replace(/[.#$[\]]/g, '_');
+        return `${dataType}/clan/${safeClanName}/${sectionKey}`;
+    } else {
+        return `${dataType}/${sectionKey}`;
+    }
+}
+
+// Upload immagine thread
+async function uploadThreadImage(file, progressCallback) {
+    if (!file)
+        return null;
+
+    try {
+        if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
             try {
-                // Rimuovi tutti gli utenti dal clan
-                if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                    const usersRef = ref(window.firebaseDatabase, 'users');
-                    const snapshot = await get(usersRef);
-                    
-                    if (snapshot.exists()) {
-                        const updates = {};
-                        snapshot.forEach((childSnapshot) => {
-                            const userData = childSnapshot.val();
-                            if (userData.clan === clanName) {
-                                updates[`users/${childSnapshot.key}/clan`] = 'Nessuno';
-                            }
-                        });
-                        
-                        await update(ref(window.firebaseDatabase), updates);
-                    }
-                } else {
-                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    Object.values(users).forEach(user => {
-                        if (user.clan === clanName) {
-                            user.clan = 'Nessuno';
-                        }
-                    });
-                    localStorage.setItem('hc_local_users', JSON.stringify(users));
-                }
-                
-                alert(`Clan "${clanName}" eliminato con successo`);
-                loadClansList();
-            } catch (error) {
-                console.error('Errore eliminazione clan:', error);
-                alert('Errore nell\'eliminazione del clan');
-            }
-        }
+                // Upload su Firebase Storage
+                const timestamp = Date.now();
+                const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
+                const imageRef = storageRef(window.firebaseStorage, filename);
 
-        // Genera il path corretto per messaggi/thread in base alla sezione e clan
-        function getDataPath(sectionKey, dataType) {
-            if (sectionKey.startsWith('clan-')) {
-                const userClan = getCurrentUserClan();
-                if (userClan === 'Nessuno') {
-                    return null;
-                }
-                // Sostituisci caratteri speciali nel nome del clan per Firebase
-                const safeClanName = userClan.replace(/[.#$[\]]/g, '_');
-                return `${dataType}/clan/${safeClanName}/${sectionKey}`;
-            } else {
-                return `${dataType}/${sectionKey}`;
-            }
-        }
+                // Upload con progress tracking
+                const uploadTask = uploadBytes(imageRef, file);
 
-        // Upload immagine thread
-        async function uploadThreadImage(file, progressCallback) {
-            if (!file) return null;
-            
-            try {
-                if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
-                    try {
-                        // Upload su Firebase Storage
-                        const timestamp = Date.now();
-                        const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
-                        const imageRef = storageRef(window.firebaseStorage, filename);
-                        
-                        // Upload con progress tracking
-                        const uploadTask = uploadBytes(imageRef, file);
-                        
-                        // Simula progress (Firebase v9 non ha onSnapshot per upload)
-                        let progress = 0;
-                        const progressInterval = setInterval(() => {
-                            progress += Math.random() * 30;
-                            if (progress > 90) progress = 90;
-                            progressCallback(progress);
-                        }, 200);
-                        
-                        const snapshot = await uploadTask;
-                        clearInterval(progressInterval);
-                        progressCallback(100);
-                        
-                        // Ottieni URL download
-                        const downloadURL = await getDownloadURL(snapshot.ref);
-                        return downloadURL;
-                        
-                    } catch (storageError) {
-                        console.warn('⚠️ Errore Firebase Storage, uso fallback locale:', storageError.message);
-                        
-                        // Fallback: converte in base64 se Firebase Storage fallisce
-                        return new Promise((resolve) => {
-                            const reader = new FileReader();
-                            reader.onload = function(e) {
-                                progressCallback(100);
-                                console.log('📷 Immagine convertita in base64 (fallback)');
-                                resolve(e.target.result);
-                            };
-                            reader.readAsDataURL(file);
-                        });
-                    }
-                    
-                } else {
-                    // Modalità locale - converte in base64
-                    return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            progressCallback(100);
-                            resolve(e.target.result);
-                        };
-                        reader.readAsDataURL(file);
-                    });
-                }
-            } catch (error) {
-                console.error('Errore upload immagine:', error);
-                
-                // Ultimo tentativo: base64 fallback
-                console.log('🔄 Tentativo fallback base64...');
-                return new Promise((resolve, reject) => {
+                // Simula progress (Firebase v9 non ha onSnapshot per upload)
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.random() * 30;
+                    if (progress > 90)
+                        progress = 90;
+                    progressCallback(progress);
+                }, 200);
+
+                const snapshot = await uploadTask;
+                clearInterval(progressInterval);
+                progressCallback(100);
+
+                // Ottieni URL download
+                const downloadURL = await getDownloadURL(snapshot.ref);
+                return downloadURL;
+
+            } catch (storageError) {
+                console.warn('⚠️ Errore Firebase Storage, uso fallback locale:', storageError.message);
+
+                // Fallback: converte in base64 se Firebase Storage fallisce
+                return new Promise((resolve) => {
                     const reader = new FileReader();
-                    reader.onload = function(e) {
+                    reader.onload = function (e) {
                         progressCallback(100);
-                        console.log('📷 Immagine salvata come base64 (fallback finale)');
+                        console.log('📷 Immagine convertita in base64 (fallback)');
                         resolve(e.target.result);
-                    };
-                    reader.onerror = function() {
-                        reject(new Error('Errore nella conversione dell\'immagine'));
                     };
                     reader.readAsDataURL(file);
                 });
             }
-        }
 
-        // Update upload progress
-        function updateUploadProgress(progress) {
-            const progressContainer = document.getElementById('upload-progress');
-            const progressPercent = Math.round(progress);
-            
-            progressContainer.innerHTML = `
+        } else {
+            // Modalità locale - converte in base64
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    progressCallback(100);
+                    resolve(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    } catch (error) {
+        console.error('Errore upload immagine:', error);
+
+        // Ultimo tentativo: base64 fallback
+        console.log('🔄 Tentativo fallback base64...');
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                progressCallback(100);
+                console.log('📷 Immagine salvata come base64 (fallback finale)');
+                resolve(e.target.result);
+            };
+            reader.onerror = function () {
+                reject(new Error('Errore nella conversione dell\'immagine'));
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+}
+
+// Update upload progress
+function updateUploadProgress(progress) {
+    const progressContainer = document.getElementById('upload-progress');
+    const progressPercent = Math.round(progress);
+
+    progressContainer.innerHTML = `
                 <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                         <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
@@ -2983,63 +3003,67 @@ async function loadUsersList() {
                     </div>
                 </div>
             `;
-            progressContainer.style.display = 'block';
-            
-            // Nascondi il progresso quando completato
-            if (progress >= 100) {
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                }, 1000);
-            }
+    progressContainer.style.display = 'block';
+
+    // Nascondi il progresso quando completato
+    if (progress >= 100) {
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 1000);
+    }
+}
+
+// Carica thread
+function loadThreads(sectionKey) {
+    const dataPath = getDataPath(sectionKey, 'threads');
+    if (!dataPath)
+        return;
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
+        const threadsRef = ref(window.firebaseDatabase, dataPath);
+
+        // Cleanup previous listener
+        if (threadListeners[sectionKey]) {
+            const oldRef = ref(window.firebaseDatabase, threadListeners[sectionKey].path);
+            off(oldRef, threadListeners[sectionKey].callback);
         }
 
-        // Carica thread
-        function loadThreads(sectionKey) {
-            const dataPath = getDataPath(sectionKey, 'threads');
-            if (!dataPath) return;
+        // Listen for changes
+        const callback = (snapshot) => {
+            const threads = [];
+            snapshot.forEach((childSnapshot) => {
+                threads.push({
+                    id: childSnapshot.key,
+                    ...childSnapshot.val()
+                });
+            });
 
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
-                const threadsRef = ref(window.firebaseDatabase, dataPath);
-                
-                // Cleanup previous listener
-                if (threadListeners[sectionKey]) {
-                    const oldRef = ref(window.firebaseDatabase, threadListeners[sectionKey].path);
-                    off(oldRef, threadListeners[sectionKey].callback);
-                }
-                
-                // Listen for changes
-                const callback = (snapshot) => {
-                    const threads = [];
-                    snapshot.forEach((childSnapshot) => {
-                        threads.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-                    
-                    // Ordina per data (più recenti prima)
-                    threads.sort((a, b) => b.createdAt - a.createdAt);
-                    
-                    displayThreads(threads);
-                };
+            // Ordina per data (più recenti prima)
+            threads.sort((a, b) => b.createdAt - a.createdAt);
 
-                threadListeners[sectionKey] = { path: dataPath, callback: callback };
-                onValue(threadsRef, callback);
-            } else {
-                // Carica da localStorage (modalità locale)
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                threads.sort((a, b) => b.createdAt - a.createdAt);
-                displayThreads(threads);
-            }
-        }
+            displayThreads(threads);
+        };
 
-        // Mostra thread
-        function displayThreads(threads) {
-            const threadList = document.getElementById('thread-list');
-            
-            if (threads.length === 0) {
-                threadList.innerHTML = `
+        threadListeners[sectionKey] = {
+            path: dataPath,
+            callback: callback
+        };
+        onValue(threadsRef, callback);
+    } else {
+        // Carica da localStorage (modalità locale)
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        threads.sort((a, b) => b.createdAt - a.createdAt);
+        displayThreads(threads);
+    }
+}
+
+// Mostra thread
+function displayThreads(threads) {
+    const threadList = document.getElementById('thread-list');
+
+    if (threads.length === 0) {
+        threadList.innerHTML = `
                     <div class="forum-header">
                         <div>Discussione</div>
                         <div>Risposte</div>
@@ -3050,20 +3074,20 @@ async function loadUsersList() {
                         Nessun thread in questa sezione. Creane uno!
                     </div>
                 `;
-                return;
-            }
-            
-            // Filtra thread approvati per utenti normali, mostra tutto per moderatori
-            const visibleThreads = threads.filter(thread => {
-                // Moderatori vedono tutto
-                if (canModerateSection(currentSection)) {
-                    return true;
-                }
-                // Utenti normali vedono solo thread approvati
-                return !thread.status || thread.status === 'approved';
-            });
-            
-            threadList.innerHTML = `
+        return;
+    }
+
+    // Filtra thread approvati per utenti normali, mostra tutto per moderatori
+    const visibleThreads = threads.filter(thread => {
+        // Moderatori vedono tutto
+        if (canModerateSection(currentSection)) {
+            return true;
+        }
+        // Utenti normali vedono solo thread approvati
+        return !thread.status || thread.status === 'approved';
+    });
+
+    threadList.innerHTML = `
                 <div class="forum-header">
                     <div>Discussione</div>
                     <div>Risposte</div>
@@ -3071,12 +3095,12 @@ async function loadUsersList() {
                     <div>Ultimo Messaggio</div>
                 </div>
             ` + visibleThreads.map(thread => {
-                const statusClass = thread.status === 'pending' ? 'thread-pending' : 
-                                    thread.status === 'rejected' ? 'thread-rejected' : '';
-                const statusIndicator = thread.status === 'pending' ? '<span class="pending-indicator">PENDING</span>' : 
-                                        thread.status === 'rejected' ? '<span class="pending-indicator" style="background: rgba(231, 76, 60, 0.2); color: #e74c3c;">RIFIUTATO</span>' : '';
-                
-                return `
+            const statusClass = thread.status === 'pending' ? 'thread-pending' :
+                thread.status === 'rejected' ? 'thread-rejected' : '';
+            const statusIndicator = thread.status === 'pending' ? '<span class="pending-indicator">PENDING</span>' :
+                thread.status === 'rejected' ? '<span class="pending-indicator" style="background: rgba(231, 76, 60, 0.2); color: #e74c3c;">RIFIUTATO</span>' : '';
+
+            return `
                     <div class="thread-item ${statusClass}">
                         <div class="thread-main">
                             <div class="thread-title" onclick="openThread('${thread.id}', '${currentSection}')">
@@ -3117,221 +3141,223 @@ async function loadUsersList() {
                         </div>
                     </div>
                 `;
-            }).join('');
-        }
+        }).join('');
+}
 
-        // Mostra modal creazione thread
-        function showThreadCreationModal() {
-            if (!currentUser) {
-                alert('Devi effettuare l\'accesso per creare thread');
-                return;
-            }
+// Mostra modal creazione thread
+function showThreadCreationModal() {
+    if (!currentUser) {
+        alert('Devi effettuare l\'accesso per creare thread');
+        return;
+    }
 
-            // Controlla accesso clan
-            if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
-                alert('Devi appartenere a un clan per creare thread qui!');
-                return;
-            }
+    // Controlla accesso clan
+    if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
+        alert('Devi appartenere a un clan per creare thread qui!');
+        return;
+    }
 
-            document.getElementById('threadCreationModal').style.display = 'flex';
-            document.getElementById('thread-title-input').focus();
-            
-            // Setup image upload listener
-            setupImageUpload();
-        }
+    document.getElementById('threadCreationModal').style.display = 'flex';
+    document.getElementById('thread-title-input').focus();
 
-        // Setup image upload
-        function setupImageUpload() {
-            const imageInput = document.getElementById('thread-image-input');
-            const imageLabel = document.querySelector('.image-upload-label');
-            
-            // Remove existing listeners
-            imageInput.removeEventListener('change', handleImageSelect);
-            imageLabel.removeEventListener('click', () => imageInput.click());
-            
-            // Add new listeners
-            imageInput.addEventListener('change', handleImageSelect);
-            imageLabel.addEventListener('click', () => imageInput.click());
-        }
+    // Setup image upload listener
+    setupImageUpload();
+}
 
-        // Handle image selection
-        function handleImageSelect(event) {
-            const file = event.target.files[0];
-            const preview = document.getElementById('image-preview');
-            const progressContainer = document.getElementById('upload-progress');
-            
-            if (!file) return;
-            
-            // Validate file type
-            if (!file.type.startsWith('image/')) {
-                alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
-                return;
-            }
-            
-            // Validate file size (max 5MB)
-            const maxSize = 5 * 1024 * 1024; // 5MB
-            if (file.size > maxSize) {
-                alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
-                return;
-            }
-            
-            // Show preview
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                preview.innerHTML = `
+// Setup image upload
+function setupImageUpload() {
+    const imageInput = document.getElementById('thread-image-input');
+    const imageLabel = document.querySelector('.image-upload-label');
+
+    // Remove existing listeners
+    imageInput.removeEventListener('change', handleImageSelect);
+    imageLabel.removeEventListener('click', () => imageInput.click());
+
+    // Add new listeners
+    imageInput.addEventListener('change', handleImageSelect);
+    imageLabel.addEventListener('click', () => imageInput.click());
+}
+
+// Handle image selection
+function handleImageSelect(event) {
+    const file = event.target.files[0];
+    const preview = document.getElementById('image-preview');
+    const progressContainer = document.getElementById('upload-progress');
+
+    if (!file)
+        return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+        return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+        alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+        return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        preview.innerHTML = `
                     <img src="${e.target.result}" alt="Anteprima immagine">
                     <button type="button" class="remove-image" onclick="removeSelectedImage()">
                         🗑️ Rimuovi Immagine
                     </button>
                 `;
-            };
-            reader.readAsDataURL(file);
-            
-            // Hide progress initially
-            progressContainer.style.display = 'none';
-        }
+    };
+    reader.readAsDataURL(file);
 
-        // Remove selected image
-        function removeSelectedImage() {
-            document.getElementById('thread-image-input').value = '';
-            document.getElementById('image-preview').innerHTML = '';
-            document.getElementById('upload-progress').style.display = 'none';
-        }
+    // Hide progress initially
+    progressContainer.style.display = 'none';
+}
 
-        // Nascondi modal creazione thread
-        function hideThreadCreationModal() {
-            document.getElementById('threadCreationModal').style.display = 'none';
-            document.getElementById('thread-title-input').value = '';
-            document.getElementById('thread-content-input').value = '';
-            removeSelectedImage(); // Pulisci anche l'immagine selezionata
-        }
+// Remove selected image
+function removeSelectedImage() {
+    document.getElementById('thread-image-input').value = '';
+    document.getElementById('image-preview').innerHTML = '';
+    document.getElementById('upload-progress').style.display = 'none';
+}
 
-        // Crea thread dalla modal
-        async function createThread() {
-            const title = document.getElementById('thread-title-input').value.trim();
-            const content = document.getElementById('thread-content-input').value.trim();
-            const imageInput = document.getElementById('thread-image-input');
-            const imageFile = imageInput.files[0];
-            
-            if (!title || !content) {
-                alert('Inserisci sia il titolo che il contenuto del thread');
-                return;
+// Nascondi modal creazione thread
+function hideThreadCreationModal() {
+    document.getElementById('threadCreationModal').style.display = 'none';
+    document.getElementById('thread-title-input').value = '';
+    document.getElementById('thread-content-input').value = '';
+    removeSelectedImage(); // Pulisci anche l'immagine selezionata
+}
+
+// Crea thread dalla modal
+async function createThread() {
+    const title = document.getElementById('thread-title-input').value.trim();
+    const content = document.getElementById('thread-content-input').value.trim();
+    const imageInput = document.getElementById('thread-image-input');
+    const imageFile = imageInput.files[0];
+
+    if (!title || !content) {
+        alert('Inserisci sia il titolo che il contenuto del thread');
+        return;
+    }
+
+    const createBtn = document.querySelector('.btn-create-thread');
+    const progressContainer = document.getElementById('upload-progress');
+
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creazione...';
+
+    try {
+        const threadData = {
+            title: title,
+            content: content,
+            author: currentUser.displayName || 'Utente',
+            authorId: currentUser.uid
+        };
+
+        // Upload immagine se presente
+        if (imageFile) {
+            createBtn.textContent = 'Caricamento immagine...';
+            progressContainer.style.display = 'block';
+
+            const imageUrl = await uploadThreadImage(imageFile, (progress) => {
+                updateUploadProgress(progress);
+            });
+
+            if (imageUrl) {
+                threadData.imageUrl = imageUrl;
+                threadData.imageName = imageFile.name;
             }
-
-            const createBtn = document.querySelector('.btn-create-thread');
-            const progressContainer = document.getElementById('upload-progress');
-            
-            createBtn.disabled = true;
-            createBtn.textContent = 'Creazione...';
-
-            try {
-                const threadData = {
-                    title: title,
-                    content: content,
-                    author: currentUser.displayName || 'Utente',
-                    authorId: currentUser.uid
-                };
-
-                // Upload immagine se presente
-                if (imageFile) {
-                    createBtn.textContent = 'Caricamento immagine...';
-                    progressContainer.style.display = 'block';
-                    
-                    const imageUrl = await uploadThreadImage(imageFile, (progress) => {
-                        updateUploadProgress(progress);
-                    });
-                    
-                    if (imageUrl) {
-                        threadData.imageUrl = imageUrl;
-                        threadData.imageName = imageFile.name;
-                    }
-                }
-
-                // Determina se il thread ha bisogno di approvazione
-                const needsApproval = currentSection.startsWith('clan-') && !canModerateSection(currentSection);
-                
-                if (needsApproval) {
-                    threadData.status = 'pending';
-                } else {
-                    threadData.status = 'approved';
-                }
-
-                const dataPath = getDataPath(currentSection, 'threads');
-                if (!dataPath) return;
-
-                createBtn.textContent = 'Salvando thread...';
-
-                if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
-                    // Salva su Firebase
-                    const threadsRef = ref(window.firebaseDatabase, dataPath);
-                    threadData.createdAt = serverTimestamp();
-                    threadData.replies = 0;
-                    threadData.views = 0;
-                    await push(threadsRef, threadData);
-                } else {
-                    // Salva in locale
-                    saveLocalThread(currentSection, threadData);
-                }
-
-                hideThreadCreationModal();
-                
-                if (needsApproval) {
-                    alert('Thread creato! È in attesa di approvazione da parte del moderatore del clan.');
-                } else {
-                    alert('Thread creato con successo!');
-                }
-            } catch (error) {
-                console.error('Errore creazione thread:', error);
-                alert('Errore nella creazione del thread: ' + (error.message || error));
-            } finally {
-                createBtn.disabled = false;
-                createBtn.textContent = 'Crea Thread';
-                progressContainer.style.display = 'none';
-            }
-            loadThreads(currentSection); 
         }
 
-        // Apri thread per visualizzazione
-        async function openThread(threadId, section) {
-            if (!currentUser) {
-                alert('Devi effettuare l\'accesso per visualizzare i thread');
-                return;
-            }
+        // Determina se il thread ha bisogno di approvazione
+        const needsApproval = currentSection.startsWith('clan-') && !canModerateSection(currentSection);
 
-            try {
-                // Trova il thread
-                const thread = await getThread(threadId, section);
-                if (!thread) {
-                    alert('Thread non trovato');
-                    return;
-                }
+        if (needsApproval) {
+            threadData.status = 'pending';
+        } else {
+            threadData.status = 'approved';
+        }
 
-                // Aggiorna visualizzazioni
-                await incrementThreadViews(threadId, section);
+        const dataPath = getDataPath(currentSection, 'threads');
+        if (!dataPath)
+            return;
 
-                // Salva riferimenti
-                currentThread = thread;
-                currentThreadId = threadId;
-                currentThreadSection = section;
+        createBtn.textContent = 'Salvando thread...';
 
-                // Mostra vista thread
-                document.getElementById('forum-content').style.display = 'none';
-                document.getElementById('chat-content').style.display = 'none';
-                document.getElementById('thread-view').style.display = 'flex';
-                document.getElementById('new-thread-btn').style.display = 'none';
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
+            // Salva su Firebase
+            const threadsRef = ref(window.firebaseDatabase, dataPath);
+            threadData.createdAt = serverTimestamp();
+            threadData.replies = 0;
+            threadData.views = 0;
+            await push(threadsRef, threadData);
+        } else {
+            // Salva in locale
+            saveLocalThread(currentSection, threadData);
+        }
 
-                // Popola dati thread
-                document.getElementById('thread-title').textContent = thread.title;
-                document.getElementById('thread-author').textContent = thread.author;
-                document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
-                document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
-                
-                // Contenuto del thread con immagine se presente
-                const threadContentEl = document.getElementById('thread-content');
-                let contentHtml = escapeHtml(thread.content || 'Nessun contenuto disponibile');
-                
-                if (thread.imageUrl) {
-                    contentHtml += `
+        hideThreadCreationModal();
+
+        if (needsApproval) {
+            alert('Thread creato! È in attesa di approvazione da parte del moderatore del clan.');
+        } else {
+            alert('Thread creato con successo!');
+        }
+    } catch (error) {
+        console.error('Errore creazione thread:', error);
+        alert('Errore nella creazione del thread: ' + (error.message || error));
+    } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = 'Crea Thread';
+        progressContainer.style.display = 'none';
+    }
+    loadThreads(currentSection);
+}
+
+// Apri thread per visualizzazione
+async function openThread(threadId, section) {
+    if (!currentUser) {
+        alert('Devi effettuare l\'accesso per visualizzare i thread');
+        return;
+    }
+
+    try {
+        // Trova il thread
+        const thread = await getThread(threadId, section);
+        if (!thread) {
+            alert('Thread non trovato');
+            return;
+        }
+
+        // Aggiorna visualizzazioni
+        await incrementThreadViews(threadId, section);
+
+        // Salva riferimenti
+        currentThread = thread;
+        currentThreadId = threadId;
+        currentThreadSection = section;
+
+        // Mostra vista thread
+        document.getElementById('forum-content').style.display = 'none';
+        document.getElementById('chat-content').style.display = 'none';
+        document.getElementById('thread-view').style.display = 'flex';
+        document.getElementById('new-thread-btn').style.display = 'none';
+
+        // Popola dati thread
+        document.getElementById('thread-title').textContent = thread.title;
+        document.getElementById('thread-author').textContent = thread.author;
+        document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
+        document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
+
+        // Contenuto del thread con immagine se presente
+        const threadContentEl = document.getElementById('thread-content');
+        let contentHtml = escapeHtml(thread.content || 'Nessun contenuto disponibile');
+
+        if (thread.imageUrl) {
+            contentHtml += `
                         <div class="thread-image">
                             <img src="${thread.imageUrl}" 
                                  alt="${thread.imageName || 'Immagine del thread'}" 
@@ -3339,126 +3365,133 @@ async function loadUsersList() {
                                  title="Clicca per ingrandire">
                         </div>
                     `;
-                }
-                
-                threadContentEl.innerHTML = contentHtml;
-
-                // Carica commenti
-				loadThreadComments(threadId, section);
-
-				// Reset flag per permettere nuovo setup nei commenti
-				commentImageUploadInitialized = false;
-
-				// Chiudi menu mobile se aperto
-				closeMobileMenu();
-
-            } catch (error) {
-                console.error('Errore apertura thread:', error);
-                alert('Errore nell\'apertura del thread');
-            }
         }
 
-        // Torna al forum
-        function backToForum() {
-            document.getElementById('thread-view').style.display = 'none';
-            document.getElementById('forum-content').style.display = 'block';
-            document.getElementById('new-thread-btn').style.display = 'block';
-            
-            // Pulisci dati thread
-            cleanupCommentImageUpload();
+        threadContentEl.innerHTML = contentHtml;
 
-			// Pulisci dati thread
-			currentThread = null;
-			currentThreadId = null;
-			currentThreadSection = null;
-						
-            // Ricarica contenuto se necessario
-            if (currentSection && sectionConfig[currentSection]) {
-                const section = sectionConfig[currentSection];
-                if (section.type === 'forum') {
-                    loadThreads(currentSection);
-                } else if (section.type === 'dashboard') {
-                    loadDashboard();
-                }
-            }
+        // Carica commenti
+        loadThreadComments(threadId, section);
+
+        // Reset flag per permettere nuovo setup nei commenti
+        commentImageUploadInitialized = false;
+
+        // Chiudi menu mobile se aperto
+        closeMobileMenu();
+
+    } catch (error) {
+        console.error('Errore apertura thread:', error);
+        alert('Errore nell\'apertura del thread');
+    }
+}
+
+// Torna al forum
+function backToForum() {
+    document.getElementById('thread-view').style.display = 'none';
+    document.getElementById('forum-content').style.display = 'block';
+    document.getElementById('new-thread-btn').style.display = 'block';
+
+    // Pulisci dati thread
+    cleanupCommentImageUpload();
+
+    // Pulisci dati thread
+    currentThread = null;
+    currentThreadId = null;
+    currentThreadSection = null;
+
+    // Ricarica contenuto se necessario
+    if (currentSection && sectionConfig[currentSection]) {
+        const section = sectionConfig[currentSection];
+        if (section.type === 'forum') {
+            loadThreads(currentSection);
+        } else if (section.type === 'dashboard') {
+            loadDashboard();
         }
+    }
+}
 
-        // Ottieni thread per ID
-        async function getThread(threadId, section) {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath) return null;
+// Ottieni thread per ID
+async function getThread(threadId, section) {
+    const dataPath = getDataPath(section, 'threads');
+    if (!dataPath)
+        return null;
 
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
-                const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-                const snapshot = await get(threadRef);
-                return snapshot.exists() ? { id: threadId, ...snapshot.val() } : null;
-            } else {
-                // Modalità locale
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                return threads.find(t => t.id === threadId) || null;
-            }
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
+        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+        const snapshot = await get(threadRef);
+        return snapshot.exists() ? {
+            id: threadId,
+            ...snapshot.val()
         }
+         : null;
+    } else {
+        // Modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        return threads.find(t => t.id === threadId) || null;
+    }
+}
 
-        // Incrementa visualizzazioni thread
-        async function incrementThreadViews(threadId, section) {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath) return;
+// Incrementa visualizzazioni thread
+async function incrementThreadViews(threadId, section) {
+    const dataPath = getDataPath(section, 'threads');
+    if (!dataPath)
+        return;
 
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && update) {
-                const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-                await update(ref(window.firebaseDatabase), {
-                    [`${dataPath}/${threadId}/views`]: (currentThread?.views || 0) + 1
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && update) {
+        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+        await update(ref(window.firebaseDatabase), {
+            [`${dataPath}/${threadId}/views`]: (currentThread?.views || 0) + 1
+        });
+    } else {
+        // Modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const threadIndex = threads.findIndex(t => t.id === threadId);
+
+        if (threadIndex !== -1) {
+            threads[threadIndex].views = (threads[threadIndex].views || 0) + 1;
+            localStorage.setItem(storageKey, JSON.stringify(threads));
+        }
+    }
+}
+
+// Carica commenti thread
+function loadThreadComments(threadId, section) {
+    const dataPath = getDataPath(section, 'comments');
+    if (!dataPath)
+        return;
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
+        const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+
+        onValue(commentsRef, (snapshot) => {
+            const comments = [];
+            snapshot.forEach((childSnapshot) => {
+                comments.push({
+                    id: childSnapshot.key,
+                    ...childSnapshot.val()
                 });
-            } else {
-                // Modalità locale
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                const threadIndex = threads.findIndex(t => t.id === threadId);
-                
-                if (threadIndex !== -1) {
-                    threads[threadIndex].views = (threads[threadIndex].views || 0) + 1;
-                    localStorage.setItem(storageKey, JSON.stringify(threads));
-                }
-            }
-        }
+            });
 
-        // Carica commenti thread
-        function loadThreadComments(threadId, section) {
-            const dataPath = getDataPath(section, 'comments');
-            if (!dataPath) return;
+            // Ordina per timestamp
+            comments.sort((a, b) => a.timestamp - b.timestamp);
 
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
-                const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-                
-                onValue(commentsRef, (snapshot) => {
-                    const comments = [];
-                    snapshot.forEach((childSnapshot) => {
-                        comments.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-                    
-                    // Ordina per timestamp
-                    comments.sort((a, b) => a.timestamp - b.timestamp);
-                    
-                    displayThreadComments(comments);
-                });
-            } else {
-                // Modalità locale
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
-                const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                comments.sort((a, b) => a.timestamp - b.timestamp);
-                displayThreadComments(comments);
-            }
-        }
+            displayThreadComments(comments);
+        });
+    } else {
+        // Modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
+        const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        comments.sort((a, b) => a.timestamp - b.timestamp);
+        displayThreadComments(comments);
+    }
+}
 
-        // Mostra commenti thread
-        // Mostra commenti thread
+// Mostra commenti thread
+// Mostra commenti thread
 function displayThreadComments(comments) {
     const commentsContainer = document.getElementById('thread-comments');
-    
+
     if (comments.length === 0) {
         commentsContainer.innerHTML = `
             <div style="text-align: center; padding: 20px; color: #666;">
@@ -3467,15 +3500,15 @@ function displayThreadComments(comments) {
         `;
         return;
     }
-    
+
     commentsContainer.innerHTML = comments.map(comment => {
         let commentContentHtml = '';
-        
+
         // Aggiungi testo del commento se presente
         if (comment.content && comment.content.trim()) {
             commentContentHtml += `<div class="comment-text">${escapeHtml(comment.content)}</div>`;
         }
-        
+
         // Aggiungi immagine se presente
         if (comment.imageUrl) {
             commentContentHtml += `
@@ -3487,7 +3520,7 @@ function displayThreadComments(comments) {
                 </div>
             `;
         }
-        
+
         return `
             <div class="comment">
                 <div class="comment-header">
@@ -3498,259 +3531,266 @@ function displayThreadComments(comments) {
             </div>
         `;
     }).join('');
-    
+
     // Scroll to bottom
     commentsContainer.scrollTop = commentsContainer.scrollHeight;
 }
 
-        // Aggiungi commento
-		async function addComment() {
-			if (!currentUser) {
-				alert('Devi effettuare l\'accesso per commentare');
-				return;
-			}
+// Aggiungi commento
+async function addComment() {
+    if (!currentUser) {
+        alert('Devi effettuare l\'accesso per commentare');
+        return;
+    }
 
-			const commentText = document.getElementById('comment-text').value.trim();
-			const imageInput = document.getElementById('comment-image-input');
-			const imageFile = imageInput.files[0];
-			
-			if (!commentText && !imageFile) {
-				alert('Scrivi un commento o aggiungi un\'immagine prima di inviare');
-				return;
-			}
+    const commentText = document.getElementById('comment-text').value.trim();
+    const imageInput = document.getElementById('comment-image-input');
+    const imageFile = imageInput.files[0];
 
-			const commentBtn = document.getElementById('submit-comment-btn');
-			const progressContainer = document.getElementById('comment-upload-progress');
-			
-			commentBtn.disabled = true;
-			commentBtn.textContent = 'Invio...';
+    if (!commentText && !imageFile) {
+        alert('Scrivi un commento o aggiungi un\'immagine prima di inviare');
+        return;
+    }
 
-			try {
-				const commentData = {
-					author: currentUser.displayName || 'Utente',
-					authorId: currentUser.uid,
-					content: commentText || '',
-					threadId: currentThreadId
-				};
+    const commentBtn = document.getElementById('submit-comment-btn');
+    const progressContainer = document.getElementById('comment-upload-progress');
 
-				// Upload immagine se presente
-				if (imageFile) {
-					commentBtn.textContent = 'Caricamento immagine...';
-					progressContainer.style.display = 'block';
-					
-					const imageUrl = await uploadThreadImage(imageFile, (progress) => {
-						updateCommentUploadProgress(progress);
-					});
-					
-					if (imageUrl) {
-						commentData.imageUrl = imageUrl;
-						commentData.imageName = imageFile.name;
-					}
-				}
+    commentBtn.disabled = true;
+    commentBtn.textContent = 'Invio...';
 
-				const dataPath = getDataPath(currentThreadSection, 'comments');
-				if (!dataPath) return;
+    try {
+        const commentData = {
+            author: currentUser.displayName || 'Utente',
+            authorId: currentUser.uid,
+            content: commentText || '',
+            threadId: currentThreadId
+        };
 
-				commentBtn.textContent = 'Salvando commento...';
+        // Upload immagine se presente
+        if (imageFile) {
+            commentBtn.textContent = 'Caricamento immagine...';
+            progressContainer.style.display = 'block';
 
-				if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
-					// Salva su Firebase
-					const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${currentThreadId}`);
-					commentData.timestamp = serverTimestamp();
-					await push(commentsRef, commentData);
-					
-					// Aggiorna contatore risposte
-					await incrementThreadReplies(currentThreadId, currentThreadSection);
-				} else {
-					// Salva in locale
-					saveLocalComment(currentThreadSection, currentThreadId, commentData);
-				}
-
-				// Pulisci input
-				document.getElementById('comment-text').value = '';
-				removeCommentSelectedImage();
-				
-				// Nascondi sezione upload se visibile
-				const uploadSection = document.getElementById('comment-image-upload');
-				uploadSection.classList.remove('show');
-				
-			} catch (error) {
-				console.error('Errore invio commento:', error);
-				alert('Errore nell\'invio del commento: ' + (error.message || error));
-			} finally {
-				commentBtn.disabled = false;
-				commentBtn.textContent = 'Commenta';
-				progressContainer.style.display = 'none';
-			}
-		}
-
-        // Salva commento locale
-        function saveLocalComment(section, threadId, commentData) {
-            const dataPath = getDataPath(section, 'comments');
-            if (!dataPath) return;
-
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
-            const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            commentData.timestamp = Date.now();
-            commentData.id = 'comment_' + Date.now();
-            comments.push(commentData);
-            localStorage.setItem(storageKey, JSON.stringify(comments));
-            
-            // Aggiorna contatore risposte
-            incrementThreadReplies(threadId, section);
-            
-            // Ricarica commenti
-            loadThreadComments(threadId, section);
-        }
-
-        // Incrementa risposte thread
-        async function incrementThreadReplies(threadId, section) {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath) return;
-
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && update) {
-                const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-                await update(ref(window.firebaseDatabase), {
-                    [`${dataPath}/${threadId}/replies`]: (currentThread?.replies || 0) + 1
-                });
-            } else {
-                // Modalità locale
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                const threadIndex = threads.findIndex(t => t.id === threadId);
-                
-                if (threadIndex !== -1) {
-                    threads[threadIndex].replies = (threads[threadIndex].replies || 0) + 1;
-                    localStorage.setItem(storageKey, JSON.stringify(threads));
-                }
-            }
-        }
-
-        // Gestione emoticon
-        function toggleEmoticonPicker(type) {
-            const panel = document.getElementById(`${type}-emoticon-panel`);
-            const isVisible = panel.classList.contains('show');
-            
-            // Chiudi tutti i panel
-            document.querySelectorAll('.emoticon-panel').forEach(p => {
-                p.classList.remove('show');
+            const imageUrl = await uploadThreadImage(imageFile, (progress) => {
+                updateCommentUploadProgress(progress);
             });
-            
-            // Mostra quello corrente se non era visibile
-            if (!isVisible) {
-                panel.classList.add('show');
+
+            if (imageUrl) {
+                commentData.imageUrl = imageUrl;
+                commentData.imageName = imageFile.name;
             }
         }
 
-        // Aggiungi emoticon
-        function addEmoticon(type, emoticon) {
-            const input = type === 'chat' ? 
-                document.getElementById('message-input') : 
-                document.getElementById('comment-text');
-            
-            const cursorPos = input.selectionStart;
-            const textBefore = input.value.substring(0, cursorPos);
-            const textAfter = input.value.substring(cursorPos);
-            
-            input.value = textBefore + emoticon + textAfter;
-            input.focus();
-            input.setSelectionRange(cursorPos + emoticon.length, cursorPos + emoticon.length);
-            
-            // Chiudi picker
-            document.getElementById(`${type}-emoticon-panel`).classList.remove('show');
+        const dataPath = getDataPath(currentThreadSection, 'comments');
+        if (!dataPath)
+            return;
+
+        commentBtn.textContent = 'Salvando commento...';
+
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
+            // Salva su Firebase
+            const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${currentThreadId}`);
+            commentData.timestamp = serverTimestamp();
+            await push(commentsRef, commentData);
+
+            // Aggiorna contatore risposte
+            await incrementThreadReplies(currentThreadId, currentThreadSection);
+        } else {
+            // Salva in locale
+            saveLocalComment(currentThreadSection, currentThreadId, commentData);
         }
 
-        // Apri modal immagine a schermo intero
-        function openImageModal(imageUrl, imageName) {
-            const modal = document.getElementById('imageModal');
-            const modalImage = document.getElementById('modalImage');
-            
-            modalImage.src = imageUrl;
-            modalImage.alt = imageName || 'Immagine';
-            modal.style.display = 'flex';
-            
-            // Previeni scroll del body
-            document.body.style.overflow = 'hidden';
-        }
+        // Pulisci input
+        document.getElementById('comment-text').value = '';
+        removeCommentSelectedImage();
 
-        // Chiudi modal immagine
-        function closeImageModal() {
-            const modal = document.getElementById('imageModal');
-            modal.style.display = 'none';
-            
-            // Ripristina scroll del body
-            document.body.style.overflow = 'auto';
-        }
+        // Nascondi sezione upload se visibile
+        const uploadSection = document.getElementById('comment-image-upload');
+        uploadSection.classList.remove('show');
 
-        // Chiudi emoticon picker quando si clicca fuori
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.emoticon-picker')) {
-                document.querySelectorAll('.emoticon-panel').forEach(panel => {
-                    panel.classList.remove('show');
-                });
-            }
+    } catch (error) {
+        console.error('Errore invio commento:', error);
+        alert('Errore nell\'invio del commento: ' + (error.message || error));
+    } finally {
+        commentBtn.disabled = false;
+        commentBtn.textContent = 'Commenta';
+        progressContainer.style.display = 'none';
+    }
+}
+
+// Salva commento locale
+function saveLocalComment(section, threadId, commentData) {
+    const dataPath = getDataPath(section, 'comments');
+    if (!dataPath)
+        return;
+
+    const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
+    const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    commentData.timestamp = Date.now();
+    commentData.id = 'comment_' + Date.now();
+    comments.push(commentData);
+    localStorage.setItem(storageKey, JSON.stringify(comments));
+
+    // Aggiorna contatore risposte
+    incrementThreadReplies(threadId, section);
+
+    // Ricarica commenti
+    loadThreadComments(threadId, section);
+}
+
+// Incrementa risposte thread
+async function incrementThreadReplies(threadId, section) {
+    const dataPath = getDataPath(section, 'threads');
+    if (!dataPath)
+        return;
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && update) {
+        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+        await update(ref(window.firebaseDatabase), {
+            [`${dataPath}/${threadId}/replies`]: (currentThread?.replies || 0) + 1
         });
+    } else {
+        // Modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const threadIndex = threads.findIndex(t => t.id === threadId);
 
-        // Carica messaggi
-        function loadMessages(sectionKey) {
-            const dataPath = getDataPath(sectionKey, 'messages');
-            if (!dataPath) return;
+        if (threadIndex !== -1) {
+            threads[threadIndex].replies = (threads[threadIndex].replies || 0) + 1;
+            localStorage.setItem(storageKey, JSON.stringify(threads));
+        }
+    }
+}
 
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
-                const messagesRef = ref(window.firebaseDatabase, dataPath);
-                
-                // Cleanup previous listener
-                if (messageListeners[sectionKey]) {
-                    const oldRef = ref(window.firebaseDatabase, messageListeners[sectionKey].path);
-                    off(oldRef, messageListeners[sectionKey].callback);
-                }
-                
-                // Listen for new messages
-                const callback = (snapshot) => {
-                    const messages = [];
-                    snapshot.forEach((childSnapshot) => {
-                        messages.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-                    
-                    // Ordina per timestamp
-                    messages.sort((a, b) => a.timestamp - b.timestamp);
-                    
-                    displayMessages(messages);
-                    updateMessageCounter(messages.length);
-                };
+// Gestione emoticon
+function toggleEmoticonPicker(type) {
+    const panel = document.getElementById(`${type}-emoticon-panel`);
+    const isVisible = panel.classList.contains('show');
 
-                messageListeners[sectionKey] = { path: dataPath, callback: callback };
-                onValue(messagesRef, callback);
-            } else {
-                // Carica da localStorage (modalità locale)
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                messages.sort((a, b) => a.timestamp - b.timestamp);
-                displayMessages(messages);
-                updateMessageCounter(messages.length);
-            }
+    // Chiudi tutti i panel
+    document.querySelectorAll('.emoticon-panel').forEach(p => {
+        p.classList.remove('show');
+    });
+
+    // Mostra quello corrente se non era visibile
+    if (!isVisible) {
+        panel.classList.add('show');
+    }
+}
+
+// Aggiungi emoticon
+function addEmoticon(type, emoticon) {
+    const input = type === 'chat' ?
+        document.getElementById('message-input') :
+        document.getElementById('comment-text');
+
+    const cursorPos = input.selectionStart;
+    const textBefore = input.value.substring(0, cursorPos);
+    const textAfter = input.value.substring(cursorPos);
+
+    input.value = textBefore + emoticon + textAfter;
+    input.focus();
+    input.setSelectionRange(cursorPos + emoticon.length, cursorPos + emoticon.length);
+
+    // Chiudi picker
+    document.getElementById(`${type}-emoticon-panel`).classList.remove('show');
+}
+
+// Apri modal immagine a schermo intero
+function openImageModal(imageUrl, imageName) {
+    const modal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+
+    modalImage.src = imageUrl;
+    modalImage.alt = imageName || 'Immagine';
+    modal.style.display = 'flex';
+
+    // Previeni scroll del body
+    document.body.style.overflow = 'hidden';
+}
+
+// Chiudi modal immagine
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    modal.style.display = 'none';
+
+    // Ripristina scroll del body
+    document.body.style.overflow = 'auto';
+}
+
+// Chiudi emoticon picker quando si clicca fuori
+document.addEventListener('click', function (event) {
+    if (!event.target.closest('.emoticon-picker')) {
+        document.querySelectorAll('.emoticon-panel').forEach(panel => {
+            panel.classList.remove('show');
+        });
+    }
+});
+
+// Carica messaggi
+function loadMessages(sectionKey) {
+    const dataPath = getDataPath(sectionKey, 'messages');
+    if (!dataPath)
+        return;
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
+        const messagesRef = ref(window.firebaseDatabase, dataPath);
+
+        // Cleanup previous listener
+        if (messageListeners[sectionKey]) {
+            const oldRef = ref(window.firebaseDatabase, messageListeners[sectionKey].path);
+            off(oldRef, messageListeners[sectionKey].callback);
         }
 
-        // Mostra messaggi
-        function displayMessages(messages) {
-            const originalDisplayMessages = window.displayMessages;
-			if (originalDisplayMessages) {
-				window.displayMessages = function(messages) {
-					const chatMessages = document.getElementById('chat-messages');
-					
-					if (messages.length === 0) {
-						chatMessages.innerHTML = `
+        // Listen for new messages
+        const callback = (snapshot) => {
+            const messages = [];
+            snapshot.forEach((childSnapshot) => {
+                messages.push({
+                    id: childSnapshot.key,
+                    ...childSnapshot.val()
+                });
+            });
+
+            // Ordina per timestamp
+            messages.sort((a, b) => a.timestamp - b.timestamp);
+
+            displayMessages(messages);
+            updateMessageCounter(messages.length);
+        };
+
+        messageListeners[sectionKey] = {
+            path: dataPath,
+            callback: callback
+        };
+        onValue(messagesRef, callback);
+    } else {
+        // Carica da localStorage (modalità locale)
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        messages.sort((a, b) => a.timestamp - b.timestamp);
+        displayMessages(messages);
+        updateMessageCounter(messages.length);
+    }
+}
+
+// Mostra messaggi
+function displayMessages(messages) {
+    const originalDisplayMessages = window.displayMessages;
+    if (originalDisplayMessages) {
+        window.displayMessages = function (messages) {
+            const chatMessages = document.getElementById('chat-messages');
+
+            if (messages.length === 0) {
+                chatMessages.innerHTML = `
 							<div style="text-align: center; padding: 40px; color: #666;">
 								Nessun messaggio in questa chat. Inizia la conversazione!
 							</div>
 						`;
-						return;
-					}
-					
-					chatMessages.innerHTML = messages.map(msg => `
+                return;
+            }
+
+            chatMessages.innerHTML = messages.map(msg => `
 						<div class="message">
 							<div class="message-author">
 								${msg.author}
@@ -3759,434 +3799,445 @@ function displayThreadComments(comments) {
 							<div>${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
 						</div>
 					`).join('');
-					
-					chatMessages.scrollTop = chatMessages.scrollHeight;
-				};
-			}
 
-        // Salva messaggio locale
-        function saveLocalMessage(section, messageData) {
-            const dataPath = getDataPath(section, 'messages');
-            if (!dataPath) return;
-
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            messageData.timestamp = Date.now();
-            messageData.id = 'msg_' + Date.now();
-            messages.push(messageData);
-            localStorage.setItem(storageKey, JSON.stringify(messages));
-            
-            // Ricarica messaggi
-            loadMessages(section);
-        }
-
-        // Salva thread locale
-        function saveLocalThread(section, threadData) {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath) return;
-
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            threadData.createdAt = Date.now();
-            threadData.id = 'thread_' + Date.now();
-            threadData.replies = 0;
-            threadData.views = 0;
-            
-            // Se non ha status, imposta come approved (per compatibilità con thread esistenti)
-            if (!threadData.status) {
-                threadData.status = 'approved';
-            }
-            
-            // Assicurati che il contenuto sia salvato
-            if (!threadData.content) {
-                threadData.content = 'Nessun contenuto disponibile';
-            }
-            
-            threads.push(threadData);
-            localStorage.setItem(storageKey, JSON.stringify(threads));
-            
-            // Ricarica thread
-            loadThreads(section);
-        }
-
-        // Invia messaggio (Firebase o locale)
-        async function sendMessage() {
-            const originalSendMessage = window.sendMessage;
-window.sendMessage = async function() {
-    if (!currentUser) {
-        alert('Devi effettuare l\'accesso per inviare messaggi');
-        return;
-    }
-
-    if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
-        alert('Devi appartenere a un clan per inviare messaggi qui!');
-        return;
-    }
-
-    const input = document.getElementById('message-input');
-    const sendBtn = document.getElementById('send-message-btn');
-    const message = input.value.trim();
-    
-    if (!message) return;
-
-    // Rileva menzioni
-    const mentions = detectMentions(message);
-
-    input.disabled = true;
-    sendBtn.disabled = true;
-
-    try {
-        const messageData = {
-            author: currentUser.displayName || 'Utente',
-            authorId: currentUser.uid,
-            message: message
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         };
-
-        const dataPath = getDataPath(currentSection, 'messages');
-        if (!dataPath) return;
-
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
-            const messagesRef = ref(window.firebaseDatabase, dataPath);
-            messageData.timestamp = serverTimestamp();
-            await push(messagesRef, messageData);
-        } else {
-            saveLocalMessage(currentSection, messageData);
-        }
-
-        // Crea notifiche per le menzioni
-        for (const mention of mentions) {
-            await createNotification('mention', mention.userId, {
-                message: message,
-                section: currentSection,
-                sectionTitle: sectionConfig[currentSection]?.title || 'Chat'
-            });
-        }
-
-        input.value = '';
-    } catch (error) {
-        console.error('Errore invio messaggio:', error);
-        alert('Errore nell\'invio del messaggio');
-    } finally {
-        input.disabled = false;
-        sendBtn.disabled = false;
-        input.focus();
     }
-};
 
+    // Salva messaggio locale
+    function saveLocalMessage(section, messageData) {
+        const dataPath = getDataPath(section, 'messages');
+        if (!dataPath)
+            return;
 
-        // Utility
-        function formatTime(timestamp) {
-            if (!timestamp) return 'ora';
-            
-            const date = new Date(timestamp);
-            const now = new Date();
-            const diff = now - date;
-            
-            if (diff < 60000) return 'ora';
-            if (diff < 3600000) return `${Math.floor(diff / 60000)} min fa`;
-            if (diff < 86400000) return `${Math.floor(diff / 3600000)} ore fa`;
-            if (diff < 2592000000) return `${Math.floor(diff / 86400000)} giorni fa`;
-            return date.toLocaleDateString();
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        messageData.timestamp = Date.now();
+        messageData.id = 'msg_' + Date.now();
+        messages.push(messageData);
+        localStorage.setItem(storageKey, JSON.stringify(messages));
+
+        // Ricarica messaggi
+        loadMessages(section);
+    }
+
+    // Salva thread locale
+    function saveLocalThread(section, threadData) {
+        const dataPath = getDataPath(section, 'threads');
+        if (!dataPath)
+            return;
+
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        threadData.createdAt = Date.now();
+        threadData.id = 'thread_' + Date.now();
+        threadData.replies = 0;
+        threadData.views = 0;
+
+        // Se non ha status, imposta come approved (per compatibilità con thread esistenti)
+        if (!threadData.status) {
+            threadData.status = 'approved';
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        // Assicurati che il contenuto sia salvato
+        if (!threadData.content) {
+            threadData.content = 'Nessun contenuto disponibile';
         }
 
-        function updateMessageCounter(count) {
-            messageCount = count;
-            document.getElementById('messageCounter').textContent = `💬 ${count} messaggi`;
-        }
+        threads.push(threadData);
+        localStorage.setItem(storageKey, JSON.stringify(threads));
 
-        function cleanupListeners() {
-            if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady || !ref || !off) return;
-            
+        // Ricarica thread
+        loadThreads(section);
+    }
+
+    // Invia messaggio (Firebase o locale)
+    async function sendMessage() {
+        const originalSendMessage = window.sendMessage;
+        window.sendMessage = async function () {
+            if (!currentUser) {
+                alert('Devi effettuare l\'accesso per inviare messaggi');
+                return;
+            }
+
+            if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
+                alert('Devi appartenere a un clan per inviare messaggi qui!');
+                return;
+            }
+
+            const input = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-message-btn');
+            const message = input.value.trim();
+
+            if (!message)
+                return;
+
+            // Rileva menzioni
+            const mentions = detectMentions(message);
+
+            input.disabled = true;
+            sendBtn.disabled = true;
+
             try {
-                // Pulisci listeners messaggi
-                Object.keys(messageListeners).forEach(section => {
-                    const listener = messageListeners[section];
-                    if (listener && listener.path && listener.callback) {
-                        const messagesRef = ref(window.firebaseDatabase, listener.path);
-                        off(messagesRef, listener.callback);
-                    }
-                });
-                messageListeners = {};
-                
-                // Pulisci listeners thread
-                Object.keys(threadListeners).forEach(section => {
-                    const listener = threadListeners[section];
-                    if (listener && listener.path && listener.callback) {
-                        const threadsRef = ref(window.firebaseDatabase, listener.path);
-                        off(threadsRef, listener.callback);
-                    }
-                });
-                threadListeners = {};
+                const messageData = {
+                    author: currentUser.displayName || 'Utente',
+                    authorId: currentUser.uid,
+                    message: message
+                };
 
-				// Pulisci upload commenti
-				cleanupCommentImageUpload();
-				} catch (error) {
-					console.error('Errore pulizia listeners:', error);
-				}
-        }
+                const dataPath = getDataPath(currentSection, 'messages');
+                if (!dataPath)
+                    return;
 
-        // Event listeners
-        function setupEventListeners() {
-            // Logout
-            document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-
-            // Navigation
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const section = item.getAttribute('data-section');
-                    if (section) switchSection(section);
-                });
-            });
-
-            // Chat input
-            document.getElementById('message-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
+                if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
+                    const messagesRef = ref(window.firebaseDatabase, dataPath);
+                    messageData.timestamp = serverTimestamp();
+                    await push(messagesRef, messageData);
+                } else {
+                    saveLocalMessage(currentSection, messageData);
                 }
-            });
 
-            // Comment input
-            document.getElementById('comment-text').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && e.ctrlKey) {
-                    e.preventDefault();
-                    addComment();
-                }
-            });
-
-            // Form inputs - Enter per submit
-            ['email', 'password', 'username'].forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleSubmit();
-                        }
+                // Crea notifiche per le menzioni
+                for (const mention of mentions) {
+                    await createNotification('mention', mention.userId, {
+                        message: message,
+                        section: currentSection,
+                        sectionTitle: sectionConfig[currentSection]?.title || 'Chat'
                     });
                 }
-            });
 
-            // Thread creation form - Enter per submit
-            document.getElementById('thread-title-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    document.getElementById('thread-content-input').focus();
-                }
-            });
-
-            document.getElementById('thread-content-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && e.ctrlKey) {
-                    e.preventDefault();
-                    createThread();
-                }
-            });
-
-            // Escape per chiudere modal
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (document.getElementById('threadCreationModal').style.display === 'flex') {
-                        hideThreadCreationModal();
-                    } else if (document.getElementById('imageModal').style.display === 'flex') {
-                        closeImageModal();
-                    }
-                }
-            });
-
-            // Chiudi modal cliccando fuori
-            document.getElementById('threadCreationModal').addEventListener('click', (e) => {
-                if (e.target === document.getElementById('threadCreationModal')) {
-                    hideThreadCreationModal();
-                }
-            });
-
-            // Previeni chiusura modal immagine cliccando sull'immagine
-            document.getElementById('modalImage').addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
+                input.value = '';
+            } catch (error) {
+                console.error('Errore invio messaggio:', error);
+                alert('Errore nell\'invio del messaggio');
+            } finally {
+                input.disabled = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
         }
-		
-		// Toggle comment image upload section
-function toggleCommentImageUpload() {
-    const uploadSection = document.getElementById('comment-image-upload');
-    const isVisible = uploadSection.classList.contains('show');
-    
-    console.log('📷 Toggle upload commento, visibile:', isVisible);
-    
-    if (isVisible) {
-        uploadSection.classList.remove('show');
-        removeCommentSelectedImage();
-        console.log('📷 Sezione upload nascosta');
-    } else {
-        uploadSection.classList.add('show');
-        // Setup solo se non è già stato fatto
-        if (!commentImageUploadInitialized) {
-            setupCommentImageUploadSafe();
-        }
-        console.log('📷 Sezione upload mostrata');
-    }
-}
-
-// Setup comment image upload SICURO (previene doppi listener)
-function setupCommentImageUploadSafe() {
-    const imageInput = document.getElementById('comment-image-input');
-    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
-    
-    if (!imageInput || !imageLabel) {
-        console.log('❌ Elementi upload commento non trovati');
-        return;
-    }
-    
-    // Rimuovi TUTTI i listener esistenti prima di aggiungerne di nuovi
-    cleanupCommentImageListeners();
-    
-    console.log('🔧 Setup listener upload commento (SAFE)');
-    
-    // Aggiungi listener per il click sulla label
-    const clickHandler = () => {
-        console.log('🖱️ Click su label upload');
-        imageInput.click();
     };
-    
-    // Aggiungi listener per la selezione file
-    const changeHandler = (event) => {
-        console.log('📁 File selezionato tramite input');
-        handleCommentImageSelect(event);
-    };
-    
-    // Salva riferimenti per cleanup futuro
-    imageLabel._commentClickHandler = clickHandler;
-    imageInput._commentChangeHandler = changeHandler;
-    
-    // Aggiungi listener
-    imageLabel.addEventListener('click', clickHandler);
-    imageInput.addEventListener('change', changeHandler);
-    
-    commentImageUploadInitialized = true;
-    console.log('✅ Listener upload commento configurati');
-}
 
-// Pulisci tutti i listener per evitare duplicati
-function cleanupCommentImageListeners() {
-    const imageInput = document.getElementById('comment-image-input');
-    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
-    
-    if (imageInput && imageInput._commentChangeHandler) {
-        imageInput.removeEventListener('change', imageInput._commentChangeHandler);
-        delete imageInput._commentChangeHandler;
-        console.log('🧹 Rimosso listener change esistente');
-    }
-    
-    if (imageLabel && imageLabel._commentClickHandler) {
-        imageLabel.removeEventListener('click', imageLabel._commentClickHandler);
-        delete imageLabel._commentClickHandler;
-        console.log('🧹 Rimosso listener click esistente');
-    }
-}
+    // Utility
+    function formatTime(timestamp) {
+        if (!timestamp)
+            return 'ora';
 
-// Pulisci tutto quando si chiude il thread o si cambia sezione
-function cleanupCommentImageUpload() {
-    console.log('🧹 Cleanup completo upload commenti');
-    cleanupCommentImageListeners();
-    commentImageUploadInitialized = false;
-    removeCommentSelectedImage();
-    
-    const uploadSection = document.getElementById('comment-image-upload');
-    if (uploadSection) {
-        uploadSection.classList.remove('show');
-    }
-}
-function setupCommentImageUploadImmediate() {
-    const imageInput = document.getElementById('comment-image-input');
-    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
-    
-    if (imageInput && imageLabel) {
-        imageInput.addEventListener('change', handleCommentImageSelect);
-        imageLabel.addEventListener('click', () => imageInput.click());
-    }
-}
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
 
-// Setup comment image upload
-function setupCommentImageUpload() {
-    const imageInput = document.getElementById('comment-image-input');
-    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
-    
-    if (imageInput && imageLabel) {
+        if (diff < 60000)
+            return 'ora';
+        if (diff < 3600000)
+            return `${Math.floor(diff / 60000)} min fa`;
+        if (diff < 86400000)
+            return `${Math.floor(diff / 3600000)} ore fa`;
+        if (diff < 2592000000)
+            return `${Math.floor(diff / 86400000)} giorni fa`;
+        return date.toLocaleDateString();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function updateMessageCounter(count) {
+        messageCount = count;
+        document.getElementById('messageCounter').textContent = `💬 ${count} messaggi`;
+    }
+
+    function cleanupListeners() {
+        if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady || !ref || !off)
+            return;
+
         try {
-            imageInput.removeEventListener('change', handleCommentImageSelect);
-            imageLabel.removeEventListener('click', () => imageInput.click());
-        } catch (e) {
-            // Ignora errori se i listener non esistevano
-        }
-        
-        imageInput.addEventListener('change', handleCommentImageSelect);
-        imageLabel.addEventListener('click', () => imageInput.click());
-    }
-}
+            // Pulisci listeners messaggi
+            Object.keys(messageListeners).forEach(section => {
+                const listener = messageListeners[section];
+                if (listener && listener.path && listener.callback) {
+                    const messagesRef = ref(window.firebaseDatabase, listener.path);
+                    off(messagesRef, listener.callback);
+                }
+            });
+            messageListeners = {};
 
-// Handle comment image selection
-function handleCommentImageSelect(event) {
-	console.log('🖼️ Selezione immagine commento avviata');
-    
-    const file = event.target.files[0];
-    const preview = document.getElementById('comment-image-preview');
-    const progressContainer = document.getElementById('comment-upload-progress');
-    
-     if (!file) {
-        console.log('❌ Nessun file selezionato');
-        return;
+            // Pulisci listeners thread
+            Object.keys(threadListeners).forEach(section => {
+                const listener = threadListeners[section];
+                if (listener && listener.path && listener.callback) {
+                    const threadsRef = ref(window.firebaseDatabase, listener.path);
+                    off(threadsRef, listener.callback);
+                }
+            });
+            threadListeners = {};
+
+            // Pulisci upload commenti
+            cleanupCommentImageUpload();
+        } catch (error) {
+            console.error('Errore pulizia listeners:', error);
+        }
     }
-    
-    console.log('📁 File selezionato:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
-    
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-        alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
-        return;
+
+    // Event listeners
+    function setupEventListeners() {
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const section = item.getAttribute('data-section');
+                if (section)
+                    switchSection(section);
+            });
+        });
+
+        // Chat input
+        document.getElementById('message-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Comment input
+        document.getElementById('comment-text').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                addComment();
+            }
+        });
+
+        // Form inputs - Enter per submit
+        ['email', 'password', 'username'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSubmit();
+                    }
+                });
+            }
+        });
+
+        // Thread creation form - Enter per submit
+        document.getElementById('thread-title-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('thread-content-input').focus();
+            }
+        });
+
+        document.getElementById('thread-content-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                createThread();
+            }
+        });
+
+        // Escape per chiudere modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (document.getElementById('threadCreationModal').style.display === 'flex') {
+                    hideThreadCreationModal();
+                } else if (document.getElementById('imageModal').style.display === 'flex') {
+                    closeImageModal();
+                }
+            }
+        });
+
+        // Chiudi modal cliccando fuori
+        document.getElementById('threadCreationModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('threadCreationModal')) {
+                hideThreadCreationModal();
+            }
+        });
+
+        // Previeni chiusura modal immagine cliccando sull'immagine
+        document.getElementById('modalImage').addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
     }
-    
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-        alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
-        return;
+
+    // Toggle comment image upload section
+    function toggleCommentImageUpload() {
+        const uploadSection = document.getElementById('comment-image-upload');
+        const isVisible = uploadSection.classList.contains('show');
+
+        console.log('📷 Toggle upload commento, visibile:', isVisible);
+
+        if (isVisible) {
+            uploadSection.classList.remove('show');
+            removeCommentSelectedImage();
+            console.log('📷 Sezione upload nascosta');
+        } else {
+            uploadSection.classList.add('show');
+            // Setup solo se non è già stato fatto
+            if (!commentImageUploadInitialized) {
+                setupCommentImageUploadSafe();
+            }
+            console.log('📷 Sezione upload mostrata');
+        }
     }
-    
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        preview.innerHTML = `
+
+    // Setup comment image upload SICURO (previene doppi listener)
+    function setupCommentImageUploadSafe() {
+        const imageInput = document.getElementById('comment-image-input');
+        const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+
+        if (!imageInput || !imageLabel) {
+            console.log('❌ Elementi upload commento non trovati');
+            return;
+        }
+
+        // Rimuovi TUTTI i listener esistenti prima di aggiungerne di nuovi
+        cleanupCommentImageListeners();
+
+        console.log('🔧 Setup listener upload commento (SAFE)');
+
+        // Aggiungi listener per il click sulla label
+        const clickHandler = () => {
+            console.log('🖱️ Click su label upload');
+            imageInput.click();
+        };
+
+        // Aggiungi listener per la selezione file
+        const changeHandler = (event) => {
+            console.log('📁 File selezionato tramite input');
+            handleCommentImageSelect(event);
+        };
+
+        // Salva riferimenti per cleanup futuro
+        imageLabel._commentClickHandler = clickHandler;
+        imageInput._commentChangeHandler = changeHandler;
+
+        // Aggiungi listener
+        imageLabel.addEventListener('click', clickHandler);
+        imageInput.addEventListener('change', changeHandler);
+
+        commentImageUploadInitialized = true;
+        console.log('✅ Listener upload commento configurati');
+    }
+
+    // Pulisci tutti i listener per evitare duplicati
+    function cleanupCommentImageListeners() {
+        const imageInput = document.getElementById('comment-image-input');
+        const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+
+        if (imageInput && imageInput._commentChangeHandler) {
+            imageInput.removeEventListener('change', imageInput._commentChangeHandler);
+            delete imageInput._commentChangeHandler;
+            console.log('🧹 Rimosso listener change esistente');
+        }
+
+        if (imageLabel && imageLabel._commentClickHandler) {
+            imageLabel.removeEventListener('click', imageLabel._commentClickHandler);
+            delete imageLabel._commentClickHandler;
+            console.log('🧹 Rimosso listener click esistente');
+        }
+    }
+
+    // Pulisci tutto quando si chiude il thread o si cambia sezione
+    function cleanupCommentImageUpload() {
+        console.log('🧹 Cleanup completo upload commenti');
+        cleanupCommentImageListeners();
+        commentImageUploadInitialized = false;
+        removeCommentSelectedImage();
+
+        const uploadSection = document.getElementById('comment-image-upload');
+        if (uploadSection) {
+            uploadSection.classList.remove('show');
+        }
+    }
+    function setupCommentImageUploadImmediate() {
+        const imageInput = document.getElementById('comment-image-input');
+        const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+
+        if (imageInput && imageLabel) {
+            imageInput.addEventListener('change', handleCommentImageSelect);
+            imageLabel.addEventListener('click', () => imageInput.click());
+        }
+    }
+
+    // Setup comment image upload
+    function setupCommentImageUpload() {
+        const imageInput = document.getElementById('comment-image-input');
+        const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+
+        if (imageInput && imageLabel) {
+            try {
+                imageInput.removeEventListener('change', handleCommentImageSelect);
+                imageLabel.removeEventListener('click', () => imageInput.click());
+            } catch (e) {
+                // Ignora errori se i listener non esistevano
+            }
+
+            imageInput.addEventListener('change', handleCommentImageSelect);
+            imageLabel.addEventListener('click', () => imageInput.click());
+        }
+    }
+
+    // Handle comment image selection
+    function handleCommentImageSelect(event) {
+        console.log('🖼️ Selezione immagine commento avviata');
+
+        const file = event.target.files[0];
+        const preview = document.getElementById('comment-image-preview');
+        const progressContainer = document.getElementById('comment-upload-progress');
+
+        if (!file) {
+            console.log('❌ Nessun file selezionato');
+            return;
+        }
+
+        console.log('📁 File selezionato:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+            return;
+        }
+
+        // Validate file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+            alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+            return;
+        }
+
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            preview.innerHTML = `
             <img src="${e.target.result}" alt="Anteprima immagine commento">
             <button type="button" class="remove-image" onclick="removeCommentSelectedImage()">
                 🗑️
             </button>
         `;
-    };
-    reader.readAsDataURL(file);
-    
-    // Hide progress initially
-    progressContainer.style.display = 'none';
-}
+        };
+        reader.readAsDataURL(file);
 
-// Remove selected comment image
-function removeCommentSelectedImage() {
-    document.getElementById('comment-image-input').value = '';
-    document.getElementById('comment-image-preview').innerHTML = '';
-    document.getElementById('comment-upload-progress').style.display = 'none';
-}
+        // Hide progress initially
+        progressContainer.style.display = 'none';
+    }
 
-// Update comment upload progress
-function updateCommentUploadProgress(progress) {
-    const progressContainer = document.getElementById('comment-upload-progress');
-    const progressPercent = Math.round(progress);
-    
-    progressContainer.innerHTML = `
+    // Remove selected comment image
+    function removeCommentSelectedImage() {
+        document.getElementById('comment-image-input').value = '';
+        document.getElementById('comment-image-preview').innerHTML = '';
+        document.getElementById('comment-upload-progress').style.display = 'none';
+    }
+
+    // Update comment upload progress
+    function updateCommentUploadProgress(progress) {
+        const progressContainer = document.getElementById('comment-upload-progress');
+        const progressPercent = Math.round(progress);
+
+        progressContainer.innerHTML = `
         <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                 <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
@@ -4197,13 +4248,12 @@ function updateCommentUploadProgress(progress) {
             </div>
         </div>
     `;
-    progressContainer.style.display = 'block';
-    
-    // Nascondi il progresso quando completato
-    if (progress >= 100) {
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-        }, 1000);
-    };
+        progressContainer.style.display = 'block';
+
+        // Nascondi il progresso quando completato
+        if (progress >= 100) {
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 1000);
+        }
     }
-	    
