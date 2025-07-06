@@ -1,5 +1,4 @@
-
-        // Aspetta che Firebase sia caricato
+// Aspetta che Firebase sia caricato
         window.addEventListener('load', async () => {
             // Attendi che i moduli Firebase siano pronti
             await new Promise(resolve => {
@@ -849,10 +848,6 @@ async function loadUsersList() {
         console.error('Errore caricamento utenti:', error);
     }
 }
-
-
-
-
 
         // Inizializza l'applicazione
         function initializeApp() {
@@ -1939,7 +1934,6 @@ async function loadUsersList() {
             overlay.classList.remove('show');
             document.body.style.overflow = 'auto';
         }
-
         // Carica dashboard
         function loadDashboard() {
             const threadList = document.getElementById('thread-list');
@@ -4210,5 +4204,6 @@ function updateCommentUploadProgress(progress) {
         setTimeout(() => {
             progressContainer.style.display = 'none';
         }, 1000);
+    };
     }
-}
+	    
