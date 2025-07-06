@@ -180,6 +180,38 @@
     
     <!-- Message Counter -->
     <div id="messageCounter" class="message-counter">💬 0 messaggi</div>
+	<!-- Notifications Bell -->
+<button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()">
+    🔔
+    <span id="notificationBadge" class="notification-badge hidden">0</span>
+</button>
+
+<!-- Notifications Panel -->
+<div id="notificationsPanel" class="notifications-panel">
+    <div class="notifications-header">
+        <h3>🔔 Notifiche</h3>
+        <button class="mark-all-read" onclick="markAllNotificationsAsRead()">
+            Segna tutte come lette
+        </button>
+    </div>
+    <div id="notificationsList" class="notifications-list">
+        <div class="notifications-empty">
+            <div class="empty-icon">🔕</div>
+            <div>Nessuna notifica</div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container">
+    <!-- I toast verranno generati dinamicamente -->
+</div>
+
+<!-- Mention Autocomplete -->
+<div id="mentionAutocomplete" class="mention-autocomplete">
+    <!-- I suggerimenti verranno generati dinamicamente -->
+</div>
+
 
     <!-- Login Modal -->
     <div id="loginModal" class="login-modal">
@@ -357,9 +389,9 @@
                 <div id="typingIndicator" class="typing-indicator"></div>
                 <div class="chat-input">
                     <div style="display: flex; align-items: flex-end; gap: 10px;">
-                        <div style="flex: 1;">
-                            <input type="text" id="message-input" placeholder="Scrivi un messaggio..." />
-                        </div>
+                        <div style="flex: 1; position: relative;">
+							<input type="text" id="message-input" placeholder="Scrivi un messaggio... (usa @nome per taggare)" />
+						</div>
                         <div style="display: flex; gap: 5px;">
                             <div class="emoticon-picker">
                                 <button class="emoticon-btn" onclick="toggleEmoticonPicker('chat')">😊</button>
@@ -420,8 +452,9 @@
                         <div class="comment-input-container">
                             <div class="comment-input-main">
                                 <div class="comment-textarea-container">
-                                    <textarea id="comment-text" placeholder="Scrivi un commento..."></textarea>
-                                </div>
+    <textarea id="comment-text" placeholder="Scrivi un commento... (usa @nome per taggare)"></textarea>
+</div>
+
                                 <div class="comment-controls">
                                     <div class="comment-buttons-row">
                                         <button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
@@ -480,7 +513,7 @@
             <h3>🏰 Crea Nuovo Thread</h3>
             
             <input type="text" id="thread-title-input" placeholder="Titolo del thread *" />
-            <textarea id="thread-content-input" placeholder="Contenuto del thread *"></textarea>
+            <textarea id="thread-content-input" placeholder="Contenuto del thread * (usa @nome per taggare)"></textarea>
             
             <!-- Image Upload Section -->
             <div class="image-upload-section">

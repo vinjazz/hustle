@@ -32,6 +32,12 @@
         let currentThreadSection = null;
 		// Flag per evitare listener multipli
 		let commentImageUploadInitialized = false;
+		let notificationsData = [];
+		let unreadNotificationsCount = 0;
+		let allUsers = []; // Cache degli utenti per autocomplete
+		let mentionAutocompleteVisible = false;
+		let currentMentionInput = null;
+		let currentMentionPosition = 0;
 
         // Ruoli utente - DEVE essere definito prima di tutto
         const USER_ROLES = {
@@ -79,6 +85,12 @@
 		window.handleCommentImageSelect = handleCommentImageSelect;
 		window.removeCommentSelectedImage = removeCommentSelectedImage;
 		window.cleanupCommentImageUpload = cleanupCommentImageUpload;
+		window.toggleNotificationsPanel = toggleNotificationsPanel;
+		window.markAllNotificationsAsRead = markAllNotificationsAsRead;
+		window.handleNotificationClick = handleNotificationClick;
+		window.selectMentionSuggestion = selectMentionSuggestion;
+		window.dismissToast = dismissToast;
+		window.handleToastAction = handleToastAction;
 
         // Funzioni per la gestione dei ruoli
         function getCurrentUserRole() {
@@ -209,6 +221,638 @@
                 type: 'forum'
             }
         };
+		
+		function initializeNotifications() {
+			console.log('🔔 Inizializzazione sistema notifiche...');
+			
+			// Carica notifiche esistenti
+			loadNotifications();
+			
+			// Setup listeners per le menzioni
+			setupMentionListeners();
+			
+			// Carica lista utenti per autocomplete
+			loadUsersList();
+			
+			// Setup click outside per chiudere pannelli
+			document.addEventListener('click', handleClickOutside);
+			
+			console.log('✅ Sistema notifiche inizializzato');
+		}
+		
+		function detectMentions(text) {
+    // Regex per trovare @username
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+    const mentions = [];
+    let match;
+    
+    while ((match = mentionRegex.exec(text)) !== null) {
+        const username = match[1];
+        // Verifica che l'utente esista
+        const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (user && user.uid !== currentUser?.uid) { // Non taggare se stesso
+            mentions.push({
+                username: username,
+                userId: user.uid,
+                position: match.index,
+                length: match[0].length
+            });
+        }
+    }
+    
+    return mentions;
+}
+
+function handleClickOutside(event) {
+    // Chiudi notifications panel
+    const notifPanel = document.getElementById('notificationsPanel');
+    const notifBell = document.getElementById('notificationsBell');
+    
+    if (!notifPanel.contains(event.target) && !notifBell.contains(event.target)) {
+        notifPanel.classList.remove('show');
+    }
+    
+    // Chiudi mention autocomplete
+    const mentionAutocomplete = document.getElementById('mentionAutocomplete');
+    const isInputFocused = ['message-input', 'comment-text', 'thread-content-input'].includes(event.target.id);
+    
+    if (!mentionAutocomplete.contains(event.target) && !isInputFocused) {
+        hideMentionAutocomplete();
+    }
+}
+
+function highlightMentions(text, currentUserId = null) {
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+    
+    return text.replace(mentionRegex, (match, username) => {
+        const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (user) {
+            const isSelf = user.uid === currentUserId;
+            const className = isSelf ? 'mention self' : 'mention';
+            return `<span class="${className}" data-user-id="${user.uid}">@${username}</span>`;
+        }
+        return match;
+    });
+}
+
+// ==============================================
+// AUTOCOMPLETE MENZIONI
+// ==============================================
+
+function setupMentionListeners() {
+    // Chat input
+    const messageInput = document.getElementById('message-input');
+    if (messageInput) {
+        messageInput.addEventListener('input', handleMentionInput);
+        messageInput.addEventListener('keydown', handleMentionKeydown);
+    }
+    
+    // Comment textarea
+    const commentTextarea = document.getElementById('comment-text');
+    if (commentTextarea) {
+        commentTextarea.addEventListener('input', handleMentionInput);
+        commentTextarea.addEventListener('keydown', handleMentionKeydown);
+    }
+    
+    // Thread content textarea
+    const threadTextarea = document.getElementById('thread-content-input');
+    if (threadTextarea) {
+        threadTextarea.addEventListener('input', handleMentionInput);
+        threadTextarea.addEventListener('keydown', handleMentionKeydown);
+    }
+}
+
+function handleMentionInput(event) {
+    const input = event.target;
+    const text = input.value;
+    const cursorPos = input.selectionStart;
+    
+    // Trova l'ultima @ prima del cursore
+    const textBeforeCursor = text.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+        // Verifica che non ci sia uno spazio tra @ e cursore
+        const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+        if (!textAfterAt.includes(' ') && textAfterAt.length <= 20) {
+            // Mostra autocomplete
+            currentMentionInput = input;
+            currentMentionPosition = lastAtIndex;
+            showMentionAutocomplete(textAfterAt, input);
+            return;
+        }
+    }
+    
+    // Nascondi autocomplete
+    hideMentionAutocomplete();
+}
+
+function handleMentionKeydown(event) {
+    if (!mentionAutocompleteVisible) return;
+    
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    const suggestions = autocomplete.querySelectorAll('.mention-suggestion');
+    let selectedIndex = Array.from(suggestions).findIndex(s => s.classList.contains('selected'));
+    
+    switch (event.key) {
+        case 'ArrowDown':
+            event.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+            updateAutocompleteSelection(suggestions, selectedIndex);
+            break;
+            
+        case 'ArrowUp':
+            event.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, 0);
+            updateAutocompleteSelection(suggestions, selectedIndex);
+            break;
+            
+        case 'Enter':
+        case 'Tab':
+            event.preventDefault();
+            if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                selectMentionSuggestion(suggestions[selectedIndex]);
+            }
+            break;
+            
+        case 'Escape':
+            hideMentionAutocomplete();
+            break;
+    }
+}
+
+function showMentionAutocomplete(query, inputElement) {
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    
+    // Filtra utenti in base alla query
+    const filteredUsers = allUsers.filter(user => 
+        user.username.toLowerCase().includes(query.toLowerCase()) &&
+        user.uid !== currentUser?.uid
+    ).slice(0, 8); // Massimo 8 suggerimenti
+    
+    if (filteredUsers.length === 0) {
+        hideMentionAutocomplete();
+        return;
+    }
+    
+    // Genera HTML suggerimenti
+    autocomplete.innerHTML = filteredUsers.map((user, index) => `
+        <div class="mention-suggestion ${index === 0 ? 'selected' : ''}" 
+             data-username="${user.username}" 
+             data-user-id="${user.uid}"
+             onclick="selectMentionSuggestion(this)">
+            <div class="mention-suggestion-avatar">
+                ${user.username.charAt(0).toUpperCase()}
+            </div>
+            <div class="mention-suggestion-info">
+                <div class="mention-suggestion-name">${user.username}</div>
+                <div class="mention-suggestion-clan">${user.clan || 'Nessun clan'}</div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Posiziona autocomplete
+    positionAutocomplete(inputElement);
+    
+    autocomplete.classList.add('show');
+    mentionAutocompleteVisible = true;
+}
+
+function positionAutocomplete(inputElement) {
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    const rect = inputElement.getBoundingClientRect();
+    
+    autocomplete.style.position = 'fixed';
+    autocomplete.style.left = rect.left + 'px';
+    autocomplete.style.top = (rect.bottom + 5) + 'px';
+    autocomplete.style.width = Math.min(300, rect.width) + 'px';
+}
+
+function updateAutocompleteSelection(suggestions, selectedIndex) {
+    suggestions.forEach((s, i) => {
+        s.classList.toggle('selected', i === selectedIndex);
+    });
+}
+
+function selectMentionSuggestion(suggestion) {
+    const username = suggestion.dataset.username;
+    const input = currentMentionInput;
+    
+    if (input && username) {
+        const text = input.value;
+        const beforeMention = text.substring(0, currentMentionPosition);
+        const afterCursor = text.substring(input.selectionStart);
+        
+        const newText = beforeMention + '@' + username + ' ' + afterCursor;
+        input.value = newText;
+        
+        // Posiziona cursore dopo la menzione
+        const newCursorPos = beforeMention.length + username.length + 2;
+        input.setSelectionRange(newCursorPos, newCursorPos);
+        input.focus();
+    }
+    
+    hideMentionAutocomplete();
+}
+
+function hideMentionAutocomplete() {
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    autocomplete.classList.remove('show');
+    mentionAutocompleteVisible = false;
+    currentMentionInput = null;
+}
+
+// ==============================================
+// GESTIONE NOTIFICHE - CREAZIONE E INVIO
+// ==============================================
+
+async function createNotification(type, targetUserId, data) {
+    if (!currentUser || targetUserId === currentUser.uid) return;
+    
+    const notification = {
+        id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        type: type,
+        fromUser: currentUser.displayName || 'Utente',
+        fromUserId: currentUser.uid,
+        targetUserId: targetUserId,
+        timestamp: window.useFirebase ? serverTimestamp() : Date.now(),
+        read: false,
+        ...data
+    };
+    
+    try {
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            // Salva su Firebase
+            const notifRef = ref(window.firebaseDatabase, `notifications/${targetUserId}/${notification.id}`);
+            await set(notifRef, notification);
+        } else {
+            // Salva in localStorage
+            saveLocalNotification(targetUserId, notification);
+        }
+        
+        console.log('📨 Notifica creata:', notification);
+        
+        // Se l'utente target è online, mostra toast (simulazione)
+        showMentionToast(notification);
+        
+    } catch (error) {
+        console.error('Errore creazione notifica:', error);
+    }
+}
+
+function saveLocalNotification(targetUserId, notification) {
+    const storageKey = `hc_notifications_${targetUserId}`;
+    const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    notifications.unshift(notification); // Aggiungi in cima
+    
+    // Mantieni solo le ultime 50 notifiche
+    if (notifications.length > 50) {
+        notifications.splice(50);
+    }
+    
+    localStorage.setItem(storageKey, JSON.stringify(notifications));
+    
+    // Se è l'utente corrente, aggiorna la UI
+    if (targetUserId === currentUser?.uid) {
+        loadNotifications();
+    }
+}
+
+// ==============================================
+// GESTIONE NOTIFICHE - CARICAMENTO E DISPLAY
+// ==============================================
+
+function loadNotifications() {
+    if (!currentUser) return;
+    
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        // Carica da Firebase
+        const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}`);
+        onValue(notifRef, (snapshot) => {
+            const notifications = [];
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    notifications.push({
+                        id: childSnapshot.key,
+                        ...childSnapshot.val()
+                    });
+                });
+            }
+            
+            // Ordina per timestamp (più recenti prima)
+            notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            
+            notificationsData = notifications;
+            updateNotificationsUI();
+        });
+    } else {
+        // Carica da localStorage
+        const storageKey = `hc_notifications_${currentUser.uid}`;
+        const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        notificationsData = notifications;
+        updateNotificationsUI();
+    }
+}
+
+function updateNotificationsUI() {
+    const unreadCount = notificationsData.filter(n => !n.read).length;
+    unreadNotificationsCount = unreadCount;
+    
+    // Aggiorna badge
+    const badge = document.getElementById('notificationBadge');
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+    
+    // Aggiorna lista se pannello è aperto
+    if (document.getElementById('notificationsPanel').classList.contains('show')) {
+        displayNotificationsList();
+    }
+}
+
+function displayNotificationsList() {
+    const listContainer = document.getElementById('notificationsList');
+    
+    if (notificationsData.length === 0) {
+        listContainer.innerHTML = `
+            <div class="notifications-empty">
+                <div class="empty-icon">🔕</div>
+                <div>Nessuna notifica</div>
+            </div>
+        `;
+        return;
+    }
+    
+    listContainer.innerHTML = notificationsData.map(notification => `
+        <div class="notification-item ${!notification.read ? 'unread' : ''}" 
+             onclick="handleNotificationClick('${notification.id}')">
+            <div class="notification-content">
+                <div class="notification-icon">
+                    ${getNotificationIcon(notification.type)}
+                </div>
+                <div class="notification-text">
+                    <div class="notification-user">${notification.fromUser}</div>
+                    <div class="notification-message">${getNotificationMessage(notification)}</div>
+                    ${notification.threadTitle ? `<div class="notification-thread">in "${notification.threadTitle}"</div>` : ''}
+                    <div class="notification-time">${formatTime(notification.timestamp)}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getNotificationIcon(type) {
+    switch (type) {
+        case 'mention': return '💬';
+        case 'reply': return '↩️';
+        case 'like': return '❤️';
+        default: return '🔔';
+    }
+}
+
+function getNotificationMessage(notification) {
+    switch (notification.type) {
+        case 'mention':
+            return `ti ha menzionato: "${notification.message || 'Messaggio'}"`;
+        case 'reply':
+            return `ha risposto al tuo thread: "${notification.message || 'Risposta'}"`;
+        default:
+            return notification.message || 'Nuova notifica';
+    }
+}
+
+// ==============================================
+// GESTIONE NOTIFICHE - INTERAZIONI UI
+// ==============================================
+
+function toggleNotificationsPanel() {
+    const panel = document.getElementById('notificationsPanel');
+    const isVisible = panel.classList.contains('show');
+    
+    if (isVisible) {
+        panel.classList.remove('show');
+    } else {
+        panel.classList.add('show');
+        displayNotificationsList();
+        
+        // Segna come lette quelle visibili dopo un delay
+        setTimeout(() => {
+            markVisibleNotificationsAsRead();
+        }, 1000);
+    }
+}
+
+async function handleNotificationClick(notificationId) {
+    const notification = notificationsData.find(n => n.id === notificationId);
+    if (!notification) return;
+    
+    // Segna come letta
+    await markNotificationAsRead(notificationId);
+    
+    // Naviga al contenuto
+    navigateToNotificationContent(notification);
+    
+    // Chiudi pannello
+    document.getElementById('notificationsPanel').classList.remove('show');
+}
+
+function navigateToNotificationContent(notification) {
+    // Chiudi menu mobile se aperto
+    closeMobileMenu();
+    
+    if (notification.threadId && notification.section) {
+        // Vai al thread
+        switchSection(notification.section);
+        setTimeout(() => {
+            openThread(notification.threadId, notification.section);
+        }, 500);
+    } else if (notification.section) {
+        // Vai alla sezione
+        switchSection(notification.section);
+    }
+}
+
+async function markNotificationAsRead(notificationId) {
+    const notification = notificationsData.find(n => n.id === notificationId);
+    if (!notification || notification.read) return;
+    
+    try {
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            // Aggiorna su Firebase
+            const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}/${notificationId}/read`);
+            await set(notifRef, true);
+        } else {
+            // Aggiorna localStorage
+            const storageKey = `hc_notifications_${currentUser.uid}`;
+            const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            const index = notifications.findIndex(n => n.id === notificationId);
+            if (index !== -1) {
+                notifications[index].read = true;
+                localStorage.setItem(storageKey, JSON.stringify(notifications));
+                loadNotifications(); // Ricarica per aggiornare UI
+            }
+        }
+    } catch (error) {
+        console.error('Errore aggiornamento notifica:', error);
+    }
+}
+
+async function markAllNotificationsAsRead() {
+    const unreadNotifications = notificationsData.filter(n => !n.read);
+    
+    for (const notification of unreadNotifications) {
+        await markNotificationAsRead(notification.id);
+    }
+}
+
+function markVisibleNotificationsAsRead() {
+    const unreadNotifications = notificationsData.filter(n => !n.read).slice(0, 10);
+    
+    unreadNotifications.forEach(notification => {
+        markNotificationAsRead(notification.id);
+    });
+}
+
+// ==============================================
+// TOAST NOTIFICATIONS
+// ==============================================
+
+function showMentionToast(notification) {
+    // Mostra toast solo se l'utente target è quello corrente (simulazione)
+    if (notification.targetUserId !== currentUser?.uid) return;
+    
+    const toast = createToast({
+        type: 'mention',
+        title: 'Nuova menzione',
+        message: `${notification.fromUser} ti ha menzionato`,
+        duration: 5000,
+        actions: [
+            {
+                text: 'Vai al messaggio',
+                action: () => navigateToNotificationContent(notification)
+            },
+            {
+                text: 'Ignora',
+                action: () => {},
+                secondary: true
+            }
+        ]
+    });
+    
+    showToast(toast);
+}
+
+function createToast(options) {
+    const toastId = 'toast_' + Date.now();
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${options.type || ''}`;
+    toast.id = toastId;
+    
+    toast.innerHTML = `
+        <div class="toast-header">
+            <div class="toast-icon">${getNotificationIcon(options.type || 'notification')}</div>
+            <div class="toast-title">${options.title}</div>
+            <button class="toast-close" onclick="dismissToast('${toastId}')">&times;</button>
+        </div>
+        <div class="toast-body">
+            ${options.message}
+        </div>
+        ${options.actions ? `
+            <div class="toast-actions">
+                ${options.actions.map((action, index) => `
+                    <button class="toast-btn ${action.secondary ? 'toast-btn-secondary' : ''}" 
+                            onclick="handleToastAction('${toastId}', ${index})">
+                        ${action.text}
+                    </button>
+                `).join('')}
+            </div>
+        ` : ''}
+    `;
+    
+    // Salva azioni per riferimento
+    toast._actions = options.actions || [];
+    
+    return toast;
+}
+
+function showToast(toastElement) {
+    const container = document.getElementById('toastContainer');
+    container.appendChild(toastElement);
+    
+    // Trigger animation
+    setTimeout(() => {
+        toastElement.classList.add('show');
+    }, 100);
+    
+    // Auto dismiss dopo durata specificata
+    const duration = 5000; // Default 5 secondi
+    setTimeout(() => {
+        dismissToast(toastElement.id);
+    }, duration);
+}
+
+function dismissToast(toastId) {
+    const toast = document.getElementById(toastId);
+    if (toast) {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 400);
+    }
+}
+
+function handleToastAction(toastId, actionIndex) {
+    const toast = document.getElementById(toastId);
+    if (toast && toast._actions && toast._actions[actionIndex]) {
+        toast._actions[actionIndex].action();
+        dismissToast(toastId);
+    }
+}
+
+// ==============================================
+// CARICAMENTO UTENTI PER AUTOCOMPLETE
+// ==============================================
+
+async function loadUsersList() {
+    try {
+        let users = [];
+        
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            // Carica da Firebase
+            const usersRef = ref(window.firebaseDatabase, 'users');
+            const snapshot = await get(usersRef);
+            
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    users.push({
+                        uid: childSnapshot.key,
+                        ...childSnapshot.val()
+                    });
+                });
+            }
+        } else {
+            // Carica da localStorage
+            const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            users = Object.values(localUsers);
+        }
+        
+        allUsers = users;
+        console.log('👥 Caricati', users.length, 'utenti per autocomplete');
+        
+    } catch (error) {
+        console.error('Errore caricamento utenti:', error);
+    }
+}
+
+
+
+
 
         // Inizializza l'applicazione
         function initializeApp() {
@@ -301,6 +945,7 @@
 
             // Setup UI
             setupEventListeners();
+			initializeNotifications();
             switchSection('home');
         }
 
@@ -3097,30 +3742,33 @@ function displayThreadComments(comments) {
 
         // Mostra messaggi
         function displayMessages(messages) {
-            const chatMessages = document.getElementById('chat-messages');
-            
-            if (messages.length === 0) {
-                chatMessages.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #666;">
-                        Nessun messaggio in questa chat. Inizia la conversazione!
-                    </div>
-                `;
-                return;
-            }
-            
-            chatMessages.innerHTML = messages.map(msg => `
-                <div class="message">
-                    <div class="message-author">
-                        ${msg.author}
-                        <span class="message-time">${formatTime(msg.timestamp)}</span>
-                    </div>
-                    <div>${escapeHtml(msg.message)}</div>
-                </div>
-            `).join('');
-            
-            // Scroll to bottom
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+            const originalDisplayMessages = window.displayMessages;
+			if (originalDisplayMessages) {
+				window.displayMessages = function(messages) {
+					const chatMessages = document.getElementById('chat-messages');
+					
+					if (messages.length === 0) {
+						chatMessages.innerHTML = `
+							<div style="text-align: center; padding: 40px; color: #666;">
+								Nessun messaggio in questa chat. Inizia la conversazione!
+							</div>
+						`;
+						return;
+					}
+					
+					chatMessages.innerHTML = messages.map(msg => `
+						<div class="message">
+							<div class="message-author">
+								${msg.author}
+								<span class="message-time">${formatTime(msg.timestamp)}</span>
+							</div>
+							<div>${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
+						</div>
+					`).join('');
+					
+					chatMessages.scrollTop = chatMessages.scrollHeight;
+				};
+			}
 
         // Salva messaggio locale
         function saveLocalMessage(section, messageData) {
@@ -3169,56 +3817,68 @@ function displayThreadComments(comments) {
 
         // Invia messaggio (Firebase o locale)
         async function sendMessage() {
-            if (!currentUser) {
-                alert('Devi effettuare l\'accesso per inviare messaggi');
-                return;
-            }
+            const originalSendMessage = window.sendMessage;
+window.sendMessage = async function() {
+    if (!currentUser) {
+        alert('Devi effettuare l\'accesso per inviare messaggi');
+        return;
+    }
 
-            // Controlla accesso clan
-            if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
-                alert('Devi appartenere a un clan per inviare messaggi qui!');
-                return;
-            }
+    if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
+        alert('Devi appartenere a un clan per inviare messaggi qui!');
+        return;
+    }
 
-            const input = document.getElementById('message-input');
-            const sendBtn = document.getElementById('send-message-btn');
-            const message = input.value.trim();
-            
-            if (!message) return;
+    const input = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-message-btn');
+    const message = input.value.trim();
+    
+    if (!message) return;
 
-            input.disabled = true;
-            sendBtn.disabled = true;
+    // Rileva menzioni
+    const mentions = detectMentions(message);
 
-            try {
-                const messageData = {
-                    author: currentUser.displayName || 'Utente',
-                    authorId: currentUser.uid,
-                    message: message
-                };
+    input.disabled = true;
+    sendBtn.disabled = true;
 
-                const dataPath = getDataPath(currentSection, 'messages');
-                if (!dataPath) return;
+    try {
+        const messageData = {
+            author: currentUser.displayName || 'Utente',
+            authorId: currentUser.uid,
+            message: message
+        };
 
-                if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
-                    // Invia a Firebase
-                    const messagesRef = ref(window.firebaseDatabase, dataPath);
-                    messageData.timestamp = serverTimestamp();
-                    await push(messagesRef, messageData);
-                } else {
-                    // Salva in locale
-                    saveLocalMessage(currentSection, messageData);
-                }
+        const dataPath = getDataPath(currentSection, 'messages');
+        if (!dataPath) return;
 
-                input.value = '';
-            } catch (error) {
-                console.error('Errore invio messaggio:', error);
-                alert('Errore nell\'invio del messaggio');
-            } finally {
-                input.disabled = false;
-                sendBtn.disabled = false;
-                input.focus();
-            }
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
+            const messagesRef = ref(window.firebaseDatabase, dataPath);
+            messageData.timestamp = serverTimestamp();
+            await push(messagesRef, messageData);
+        } else {
+            saveLocalMessage(currentSection, messageData);
         }
+
+        // Crea notifiche per le menzioni
+        for (const mention of mentions) {
+            await createNotification('mention', mention.userId, {
+                message: message,
+                section: currentSection,
+                sectionTitle: sectionConfig[currentSection]?.title || 'Chat'
+            });
+        }
+
+        input.value = '';
+    } catch (error) {
+        console.error('Errore invio messaggio:', error);
+        alert('Errore nell\'invio del messaggio');
+    } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        input.focus();
+    }
+};
+
 
         // Utility
         function formatTime(timestamp) {
