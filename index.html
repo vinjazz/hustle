@@ -172,20 +172,23 @@
     <!-- Mobile Menu Toggle -->
     <button id="mobileMenuToggle" class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
     
+	
     <!-- Mobile Overlay -->
     <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
     
     <!-- Connection Status -->
     <div id="connectionStatus" class="connection-status offline">🔴 Disconnesso</div>
+	
+	<!-- Notifications Bell -->
+	<button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()">
+		🔔
+		<span id="notificationBadge" class="notification-badge hidden">0</span>
+	</button>
+
     
     <!-- Message Counter -->
     <div id="messageCounter" class="message-counter">💬 0 messaggi</div>
-	<!-- Notifications Bell -->
-<button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()">
-    🔔
-    <span id="notificationBadge" class="notification-badge hidden">0</span>
-</button>
-
+	
 <!-- Notifications Panel -->
 <div id="notificationsPanel" class="notifications-panel">
     <div class="notifications-header">
