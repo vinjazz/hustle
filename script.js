@@ -227,6 +227,17 @@ const sectionConfig = {
 function initializeNotifications() {
     console.log('🔔 Inizializzazione sistema notifiche...');
 
+    // Forza visibilità della campanella
+    const notificationsBell = document.getElementById('notificationsBell');
+    if (notificationsBell) {
+        notificationsBell.style.display = 'block';
+        notificationsBell.style.visibility = 'visible';
+        notificationsBell.style.opacity = '1';
+        console.log('🔔 Campanella notifiche forzata visibile');
+    } else {
+        console.error('❌ Elemento notificationsBell non trovato!');
+    }
+
     // Carica notifiche esistenti
     loadNotifications();
 

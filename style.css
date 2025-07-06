@@ -128,7 +128,7 @@ body::before {
 .notifications-bell {
     position: fixed;
     top: 20px;
-    right: 20px;
+    right: 340px;
     background: var(--gradient-secondary);
     color: white;
     border: none;
@@ -2973,4 +2973,16 @@ textarea:focus,
     .toast-header {
         margin-bottom: 6px;
     }
+}
+
+#notificationsBell {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 1001 !important;
+}
+
+/* Debug: aggiungi bordo temporaneo per vedere la campanella */
+.notifications-bell {
+    /* border: 2px solid red !important; */ /* Decommentare per debug */
 }
