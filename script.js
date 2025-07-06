@@ -946,7 +946,7 @@ async function loadUsersList() {
         }
 
         // Gestione login utente
-        function handleUserLogin(user) {
+         function handleUserLogin(user) {
             console.log('👤 Utente loggato:', user.email);
             
             // Nascondi modal login
@@ -960,6 +960,16 @@ async function loadUsersList() {
             
             // Carica dati utente
             loadUserProfile();
+            
+            // Carica lista utenti e notifiche dopo il login
+            setTimeout(() => {
+                loadUsersList(); // Ricarica la lista utenti
+                loadNotifications(); // Carica le notifiche dell'utente
+                // Forza aggiornamento UI notifiche
+                setTimeout(() => {
+                    updateNotificationsUI();
+                }, 100);
+            }, 100);
             
             // Aggiorna dashboard se è la sezione corrente
             if (currentSection === 'home') {
