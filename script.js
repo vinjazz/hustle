@@ -531,12 +531,17 @@ function saveLocalNotification(targetUserId, notification) {
 // ==============================================
 
 function loadNotifications() {
-    if (!currentUser)
+    console.log('🚀 CHIAMATA loadNotifications()');
+    
+    if (!currentUser) {
+        console.log('⚠️ currentUser è nullo');
         return;
+    }
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        // Carica da Firebase
+        console.log('✅ Firebase attivo, in ascolto su notifications/' + currentUser.uid);
         const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}`);
+        
         onValue(notifRef, (snapshot) => {
             const notifications = [];
             if (snapshot.exists()) {
@@ -546,23 +551,23 @@ function loadNotifications() {
                         ...childSnapshot.val()
                     });
                 });
+            } else {
+                console.log('📭 Nessuna notifica trovata su Firebase');
             }
 
-            // Ordina per timestamp (più recenti prima)
             notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
             notificationsData = notifications;
+
+            console.log('📥 Notifiche caricate:', notificationsData);
+
             updateNotificationsUI();
         });
     } else {
-        // Carica da localStorage
-        const storageKey = `hc_notifications_${currentUser.uid}`;
-        const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        notificationsData = notifications;
-        updateNotificationsUI();
-		console.log('📥 notifiche caricate da Firebase:', notificationsData);
+        console.log('⚠️ Firebase non attivo o non pronto, fallback su localStorage');
     }
 }
+
 
 function updateNotificationsUI() {
     const unreadCount = notificationsData.filter(n => !n.read).length;
