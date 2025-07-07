@@ -165,54 +165,55 @@
         });
     </script>
     
-    <!-- CSS Files -->
-    <link href="style.css" rel="stylesheet">
-    <link href="dashboard.css" rel="stylesheet">
+
 </head>
+<link href="style.css" rel="stylesheet">
 <body>
     <!-- Mobile Menu Toggle -->
     <button id="mobileMenuToggle" class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
     
+	
     <!-- Mobile Overlay -->
     <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
     
     <!-- Connection Status -->
     <div id="connectionStatus" class="connection-status offline">🔴 Disconnesso</div>
+	
+	
     
     <!-- Message Counter -->
     <div id="messageCounter" class="message-counter">💬 0 messaggi</div>
 	
-    <!-- Notifications Bell -->
-    <button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()">
+	    <button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()">
         🔔
         <span id="notificationBadge" class="notification-badge hidden">0</span>
     </button>
 
-    <!-- Notifications Panel -->
-    <div id="notificationsPanel" class="notifications-panel">
-        <div class="notifications-header">
-            <h3>🔔 Notifiche</h3>
-            <button class="mark-all-read" onclick="markAllNotificationsAsRead()">
-                Segna tutte come lette
-            </button>
+<!-- Notifications Panel -->
+<div id="notificationsPanel" class="notifications-panel">
+    <div class="notifications-header">
+        <h3>🔔 Notifiche</h3>
+        <button class="mark-all-read" onclick="markAllNotificationsAsRead()">
+            Segna tutte come lette
+        </button>
+    </div>
+    <div id="notificationsList" class="notifications-list">
+        <div class="notifications-empty">
+            <div class="empty-icon">🔕</div>
+            <div>Nessuna notifica</div>
         </div>
-        <div id="notificationsList" class="notifications-list">
-            <div class="notifications-empty">
-                <div class="empty-icon">🔕</div>
-                <div>Nessuna notifica</div>
-            </div>
-        </div>
     </div>
+</div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="toast-container">
-        <!-- I toast verranno generati dinamicamente -->
-    </div>
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container">
+    <!-- I toast verranno generati dinamicamente -->
+</div>
 
-    <!-- Mention Autocomplete -->
-    <div id="mentionAutocomplete" class="mention-autocomplete">
-        <!-- I suggerimenti verranno generati dinamicamente -->
-    </div>
+<!-- Mention Autocomplete -->
+<div id="mentionAutocomplete" class="mention-autocomplete">
+    <!-- I suggerimenti verranno generati dinamicamente -->
+</div>
 
     <!-- Login Modal -->
     <div id="loginModal" class="login-modal">
@@ -456,12 +457,14 @@
                         </div>
                     </div>
                     
+                    
                     <div class="comment-input">
                         <div class="comment-input-container">
                             <div class="comment-input-main">
                                 <div class="comment-textarea-container">
-                                    <textarea id="comment-text" placeholder="Scrivi un commento... (usa @nome per taggare)"></textarea>
-                                </div>
+    <textarea id="comment-text" placeholder="Scrivi un commento... (usa @nome per taggare)"></textarea>
+</div>
+
                                 <div class="comment-controls">
                                     <div class="comment-buttons-row">
                                         <button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
@@ -506,6 +509,7 @@
                             </div>
                         </div>
                     </div>
+				
 				</div>
             </div>
         </div>
@@ -566,8 +570,6 @@
         <img id="modalImage" src="" alt="Immagine a schermo intero">
     </div>
 
-    <!-- Scripts -->
     <script src="script.js"></script>
-    <script src="dashboard.js"></script>
 </body>
 </html>
