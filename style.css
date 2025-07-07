@@ -1447,12 +1447,6 @@ button:disabled {
     opacity: 0 !important;
 }
 
-#notificationsBell {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 9999;
-}
 
 .notifications-bell.user-logged-in {
     display: flex !important;
@@ -2362,7 +2356,7 @@ button:disabled {
     
     .notifications-bell.user-logged-in {
         top: 80px !important;
-        right: 80px !important;
+        right: 200px !important;
         width: 45px !important;
         height: 45px !important;
         font-size: 18px !important;
