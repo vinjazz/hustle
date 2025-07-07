@@ -129,7 +129,7 @@ body::before {
 .notifications-bell {
     position: fixed !important;
     top: 20px !important;
-    right: 120px !important;
+    right: 240px !important; /* Posizionata tra connection status (20px) e message counter (350px) */
     background: var(--gradient-secondary) !important;
     color: white !important;
     border: none !important;
@@ -3003,4 +3003,383 @@ textarea:focus,
 /* Debug: aggiungi bordo temporaneo per vedere la campanella */
 .notifications-bell {
     /* border: 2px solid red !important; */ /* Decommentare per debug */
+}
+
+
+/* Avatar nella sidebar */
+.user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--gradient-secondary);
+    margin: 0 auto 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    position: relative;
+    border: 3px solid var(--border);
+    overflow: hidden;
+}
+
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.user-avatar-default {
+    font-size: 24px;
+    color: white;
+}
+
+/* Controlli avatar */
+.avatar-upload-btn {
+    background: var(--gradient-secondary);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+    display: inline-block;
+}
+
+.avatar-upload-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(45, 130, 181, 0.4);
+}
+
+/* Avatar piccoli nei messaggi e commenti */
+.message-avatar, .comment-avatar, .thread-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--gradient-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: white;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.message-avatar img, .comment-avatar img, .thread-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* Modal avatar */
+.avatar-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.avatar-modal-content {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 500px;
+    backdrop-filter: blur(15px);
+    text-align: center;
+}
+
+.avatar-modal-content h3 {
+    color: var(--accent-4);
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+}
+
+.avatar-preview-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.avatar-preview-large {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid var(--accent-3);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-secondary);
+}
+
+.avatar-preview-large img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-preview-small {
+    text-align: center;
+}
+
+.avatar-preview-small img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    object-fit: cover;
+    display: block;
+    margin: 0 auto 0.5rem;
+}
+
+.avatar-preview-small p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.avatar-modal-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-save-avatar, .btn-cancel-avatar, .btn-remove-avatar {
+    padding: 0.8rem 1.5rem;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.btn-save-avatar {
+    background: var(--gradient-success);
+    color: white;
+}
+
+.btn-cancel-avatar {
+    background: var(--gradient-secondary);
+    color: white;
+}
+
+.btn-remove-avatar {
+    background: var(--gradient-danger);
+    color: white;
+}
+
+.btn-save-avatar:hover, .btn-cancel-avatar:hover, .btn-remove-avatar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* CLAN BADGES - Mostrati accanto ai nomi */
+.user-clan-badge {
+    background: var(--gradient-primary);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-clan-badge.no-clan {
+    background: rgba(108, 117, 125, 0.3);
+    color: var(--text-muted);
+    border-color: rgba(108, 117, 125, 0.3);
+}
+
+/* Layout per messaggi con avatar */
+.message-with-avatar {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--accent-3);
+}
+
+.message-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.message-author-name {
+    font-weight: 600;
+    color: var(--accent-4);
+}
+
+.message-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+/* Layout per commenti con avatar */
+.comment-with-avatar {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.comment-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.comment-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.comment-author-name {
+    font-weight: 600;
+    color: var(--accent-4);
+}
+
+.comment-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Thread list con avatar */
+.thread-author-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.thread-author-name {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Autocomplete menzioni con avatar e clan */
+.mention-suggestion-avatar {
+    width: 24px;
+    height: 24px;
+    background: var(--gradient-secondary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: white;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.mention-suggestion-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.mention-suggestion-info {
+    flex: 1;
+}
+
+.mention-suggestion-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mention-suggestion-clan {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Responsive per avatar */
+@media (max-width: 768px) {
+    .avatar-preview-container {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .avatar-modal-buttons {
+        flex-direction: column;
+    }
+    
+    .btn-save-avatar, .btn-cancel-avatar, .btn-remove-avatar {
+        width: 100%;
+    }
+    
+    .message-avatar, .comment-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+    
+    .user-clan-badge {
+        font-size: 0.6rem;
+        padding: 1px 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .message-with-avatar, .comment-with-avatar {
+        gap: 0.5rem;
+        padding: 0.8rem;
+    }
+    
+    .message-avatar, .comment-avatar {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+    }
+    
+    .user-clan-badge {
+        display: block;
+        margin: 0.2rem 0 0 0;
+        text-align: center;
+    }
+    
+    .message-header, .comment-header {
+        flex-wrap: wrap;
+    }
 }

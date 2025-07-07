@@ -37,7 +37,8 @@ let allUsers = []; // Cache degli utenti per autocomplete
 let mentionAutocompleteVisible = false;
 let currentMentionInput = null;
 let currentMentionPosition = 0;
-
+let currentAvatarFile = null;
+let isAvatarUploading = false;
 // Ruoli utente - DEVE essere definito prima di tutto
 const USER_ROLES = {
     SUPERUSER: 'superuser',
@@ -88,6 +89,11 @@ window.handleNotificationClick = handleNotificationClick;
 window.selectMentionSuggestion = selectMentionSuggestion;
 window.dismissToast = dismissToast;
 window.handleToastAction = handleToastAction;
+window.showAvatarModal = showAvatarModal;
+window.saveAvatarChanges = saveAvatarChanges;
+window.cancelAvatarChange = cancelAvatarChange;
+window.removeAvatar = removeAvatar;
+window.handleAvatarUpload = handleAvatarUpload;
 
 // Funzioni per la gestione dei ruoli
 function getCurrentUserRole() {
@@ -226,23 +232,23 @@ const sectionConfig = {
 
 function ensureNotificationsBellExists() {
     let bell = document.getElementById('notificationsBell');
-    
+
     if (!bell) {
         console.log('🚨 Campanella non trovata, creando elemento di emergenza...');
-        
+
         // Crea l'elemento
         bell = document.createElement('button');
         bell.id = 'notificationsBell';
         bell.className = 'notifications-bell';
         bell.innerHTML = '🔔<span id="notificationBadge" class="notification-badge hidden">0</span>';
         bell.onclick = toggleNotificationsPanel;
-        
+
         // Aggiungi al body
         document.body.appendChild(bell);
-        
+
         console.log('✅ Campanella di emergenza creata!');
     }
-    
+
     return bell;
 }
 
@@ -429,24 +435,30 @@ function showMentionAutocomplete(query, inputElement) {
     // Filtra utenti in base alla query
     const filteredUsers = allUsers.filter(user =>
             user.username.toLowerCase().includes(query.toLowerCase()) &&
-            user.uid !== currentUser?.uid).slice(0, 8); // Massimo 8 suggerimenti
+            user.uid !== currentUser?.uid).slice(0, 8);
 
     if (filteredUsers.length === 0) {
         hideMentionAutocomplete();
         return;
     }
 
-    // Genera HTML suggerimenti
+    // Genera HTML suggerimenti con avatar
     autocomplete.innerHTML = filteredUsers.map((user, index) => `
         <div class="mention-suggestion ${index === 0 ? 'selected' : ''}" 
              data-username="${user.username}" 
              data-user-id="${user.uid}"
              onclick="selectMentionSuggestion(this)">
             <div class="mention-suggestion-avatar">
-                ${user.username.charAt(0).toUpperCase()}
+                ${user.avatarUrl ? 
+`<img src="${user.avatarUrl}" alt="Avatar ${user.username}">` :
+            user.username.charAt(0).toUpperCase()
+}
             </div>
             <div class="mention-suggestion-info">
-                <div class="mention-suggestion-name">${user.username}</div>
+                <div class="mention-suggestion-name">
+                    ${user.username}
+                    ${createClanBadgeHTML(user.clan)}
+                </div>
                 <div class="mention-suggestion-clan">${user.clan || 'Nessun clan'}</div>
             </div>
         </div>
@@ -458,7 +470,6 @@ function showMentionAutocomplete(query, inputElement) {
     autocomplete.classList.add('show');
     mentionAutocompleteVisible = true;
 }
-
 function positionAutocomplete(inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
     const rect = inputElement.getBoundingClientRect();
@@ -571,7 +582,7 @@ function saveLocalNotification(targetUserId, notification) {
 
 function loadNotifications() {
     console.log('🚀 CHIAMATA loadNotifications()');
-    
+
     if (!currentUser) {
         console.log('⚠️ currentUser è nullo');
         return;
@@ -580,7 +591,7 @@ function loadNotifications() {
     if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
         console.log('✅ Firebase attivo, in ascolto su notifications/' + currentUser.uid);
         const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}`);
-        
+
         onValue(notifRef, (snapshot) => {
             const notifications = [];
             if (snapshot.exists()) {
@@ -606,7 +617,6 @@ function loadNotifications() {
         console.log('⚠️ Firebase non attivo o non pronto, fallback su localStorage');
     }
 }
-
 
 function updateNotificationsUI() {
     const unreadCount = notificationsData.filter(n => !n.read).length;
@@ -1025,12 +1035,10 @@ function handleUserLogin(user) {
 
     // Carica lista utenti e notifiche dopo il login
     setTimeout(() => {
-        loadUsersList(); // Ricarica la lista utenti
-        loadNotifications(); // Carica le notifiche dell'utente
-        // Forza aggiornamento UI notifiche
-        setTimeout(() => {
-            updateNotificationsUI();
-        }, 100);
+        setupAvatarUpload();
+        if (currentUserData && currentUserData.avatarUrl) {
+            updateUserAvatarDisplay(currentUserData.avatarUrl);
+        }
     }, 100);
 
     // Aggiorna dashboard se è la sezione corrente
@@ -1039,7 +1047,7 @@ function handleUserLogin(user) {
             loadDashboard();
         }, 500); // Piccolo delay per permettere il caricamento dei dati utente
     }
-}
+};
 
 // Gestione logout utente
 function handleUserLogout() {
@@ -1084,6 +1092,10 @@ function handleUserLogout() {
 }
 
 // Carica profilo utente
+// The main issue is in the loadUserProfile function and subsequent code
+// Here's the corrected section that was causing the syntax error:
+
+// Carica profilo utente
 async function loadUserProfile() {
     if (!currentUser) {
         // In modalità locale, aggiorna comunque l'accesso clan
@@ -1118,9 +1130,56 @@ async function loadUserProfile() {
         loadLocalUserProfile();
     }
 
+    setupAvatarUpload();
+
+    // Update avatar display
+    if (currentUserData && currentUserData.avatarUrl) {
+        updateUserAvatarDisplay(currentUserData.avatarUrl);
+    }
+
     // Aggiorna accesso clan e admin in ogni caso
     updateClanSectionsAccess();
     updateAdminSectionsAccess();
+}
+
+// Carica profilo locale
+function loadLocalUserProfile() {
+    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+    const userData = users[currentUser.email];
+
+    if (userData) {
+        // Controlla se questo utente dovrebbe essere superuser
+        const realUsers = Object.values(users).filter(user =>
+                !user.uid.startsWith('super_admin_') &&
+                !user.uid.startsWith('clan_mod_') &&
+                !user.uid.startsWith('user_'));
+
+        // Se è il primo utente reale e non ha ruolo superuser, assegnaglielo
+        if (realUsers.length > 0 && realUsers[0].uid === userData.uid) {
+            if (!userData.role || userData.role === USER_ROLES.USER) {
+                userData.role = USER_ROLES.SUPERUSER;
+                users[currentUser.email] = userData;
+                localStorage.setItem('hc_local_users', JSON.stringify(users));
+                console.log('🎉 Utente promosso a SUPERUSER:', currentUser.email);
+
+                // Mostra notifica
+                setTimeout(() => {
+                    alert('🎉 Congratulazioni! Sei stato promosso a SUPERUSER come primo utente registrato!');
+                }, 1000);
+            }
+        }
+
+        currentUserData = userData;
+        document.getElementById('currentUsername').textContent = userData.username;
+        document.getElementById('currentClan').textContent = userData.clan || 'Nessuno';
+        document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
+        updateUserRoleBadge();
+
+        // Aggiorna dashboard se è la sezione corrente
+        if (currentSection === 'home') {
+            loadDashboard();
+        }
+    }
 }
 
 // Carica profilo locale
@@ -3129,83 +3188,90 @@ function displayThreads(threads) {
 
     if (threads.length === 0) {
         threadList.innerHTML = `
-                    <div class="forum-header">
-                        <div>Discussione</div>
-                        <div>Risposte</div>
-                        <div>Visualizzazioni</div>
-                        <div>Ultimo Messaggio</div>
-                    </div>
-                    <div style="text-align: center; padding: 40px; color: #666;">
-                        Nessun thread in questa sezione. Creane uno!
-                    </div>
-                `;
+            <div class="forum-header">
+                <div>Discussione</div>
+                <div>Risposte</div>
+                <div>Visualizzazioni</div>
+                <div>Ultimo Messaggio</div>
+            </div>
+            <div style="text-align: center; padding: 40px; color: #666;">
+                Nessun thread in questa sezione. Creane uno!
+            </div>
+        `;
         return;
     }
 
-    // Filtra thread approvati per utenti normali, mostra tutto per moderatori
+    // Filtra thread approvati per utenti normali
     const visibleThreads = threads.filter(thread => {
-        // Moderatori vedono tutto
         if (canModerateSection(currentSection)) {
             return true;
         }
-        // Utenti normali vedono solo thread approvati
         return !thread.status || thread.status === 'approved';
     });
 
     threadList.innerHTML = `
-                <div class="forum-header">
-                    <div>Discussione</div>
-                    <div>Risposte</div>
-                    <div>Visualizzazioni</div>
-                    <div>Ultimo Messaggio</div>
-                </div>
-            ` + visibleThreads.map(thread => {
+        <div class="forum-header">
+            <div>Discussione</div>
+            <div>Risposte</div>
+            <div>Visualizzazioni</div>
+            <div>Ultimo Messaggio</div>
+        </div>
+    ` + visibleThreads.map(thread => {
             const statusClass = thread.status === 'pending' ? 'thread-pending' :
                 thread.status === 'rejected' ? 'thread-rejected' : '';
             const statusIndicator = thread.status === 'pending' ? '<span class="pending-indicator">PENDING</span>' :
                 thread.status === 'rejected' ? '<span class="pending-indicator" style="background: rgba(231, 76, 60, 0.2); color: #e74c3c;">RIFIUTATO</span>' : '';
 
+            // Trova dati autore per clan
+            const author = allUsers.find(u => u.uid === thread.authorId) || {
+                username: thread.author,
+                clan: 'Nessuno'
+            };
+
             return `
-                    <div class="thread-item ${statusClass}">
-                        <div class="thread-main">
-                            <div class="thread-title" onclick="openThread('${thread.id}', '${currentSection}')">
-                                ${thread.title}
-                                ${statusIndicator}
-                            </div>
-                            <div class="thread-author">da ${thread.author}</div>
-                            <div class="thread-stats-mobile">
-                                <div class="stat">
-                                    <span>💬</span>
-                                    <span>${thread.replies || 0}</span>
-                                </div>
-                                <div class="stat">
-                                    <span>👁️</span>
-                                    <span>${thread.views || 0}</span>
-                                </div>
-                                <div class="stat">
-                                    <span>🕐</span>
-                                    <span>${formatTime(thread.createdAt)}</span>
-                                </div>
-                            </div>
-                            ${thread.status === 'pending' && canModerateSection(currentSection) ? `
-                                <div class="moderation-actions">
-                                    <button class="approve-btn" onclick="approveThread('${thread.id}', '${currentSection}')">
-                                        ✅ Approva
-                                    </button>
-                                    <button class="reject-btn" onclick="rejectThread('${thread.id}', '${currentSection}')">
-                                        ❌ Rifiuta
-                                    </button>
-                                </div>
-                            ` : ''}
+            <div class="thread-item ${statusClass}">
+                <div class="thread-main">
+                    <div class="thread-title" onclick="openThread('${thread.id}', '${currentSection}')">
+                        ${thread.title}
+                        ${statusIndicator}
+                    </div>
+                    <div class="thread-author-info">
+                        <span class="thread-author-name">da ${thread.author}</span>
+                        ${createClanBadgeHTML(author.clan)}
+                    </div>
+                    <div class="thread-stats-mobile">
+                        <div class="stat">
+                            <span>💬</span>
+                            <span>${thread.replies || 0}</span>
                         </div>
-                        <div class="thread-replies">${thread.replies || 0}</div>
-                        <div class="thread-stats">${thread.views || 0}</div>
-                        <div class="thread-last-post">
-                            <div>${formatTime(thread.createdAt)}</div>
-                            <div>da <strong>${thread.author}</strong></div>
+                        <div class="stat">
+                            <span>👁️</span>
+                            <span>${thread.views || 0}</span>
+                        </div>
+                        <div class="stat">
+                            <span>🕐</span>
+                            <span>${formatTime(thread.createdAt)}</span>
                         </div>
                     </div>
-                `;
+                    ${thread.status === 'pending' && canModerateSection(currentSection) ? `
+                        <div class="moderation-actions">
+                            <button class="approve-btn" onclick="approveThread('${thread.id}', '${currentSection}')">
+                                ✅ Approva
+                            </button>
+                            <button class="reject-btn" onclick="rejectThread('${thread.id}', '${currentSection}')">
+                                ❌ Rifiuta
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="thread-replies">${thread.replies || 0}</div>
+                <div class="thread-stats">${thread.views || 0}</div>
+                <div class="thread-last-post">
+                    <div>${formatTime(thread.createdAt)}</div>
+                    <div>da <strong>${thread.author}</strong></div>
+                </div>
+            </div>
+        `;
         }).join('');
 }
 
@@ -3558,14 +3624,21 @@ function displayThreadComments(comments) {
 
     if (comments.length === 0) {
         commentsContainer.innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: #666;">
-                        Nessun commento ancora. Sii il primo a commentare!
-                    </div>
-                `;
+            <div style="text-align: center; padding: 20px; color: #666;">
+                Nessun commento ancora. Sii il primo a commentare!
+            </div>
+        `;
         return;
     }
 
     commentsContainer.innerHTML = comments.map(comment => {
+        // Trova dati utente per avatar e clan
+        const user = allUsers.find(u => u.uid === comment.authorId) || {
+            username: comment.author,
+            clan: 'Nessuno',
+            avatarUrl: null
+        };
+
         let commentContentHtml = '';
 
         // Aggiungi testo del commento se presente
@@ -3576,30 +3649,33 @@ function displayThreadComments(comments) {
         // Aggiungi immagine se presente
         if (comment.imageUrl) {
             commentContentHtml += `
-                        <div class="comment-image">
-                            <img src="${comment.imageUrl}" 
-                                 alt="${comment.imageName || 'Immagine del commento'}" 
-                                 onclick="openImageModal('${comment.imageUrl}', '${comment.imageName || 'Immagine del commento'}')"
-                                 title="Clicca per ingrandire">
-                        </div>
-                    `;
+                <div class="comment-image">
+                    <img src="${comment.imageUrl}" 
+                         alt="${comment.imageName || 'Immagine del commento'}" 
+                         onclick="openImageModal('${comment.imageUrl}', '${comment.imageName || 'Immagine del commento'}')"
+                         title="Clicca per ingrandire">
+                </div>
+            `;
         }
 
         return `
-                    <div class="comment">
-                        <div class="comment-header">
-                            <span class="comment-author">${comment.author}</span>
-                            <span class="comment-time">${formatTime(comment.timestamp)}</span>
-                        </div>
-                        <div class="comment-content">${commentContentHtml}</div>
+            <div class="comment-with-avatar">
+                ${createAvatarHTML(user, 'small')}
+                <div class="comment-content">
+                    <div class="comment-header">
+                        <span class="comment-author-name">${comment.author}</span>
+                        ${createClanBadgeHTML(user.clan)}
+                        <span class="comment-time">${formatTime(comment.timestamp)}</span>
                     </div>
-                `;
+                    <div class="comment-body">${commentContentHtml}</div>
+                </div>
+            </div>
+        `;
     }).join('');
 
     // Scroll to bottom
     commentsContainer.scrollTop = commentsContainer.scrollHeight;
 }
-
 // Aggiungi commento
 async function addComment() {
     if (!currentUser) {
@@ -3858,22 +3934,35 @@ function displayMessages(messages) {
 
     if (messages.length === 0) {
         chatMessages.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #666;">
-                        Nessun messaggio in questa chat. Inizia la conversazione!
-                    </div>
-                `;
+            <div style="text-align: center; padding: 40px; color: #666;">
+                Nessun messaggio in questa chat. Inizia la conversazione!
+            </div>
+        `;
         return;
     }
 
-    chatMessages.innerHTML = messages.map(msg => `
-                <div class="message">
-                    <div class="message-author">
-                        ${msg.author}
+    chatMessages.innerHTML = messages.map(msg => {
+        // Trova dati utente per avatar e clan
+        const user = allUsers.find(u => u.uid === msg.authorId) || {
+            username: msg.author,
+            clan: 'Nessuno',
+            avatarUrl: null
+        };
+
+        return `
+            <div class="message-with-avatar">
+                ${createAvatarHTML(user, 'medium')}
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-author-name">${msg.author}</span>
+                        ${createClanBadgeHTML(user.clan)}
                         <span class="message-time">${formatTime(msg.timestamp)}</span>
                     </div>
-                    <div>${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
+                    <div class="message-text">${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
                 </div>
-            `).join('');
+            </div>
+        `;
+    }).join('');
 
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -4300,6 +4389,272 @@ function updateCommentUploadProgress(progress) {
             progressContainer.style.display = 'none';
         }, 1000);
     }
+}
+
+function setupAvatarUpload() {
+    const avatarUpload = document.getElementById('avatar-upload');
+    const avatarControls = document.getElementById('avatarControls');
+
+    if (avatarUpload && currentUser) {
+        avatarControls.style.display = 'block';
+        avatarUpload.addEventListener('change', handleAvatarUpload);
+    }
+}
+
+// Handle avatar upload
+function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file)
+        return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+        return;
+    }
+
+    // Validate file size (max 2MB for avatar)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+        alert('L\'immagine è troppo grande. Massimo 2MB consentiti per l\'avatar.');
+        return;
+    }
+
+    currentAvatarFile = file;
+    showAvatarModal(file);
+}
+
+// Show avatar modal with preview
+function showAvatarModal(file) {
+    const modal = document.getElementById('avatarModal');
+    const previewLarge = document.getElementById('avatarPreviewLarge');
+    const previewSmall = document.getElementById('avatarPreviewSmall');
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        previewLarge.src = e.target.result;
+        previewSmall.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+// Save avatar changes
+async function saveAvatarChanges() {
+    if (!currentAvatarFile || isAvatarUploading)
+        return;
+
+    isAvatarUploading = true;
+    const saveBtn = document.querySelector('.btn-save-avatar');
+    const progressContainer = document.getElementById('avatar-upload-progress');
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Caricando...';
+    progressContainer.style.display = 'block';
+
+    try {
+        // Upload avatar
+        const avatarUrl = await uploadAvatarImage(currentAvatarFile, (progress) => {
+            updateAvatarUploadProgress(progress);
+        });
+
+        if (avatarUrl) {
+            // Save to user profile
+            await updateUserAvatar(avatarUrl);
+
+            // Update UI
+            updateUserAvatarDisplay(avatarUrl);
+
+            alert('✅ Avatar aggiornato con successo!');
+            cancelAvatarChange();
+        }
+
+    } catch (error) {
+        console.error('Errore upload avatar:', error);
+        alert('❌ Errore nel caricamento dell\'avatar: ' + (error.message || error));
+    } finally {
+        isAvatarUploading = false;
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Salva Avatar';
+        progressContainer.style.display = 'none';
+    }
+}
+
+// Cancel avatar change
+function cancelAvatarChange() {
+    const modal = document.getElementById('avatarModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+
+    // Reset file input
+    document.getElementById('avatar-upload').value = '';
+    currentAvatarFile = null;
+}
+
+// Remove avatar
+async function removeAvatar() {
+    if (!confirm('🗑️ Sei sicuro di voler rimuovere il tuo avatar?'))
+        return;
+
+    try {
+        await updateUserAvatar(null);
+        updateUserAvatarDisplay(null);
+        alert('✅ Avatar rimosso con successo!');
+        cancelAvatarChange();
+    } catch (error) {
+        console.error('Errore rimozione avatar:', error);
+        alert('❌ Errore nella rimozione dell\'avatar');
+    }
+}
+
+// Upload avatar image
+async function uploadAvatarImage(file, progressCallback) {
+    if (!file)
+        return null;
+
+    try {
+        if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
+            try {
+                // Upload su Firebase Storage
+                const timestamp = Date.now();
+                const filename = `avatars/${currentUser.uid}/${timestamp}_avatar.${file.name.split('.').pop()}`;
+                const imageRef = storageRef(window.firebaseStorage, filename);
+
+                // Simula progress
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.random() * 30;
+                    if (progress > 90)
+                        progress = 90;
+                    progressCallback(progress);
+                }, 200);
+
+                const snapshot = await uploadBytes(imageRef, file);
+                clearInterval(progressInterval);
+                progressCallback(100);
+
+                const downloadURL = await getDownloadURL(snapshot.ref);
+                console.log('📷 Avatar caricato su Firebase Storage');
+                return downloadURL;
+
+            } catch (storageError) {
+                console.warn('⚠️ Errore Firebase Storage per avatar, uso fallback locale:', storageError.message);
+                return convertToBase64(file, progressCallback);
+            }
+        } else {
+            // Modalità locale - converte in base64
+            return convertToBase64(file, progressCallback);
+        }
+    } catch (error) {
+        console.error('Errore upload avatar:', error);
+        return convertToBase64(file, progressCallback);
+    }
+}
+
+// Convert image to base64
+function convertToBase64(file, progressCallback) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            progressCallback(100);
+            console.log('📷 Avatar convertito in base64');
+            resolve(e.target.result);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// Update avatar upload progress
+function updateAvatarUploadProgress(progress) {
+    const progressContainer = document.getElementById('avatar-upload-progress');
+    const progressPercent = Math.round(progress);
+
+    progressContainer.innerHTML = `
+        <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento avatar...</span>
+                <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
+            </div>
+            <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
+                <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
+            </div>
+        </div>
+    `;
+}
+
+// Update user avatar in database
+async function updateUserAvatar(avatarUrl) {
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/avatarUrl`);
+        await set(userRef, avatarUrl);
+    } else {
+        // Modalità locale
+        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+        for (const email in users) {
+            if (users[email].uid === currentUser.uid) {
+                users[email].avatarUrl = avatarUrl;
+                localStorage.setItem('hc_local_users', JSON.stringify(users));
+                // Aggiorna anche i dati correnti
+                if (currentUserData) {
+                    currentUserData.avatarUrl = avatarUrl;
+                }
+                break;
+            }
+        }
+    }
+}
+
+// Update user avatar display in UI
+function updateUserAvatarDisplay(avatarUrl) {
+    const avatarImg = document.getElementById('userAvatarImg');
+    const avatarDefault = document.getElementById('userAvatarDefault');
+
+    if (avatarUrl) {
+        avatarImg.src = avatarUrl;
+        avatarImg.style.display = 'block';
+        avatarDefault.style.display = 'none';
+    } else {
+        avatarImg.style.display = 'none';
+        avatarDefault.style.display = 'flex';
+    }
+
+    // Aggiorna anche nei dati utente correnti
+    if (currentUserData) {
+        currentUserData.avatarUrl = avatarUrl;
+    }
+}
+
+// ===============================================
+// UTILITY FUNCTIONS PER AVATAR E CLAN
+// ===============================================
+
+// Create avatar HTML
+function createAvatarHTML(user, size = 'small') {
+    const sizeClass = size === 'large' ? 'user-avatar' :
+        size === 'medium' ? 'message-avatar' : 'comment-avatar';
+
+    if (user.avatarUrl) {
+        return `<div class="${sizeClass}"><img src="${user.avatarUrl}" alt="Avatar ${user.username}"></div>`;
+    } else {
+        const initial = user.username ? user.username.charAt(0).toUpperCase() : '👤';
+        return `<div class="${sizeClass}">${initial}</div>`;
+    }
+}
+
+// Create clan badge HTML
+function createClanBadgeHTML(clan) {
+    if (!clan || clan === 'Nessuno') {
+        return '<span class="user-clan-badge no-clan">Nessun Clan</span>';
+    }
+    return `<span class="user-clan-badge">🏰 ${clan}</span>`;
+}
+
+// Get user display name with clan
+function getUserDisplayName(user) {
+    const clan = user.clan && user.clan !== 'Nessuno' ? ` [${user.clan}]` : '';
+    return `${user.username}${clan}`;
 }
 
 // ✅ AGGIUNGI QUESTE FUNZIONI ALLA FINE DEL FILE
