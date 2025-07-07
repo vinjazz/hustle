@@ -1,0 +1,616 @@
+/* ===============================================
+   MODERN DASHBOARD STYLES - Mobile First
+   =============================================== */
+
+/* Dashboard Container */
+.dashboard-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 0;
+    max-width: 100%;
+}
+
+/* Welcome Section */
+.dashboard-welcome {
+    background: linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(244, 164, 96, 0.15) 100%);
+    border-radius: 20px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(218, 165, 32, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+.welcome-bg-icon {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 4rem;
+    opacity: 0.1;
+    pointer-events: none;
+}
+
+.welcome-content {
+    position: relative;
+    z-index: 2;
+}
+
+.welcome-title {
+    color: #8B4513;
+    margin-bottom: 0.8rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.welcome-subtitle {
+    color: #666;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-left: 0.5rem;
+}
+
+.role-badge.role-super {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+}
+
+.role-badge.role-mod {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: white;
+}
+
+.role-badge.role-user {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+}
+
+/* Clan Status Card */
+.clan-status-card {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem;
+    border-radius: 12px;
+    margin-top: 1rem;
+}
+
+.clan-status-card.clan-active {
+    background: rgba(52, 152, 219, 0.1);
+    border-left: 4px solid #3498db;
+}
+
+.clan-status-card.clan-none {
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 4px solid #ffc107;
+}
+
+.clan-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.clan-info strong {
+    color: #3498db;
+    font-size: 0.9rem;
+}
+
+.clan-info p {
+    color: #666;
+    font-size: 0.8rem;
+    margin: 0.2rem 0 0 0;
+}
+
+/* Dashboard Sections */
+.dashboard-section {
+    margin-bottom: 1.5rem;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #8B4513;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.section-icon {
+    font-size: 1.3rem;
+}
+
+/* Quick Navigation Grid */
+.quick-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.8rem;
+}
+
+.quick-nav-card {
+    background: white;
+    border-radius: 15px;
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.quick-nav-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    transition: all 0.3s ease;
+}
+
+.nav-card-red::before { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+.nav-card-purple::before { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+.nav-card-blue::before { background: linear-gradient(135deg, #3498db, #2980b9); }
+.nav-card-green::before { background: linear-gradient(135deg, #27ae60, #229954); }
+
+.quick-nav-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.nav-card-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.nav-card-content h4 {
+    margin: 0 0 0.3rem 0;
+    font-size: 0.9rem;
+    color: #333;
+    font-weight: 600;
+}
+
+.nav-card-content p {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #666;
+    line-height: 1.3;
+}
+
+/* Content Grid */
+.dashboard-content-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+/* Content Cards */
+.content-card {
+    background: white;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.content-card:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    background: rgba(249, 249, 249, 0.5);
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #333;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-header h3 span {
+    font-size: 1.1rem;
+}
+
+.card-action-btn {
+    background: none;
+    border: 1px solid rgba(52, 152, 219, 0.3);
+    color: #3498db;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.card-action-btn:hover {
+    background: #3498db;
+    color: white;
+    transform: translateY(-1px);
+}
+
+.card-content {
+    padding: 1rem 1.2rem;
+    min-height: 120px;
+}
+
+/* Notification Items */
+.notification-item-small {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    margin-bottom: 0.5rem;
+}
+
+.notification-item-small:hover {
+    background: rgba(52, 152, 219, 0.05);
+}
+
+.notification-item-small.unread {
+    background: rgba(52, 152, 219, 0.08);
+    border-left: 3px solid #3498db;
+}
+
+.notif-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.notif-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.notif-text {
+    font-size: 0.85rem;
+    color: #333;
+    margin-bottom: 0.2rem;
+    line-height: 1.3;
+}
+
+.notif-time {
+    font-size: 0.7rem;
+    color: #666;
+}
+
+.unread-dot {
+    width: 6px;
+    height: 6px;
+    background: #3498db;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Thread Items */
+.thread-item-small {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 0.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.thread-item-small:hover {
+    background: rgba(155, 89, 182, 0.05);
+    border-color: rgba(155, 89, 182, 0.2);
+    transform: translateX(2px);
+}
+
+.thread-item-small.clan-thread:hover {
+    background: rgba(52, 152, 219, 0.05);
+    border-color: rgba(52, 152, 219, 0.2);
+}
+
+.thread-small-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(155, 89, 182, 0.1);
+    border-radius: 8px;
+}
+
+.thread-item-small.clan-thread .thread-small-icon {
+    background: rgba(52, 152, 219, 0.1);
+}
+
+.thread-small-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.thread-small-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.3rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+}
+
+.thread-small-meta {
+    font-size: 0.7rem;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.thread-small-stats {
+    color: #3498db;
+    font-weight: 600;
+}
+
+/* Daily Tip */
+.daily-tip-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.5rem;
+}
+
+.tip-icon {
+    font-size: 2.5rem;
+    flex-shrink: 0;
+}
+
+.tip-text h4 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.tip-text p {
+    margin: 0;
+    color: #666;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+/* Quick Actions */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.8rem;
+}
+
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: white;
+    font-weight: 600;
+    text-align: center;
+}
+
+.action-red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+.action-green { background: linear-gradient(135deg, #27ae60, #229954); }
+.action-purple { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+.action-blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+
+.quick-action-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.action-icon {
+    font-size: 1.5rem;
+}
+
+.action-text {
+    font-size: 0.8rem;
+    line-height: 1.2;
+}
+
+/* States */
+.loading-state, .empty-state, .error-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.dashboard-loading {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #666;
+}
+
+.loading-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    animation: pulse 2s infinite;
+}
+
+.dashboard-loading h2 {
+    color: #8B4513;
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+}
+
+.join-clan-btn {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    border: none;
+    padding: 0.6rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.join-clan-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
+}
+
+/* Animations */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ===============================================
+   RESPONSIVE DESIGN - Mobile First
+   =============================================== */
+
+/* Small Mobile (320px+) */
+@media (max-width: 480px) {
+    .dashboard-container {
+        gap: 1rem;
+    }
+    
+    .dashboard-welcome {
+        padding: 1rem;
+    }
+    
+    .welcome-title {
+        font-size: 1.2rem;
+    }
+    
+    .welcome-subtitle {
+        font-size: 0.85rem;
+    }
+    
+    .quick-nav-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+    }
+    
+    .quick-nav-card {
+        padding: 0.8rem;
+    }
+    
+    .nav-card-icon {
+        font-size: 1.5rem;
+    }
+    
+    .nav-card-content h4 {
+        font-size: 0.8rem;
+    }
+    
+    .nav-card-content p {
+        font-size: 0.7rem;
+    }
+    
+    .card-header {
+        padding: 0.8rem 1rem;
+    }
+    
+    .card-content {
+        padding: 0.8rem 1rem;
+        min-height: 100px;
+    }
+    
+    .quick-actions-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+    }
+    
+    .quick-action-btn {
+        padding: 0.8rem;
+    }
+    
+    .action-icon {
+        font-size: 1.3rem;
+    }
+    
+    .action-text {
+        font-size: 0.75rem;
+    }
+}
+
+/* Tablet (768px+) */
+@media (min-width: 768px) {
+    .dashboard-container {
+        gap: 2rem;
+    }
+    
+    .dashboard-welcome {
+        padding: 2rem;
+    }
+    
+    .welcome-title {
+        font-size: 1.8rem;
+    }
+    
+    .quick-nav-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .dashboard-content-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+    
+    .quick-actions-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Desktop (1024px+) */
+@media (min-width: 1024px) {
+    .dashboard-container {
+        gap: 2.5rem;
+    }
+    
+    .dashboard-content-grid {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+    
+    .content-card {
+        min-height: 250px;
+    }
+    
+    .card-content {
+        min-height: 150px;
+    }
+}

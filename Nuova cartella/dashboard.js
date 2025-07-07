@@ -1,12 +1,11 @@
 // ===============================================
-// DASHBOARD MODULE - Modern Dark Theme Design
+// DASHBOARD MODULE - Modern Mobile-First Design
 // ===============================================
 
 class DashboardManager {
     constructor() {
         this.latestThreadsCache = new Map();
         this.refreshInterval = null;
-        this.animationTimers = [];
     }
 
     // Carica dashboard principale
@@ -25,56 +24,16 @@ class DashboardManager {
 
         threadList.innerHTML = this.getDashboardHTML(userName, userClan, userRole);
 
-        // Carica contenuti dinamici con animazioni sequential
-        this.loadContentWithAnimations();
+        // Carica contenuti dinamici
+        setTimeout(() => {
+            this.loadLatestNotifications();
+            this.loadLatestGeneralThreads();
+            this.loadLatestClanThreads();
+            this.loadDailyTip();
+        }, 100);
 
         // Setup auto-refresh ogni 30 secondi
         this.setupAutoRefresh();
-    }
-
-    // Carica contenuti con animazioni sequenziali
-    loadContentWithAnimations() {
-        const animations = [
-            { delay: 100, fn: () => this.loadLatestNotifications() },
-            { delay: 300, fn: () => this.loadLatestGeneralThreads() },
-            { delay: 500, fn: () => this.loadLatestClanThreads() },
-            { delay: 700, fn: () => this.animateElements() }
-        ];
-
-        animations.forEach(({ delay, fn }) => {
-            const timer = setTimeout(fn, delay);
-            this.animationTimers.push(timer);
-        });
-    }
-
-    // Anima elementi della dashboard
-    animateElements() {
-        // Anima le cards con delay progressivo
-        const cards = document.querySelectorAll('.content-card');
-        cards.forEach((card, index) => {
-            setTimeout(() => {
-                card.style.animation = 'slideInUp 0.6s ease forwards';
-                card.style.opacity = '1';
-            }, index * 150);
-        });
-
-        // Anima i quick nav cards
-        const navCards = document.querySelectorAll('.quick-nav-card');
-        navCards.forEach((card, index) => {
-            setTimeout(() => {
-                card.style.animation = 'fadeInScale 0.5s ease forwards';
-                card.style.opacity = '1';
-            }, index * 100);
-        });
-
-        // Anima le action buttons
-        const actionBtns = document.querySelectorAll('.quick-action-btn');
-        actionBtns.forEach((btn, index) => {
-            setTimeout(() => {
-                btn.style.animation = 'bounceIn 0.6s ease forwards';
-                btn.style.opacity = '1';
-            }, index * 120);
-        });
     }
 
     // HTML principale della dashboard
@@ -82,7 +41,6 @@ class DashboardManager {
         return `
             <div class="dashboard-container">
                 ${this.getWelcomeSection(userName, userClan, userRole)}
-                ${this.getStatsOverview()}
                 ${this.getQuickNavigationSection()}
                 ${this.getContentGrid()}
                 ${this.getQuickActionsSection(userClan)}
@@ -90,21 +48,20 @@ class DashboardManager {
         `;
     }
 
-    // Sezione benvenuto migliorata
+    // Sezione benvenuto
     getWelcomeSection(userName, userClan, userRole) {
         const welcomeMessage = this.getWelcomeMessage();
         const roleDisplay = this.getRoleDisplay(userRole);
 
         return `
             <div class="dashboard-welcome">
-                <div class="welcome-bg-particles"></div>
                 <div class="welcome-bg-icon">🏰</div>
                 <div class="welcome-content">
-                    <h2 class="welcome-title animate-text">
-                        ${welcomeMessage}, <span class="username-highlight">${userName}</span>! ${roleDisplay}
+                    <h2 class="welcome-title">
+                        ${welcomeMessage}, ${userName}! ${roleDisplay}
                     </h2>
                     <p class="welcome-subtitle">
-                        🛡️ Benvenuto nel tuo comando, guerriero! Gestisci il tuo impero e coordina le strategie con la community.
+                        Benvenuto nel forum di Hustle Castle Council! Rimani aggiornato su eventi, strategie e novità della community.
                     </p>
                     ${this.getClanStatusCard(userClan)}
                 </div>
@@ -112,50 +69,13 @@ class DashboardManager {
         `;
     }
 
-    // Nuova sezione statistiche overview
-    getStatsOverview() {
-        return `
-            <div class="stats-overview">
-                <div class="stat-card stat-threads">
-                    <div class="stat-icon">📝</div>
-                    <div class="stat-content">
-                        <div class="stat-number" id="total-threads">-</div>
-                        <div class="stat-label">Thread Totali</div>
-                    </div>
-                </div>
-                <div class="stat-card stat-messages">
-                    <div class="stat-icon">💬</div>
-                    <div class="stat-content">
-                        <div class="stat-number" id="total-messages">-</div>
-                        <div class="stat-label">Messaggi Oggi</div>
-                    </div>
-                </div>
-                <div class="stat-card stat-users">
-                    <div class="stat-icon">👥</div>
-                    <div class="stat-content">
-                        <div class="stat-number" id="online-users">-</div>
-                        <div class="stat-label">Utenti Online</div>
-                    </div>
-                </div>
-                <div class="stat-card stat-clan">
-                    <div class="stat-icon">🏰</div>
-                    <div class="stat-content">
-                        <div class="stat-number" id="clan-power">-</div>
-                        <div class="stat-label">Potere Clan</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Navigazione rapida migliorata
+    // Navigazione rapida
     getQuickNavigationSection() {
         return `
             <div class="dashboard-section">
                 <h3 class="section-title">
                     <span class="section-icon">🧭</span>
-                    <span class="section-text">Navigazione Rapida</span>
-                    <div class="section-line"></div>
+                    Navigazione Rapida
                 </h3>
                 <div class="quick-nav-grid">
                     ${this.getQuickNavCards()}
@@ -164,69 +84,68 @@ class DashboardManager {
         `;
     }
 
-    // Griglia contenuti principali (senza consiglio del giorno)
+    // Griglia contenuti principali
     getContentGrid() {
         return `
             <div class="dashboard-content-grid">
                 <div class="content-card notifications-card">
                     <div class="card-header">
-                        <h3><span class="card-icon">🔔</span> Ultime Notifiche</h3>
+                        <h3><span>🔔</span> Ultime Notifiche</h3>
                         <button class="card-action-btn" onclick="toggleNotificationsPanel()">
-                            <span class="btn-text">Vedi Tutte</span>
-                            <span class="btn-icon">→</span>
+                            Vedi Tutte
                         </button>
                     </div>
                     <div id="dashboard-notifications" class="card-content">
-                        <div class="loading-state">
-                            <div class="loading-spinner"></div>
-                            <span>Caricamento...</span>
-                        </div>
+                        <div class="loading-state">🔄 Caricamento...</div>
                     </div>
                 </div>
 
                 <div class="content-card threads-card">
                     <div class="card-header">
-                        <h3><span class="card-icon">🌍</span> Thread Generali</h3>
+                        <h3><span>🌍</span> Thread Generali</h3>
                         <button class="card-action-btn" onclick="switchSection('eventi')">
-                            <span class="btn-text">Vedi Tutti</span>
-                            <span class="btn-icon">→</span>
+                            Vedi Tutti
                         </button>
                     </div>
                     <div id="dashboard-general-threads" class="card-content">
-                        <div class="loading-state">
-                            <div class="loading-spinner"></div>
-                            <span>Caricamento...</span>
-                        </div>
+                        <div class="loading-state">🔄 Caricamento...</div>
                     </div>
                 </div>
 
                 <div class="content-card clan-card">
                     <div class="card-header">
-                        <h3><span class="card-icon">🏰</span> Attività Clan</h3>
+                        <h3><span>🏰</span> Thread Clan</h3>
                         <button class="card-action-btn" onclick="switchSection('clan-chat')">
-                            <span class="btn-text">Vai al Clan</span>
-                            <span class="btn-icon">→</span>
+                            Vai al Clan
                         </button>
                     </div>
                     <div id="dashboard-clan-threads" class="card-content">
-                        <div class="loading-state">
-                            <div class="loading-spinner"></div>
-                            <span>Caricamento...</span>
-                        </div>
+                        <div class="loading-state">🔄 Caricamento...</div>
+                    </div>
+                </div>
+
+                <div class="content-card tip-card">
+                    <div class="card-header">
+                        <h3><span>💡</span> Consiglio del Giorno</h3>
+                        <button class="card-action-btn" onclick="dashboardManager.loadDailyTip()">
+                            🔄
+                        </button>
+                    </div>
+                    <div id="dashboard-daily-tip" class="card-content">
+                        <div class="loading-state">🔄 Caricamento...</div>
                     </div>
                 </div>
             </div>
         `;
     }
 
-    // Azioni rapide migliorate
+    // Azioni rapide
     getQuickActionsSection(userClan) {
         return `
             <div class="dashboard-section">
                 <h3 class="section-title">
                     <span class="section-icon">⚡</span>
-                    <span class="section-text">Azioni Rapide</span>
-                    <div class="section-line"></div>
+                    Azioni Rapide
                 </h3>
                 <div class="quick-actions-grid">
                     ${this.getQuickActionButtons(userClan)}
@@ -235,104 +154,64 @@ class DashboardManager {
         `;
     }
 
-    // Cards navigazione rapida con design aggiornato
+    // Cards navigazione rapida
     getQuickNavCards() {
         const navItems = [
-            { icon: '📅', title: 'Eventi', subtitle: 'Scopri eventi in corso', section: 'eventi', gradient: 'red' },
-            { icon: '⚔️', title: 'Oggetti', subtitle: 'Guide armi e armature', section: 'oggetti', gradient: 'purple' },
-            { icon: '🆕', title: 'Novità', subtitle: 'Ultimi aggiornamenti', section: 'novita', gradient: 'blue' },
-            { icon: '💬', title: 'Chat', subtitle: 'Chiacchiera con tutti', section: 'chat-generale', gradient: 'green' }
+            { icon: '📅', title: 'Eventi', subtitle: 'Scopri eventi in corso', section: 'eventi', color: 'red' },
+            { icon: '⚔️', title: 'Oggetti', subtitle: 'Guide armi e armature', section: 'oggetti', color: 'purple' },
+            { icon: '🆕', title: 'Novità', subtitle: 'Ultimi aggiornamenti', section: 'novita', color: 'blue' },
+            { icon: '💬', title: 'Chat', subtitle: 'Chiacchiera con tutti', section: 'chat-generale', color: 'green' }
         ];
 
         return navItems.map(item => `
-            <div class="quick-nav-card nav-card-${item.gradient}" onclick="switchSection('${item.section}')">
-                <div class="nav-card-glow"></div>
+            <div class="quick-nav-card nav-card-${item.color}" onclick="switchSection('${item.section}')">
                 <div class="nav-card-icon">${item.icon}</div>
                 <div class="nav-card-content">
                     <h4>${item.title}</h4>
                     <p>${item.subtitle}</p>
                 </div>
-                <div class="nav-card-arrow">→</div>
             </div>
         `).join('');
     }
 
-    // Bottoni azioni rapide aggiornati
+    // Bottoni azioni rapide
     getQuickActionButtons(userClan) {
         const actions = [
             {
-                icon: '🎯',
-                title: 'Strategie',
-                subtitle: 'Guide e tattiche',
+                icon: '📅',
+                title: 'Controlla Eventi',
                 action: "switchSection('eventi')",
-                gradient: 'red'
+                color: 'red'
             },
             {
                 icon: '💬',
-                title: 'Community',
-                subtitle: 'Unisciti alla chat',
+                title: 'Inizia Chat',
                 action: "switchSection('chat-generale')",
-                gradient: 'green'
+                color: 'green'
             },
             {
                 icon: '✍️',
-                title: 'Crea Thread',
-                subtitle: 'Condividi idee',
+                title: 'Nuovo Thread',
                 action: "showThreadCreationModal()",
-                gradient: 'purple'
+                color: 'purple'
             }
         ];
 
         if (userClan !== 'Nessuno') {
             actions.push({
                 icon: '🏰',
-                title: 'Clan Wars',
-                subtitle: 'Strategia clan',
-                action: "switchSection('clan-war')",
-                gradient: 'blue'
+                title: 'Chat Clan',
+                action: "switchSection('clan-chat')",
+                color: 'blue'
             });
         }
 
         return actions.map(action => `
-            <button class="quick-action-btn action-${action.gradient}" onclick="${action.action}">
-                <div class="action-glow"></div>
-                <div class="action-icon">${action.icon}</div>
-                <div class="action-content">
-                    <div class="action-title">${action.title}</div>
-                    <div class="action-subtitle">${action.subtitle}</div>
-                </div>
+            <button class="quick-action-btn action-${action.color}" onclick="${action.action}">
+                <span class="action-icon">${action.icon}</span>
+                <span class="action-text">${action.title}</span>
             </button>
         `).join('');
-    }
-
-    // Carica statistiche overview
-    loadStatsOverview() {
-        // Simula il caricamento delle statistiche
-        setTimeout(() => {
-            document.getElementById('total-threads').textContent = Math.floor(Math.random() * 200) + 150;
-            document.getElementById('total-messages').textContent = Math.floor(Math.random() * 50) + 25;
-            document.getElementById('online-users').textContent = Math.floor(Math.random() * 20) + 5;
-            
-            const userClan = getCurrentUserClan();
-            if (userClan !== 'Nessuno') {
-                document.getElementById('clan-power').textContent = Math.floor(Math.random() * 5000) + 2000;
-            } else {
-                document.getElementById('clan-power').textContent = '-';
-            }
-
-            // Anima i numeri
-            this.animateNumbers();
-        }, 800);
-    }
-
-    // Anima i numeri delle statistiche
-    animateNumbers() {
-        const numbers = document.querySelectorAll('.stat-number');
-        numbers.forEach(num => {
-            if (num.textContent !== '-') {
-                num.style.animation = 'countUp 1s ease forwards';
-            }
-        });
     }
 
     // Carica ultime notifiche per dashboard
@@ -340,14 +219,14 @@ class DashboardManager {
         const container = document.getElementById('dashboard-notifications');
         
         if (!currentUser) {
-            container.innerHTML = this.getEmptyState('🔒', 'Accedi per vedere le notifiche');
+            container.innerHTML = '<div class="empty-state">🔒 Accedi per vedere le notifiche</div>';
             return;
         }
 
         const recentNotifications = notificationsData.slice(0, 3);
 
         if (recentNotifications.length === 0) {
-            container.innerHTML = this.getEmptyState('🔕', 'Nessuna notifica recente');
+            container.innerHTML = '<div class="empty-state">🔕 Nessuna notifica recente</div>';
             return;
         }
 
@@ -361,12 +240,12 @@ class DashboardManager {
                     </div>
                     <div class="notif-time">${formatTime(notif.timestamp)}</div>
                 </div>
-                ${!notif.read ? '<div class="unread-pulse"></div>' : ''}
+                ${!notif.read ? '<div class="unread-dot"></div>' : ''}
             </div>
         `).join('');
     }
 
-    // Carica ultimi thread generali con statistiche
+    // Carica ultimi thread generali
     async loadLatestGeneralThreads() {
         const container = document.getElementById('dashboard-general-threads');
         const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
@@ -379,15 +258,12 @@ class DashboardManager {
                 allThreads.push(...threads.map(t => ({...t, section})));
             }
 
-            // Carica anche le statistiche
-            this.loadStatsOverview();
-
             // Ordina per data e prendi i più recenti
             allThreads.sort((a, b) => b.createdAt - a.createdAt);
             const recentThreads = allThreads.slice(0, 4);
 
             if (recentThreads.length === 0) {
-                container.innerHTML = this.getEmptyState('📝', 'Nessun thread recente');
+                container.innerHTML = '<div class="empty-state">📝 Nessun thread recente</div>';
                 return;
             }
 
@@ -397,35 +273,30 @@ class DashboardManager {
                     <div class="thread-small-content">
                         <div class="thread-small-title">${thread.title}</div>
                         <div class="thread-small-meta">
-                            <span class="thread-author">${thread.author}</span>
-                            <span class="thread-time">${formatTime(thread.createdAt)}</span>
-                            <span class="thread-stats">💬 ${thread.replies || 0}</span>
+                            ${thread.author} • ${formatTime(thread.createdAt)}
+                            <span class="thread-small-stats">💬 ${thread.replies || 0}</span>
                         </div>
                     </div>
-                    <div class="thread-trending ${Math.random() > 0.5 ? 'hot' : ''}"></div>
                 </div>
             `).join('');
 
         } catch (error) {
             console.error('Errore caricamento thread generali:', error);
-            container.innerHTML = this.getErrorState();
+            container.innerHTML = '<div class="error-state">❌ Errore nel caricamento</div>';
         }
     }
 
-    // Carica ultimi thread clan migliorati
+    // Carica ultimi thread clan
     async loadLatestClanThreads() {
         const container = document.getElementById('dashboard-clan-threads');
         const userClan = getCurrentUserClan();
 
         if (userClan === 'Nessuno') {
             container.innerHTML = `
-                <div class="empty-state-enhanced">
-                    <div class="empty-icon">🏠</div>
-                    <div class="empty-title">Nessun Clan</div>
-                    <div class="empty-subtitle">Unisciti a un clan per accedere a contenuti esclusivi</div>
+                <div class="empty-state">
+                    🏠 Non hai un clan
                     <button class="join-clan-btn" onclick="switchSection('associa-clan')">
-                        <span>Trova un Clan</span>
-                        <span class="btn-arrow">→</span>
+                        Unisciti a un Clan
                     </button>
                 </div>
             `;
@@ -445,51 +316,75 @@ class DashboardManager {
             const recentClanThreads = allClanThreads.slice(0, 4);
 
             if (recentClanThreads.length === 0) {
-                container.innerHTML = this.getEmptyState('🏰', 'Nessuna attività clan recente');
+                container.innerHTML = '<div class="empty-state">🏰 Nessun thread clan recente</div>';
                 return;
             }
 
             container.innerHTML = recentClanThreads.map(thread => `
                 <div class="thread-item-small clan-thread" onclick="switchSection('${thread.section}'); setTimeout(() => openThread('${thread.id}', '${thread.section}'), 500)">
-                    <div class="thread-small-icon clan-icon">${this.getSectionIcon(thread.section)}</div>
+                    <div class="thread-small-icon">${this.getSectionIcon(thread.section)}</div>
                     <div class="thread-small-content">
                         <div class="thread-small-title">${thread.title}</div>
                         <div class="thread-small-meta">
-                            <span class="thread-author">${thread.author}</span>
-                            <span class="thread-time">${formatTime(thread.createdAt)}</span>
-                            <span class="thread-stats clan-stats">💬 ${thread.replies || 0}</span>
+                            ${thread.author} • ${formatTime(thread.createdAt)}
+                            <span class="thread-small-stats">💬 ${thread.replies || 0}</span>
                         </div>
                     </div>
-                    <div class="clan-badge">🏰</div>
                 </div>
             `).join('');
 
         } catch (error) {
             console.error('Errore caricamento thread clan:', error);
-            container.innerHTML = this.getErrorState();
+            container.innerHTML = '<div class="error-state">❌ Errore nel caricamento</div>';
         }
     }
 
-    // Utility per stati vuoti migliorati
-    getEmptyState(icon, message) {
-        return `
-            <div class="empty-state-enhanced">
-                <div class="empty-icon">${icon}</div>
-                <div class="empty-message">${message}</div>
+    // Carica consiglio del giorno
+    loadDailyTip() {
+        const container = document.getElementById('dashboard-daily-tip');
+        const tips = [
+            {
+                icon: '⚔️',
+                title: 'Strategia di Combattimento',
+                content: 'Bilancia sempre la tua formazione: un tank robusto, DPS equilibrati e un supporto possono fare la differenza!'
+            },
+            {
+                icon: '🏰',
+                title: 'Gestione del Castello',
+                content: 'Aggiorna sempre la sala del trono prima di potenziare altre stanze per massimizzare l\'efficienza.'
+            },
+            {
+                icon: '💎',
+                title: 'Gemme e Equipaggiamento',
+                content: 'Non vendere mai le gemme leggendarie! Potrebbero essere utili per upgrade futuri.'
+            },
+            {
+                icon: '🎯',
+                title: 'Eventi Speciali',
+                content: 'Partecipa sempre agli eventi temporanei: offrono ricompense uniche!'
+            },
+            {
+                icon: '👥',
+                title: 'Vita di Clan',
+                content: 'Coordina sempre con il tuo clan prima delle guerre. La comunicazione è la chiave!'
+            }
+        ];
+
+        const today = new Date().getDate();
+        const selectedTip = tips[today % tips.length];
+
+        container.innerHTML = `
+            <div class="daily-tip-content">
+                <div class="tip-icon">${selectedTip.icon}</div>
+                <div class="tip-text">
+                    <h4>${selectedTip.title}</h4>
+                    <p>${selectedTip.content}</p>
+                </div>
             </div>
         `;
     }
 
-    getErrorState() {
-        return `
-            <div class="error-state-enhanced">
-                <div class="error-icon">⚠️</div>
-                <div class="error-message">Errore nel caricamento</div>
-            </div>
-        `;
-    }
-
-    // Utility functions aggiornate
+    // Utility functions
     getWelcomeMessage() {
         const hour = new Date().getHours();
         if (hour < 12) return '🌅 Buongiorno';
@@ -499,8 +394,8 @@ class DashboardManager {
 
     getRoleDisplay(role) {
         switch (role) {
-            case USER_ROLES.SUPERUSER: return '<span class="role-badge role-super">👑 IMPERATORE</span>';
-            case USER_ROLES.CLAN_MOD: return '<span class="role-badge role-mod">🛡️ COMANDANTE</span>';
+            case USER_ROLES.SUPERUSER: return '<span class="role-badge role-super">👑 SUPER</span>';
+            case USER_ROLES.CLAN_MOD: return '<span class="role-badge role-mod">🛡️ MOD</span>';
             default: return '<span class="role-badge role-user">⚔️ GUERRIERO</span>';
         }
     }
@@ -509,13 +404,11 @@ class DashboardManager {
         if (userClan !== 'Nessuno') {
             return `
                 <div class="clan-status-card clan-active">
-                    <div class="clan-glow"></div>
                     <div class="clan-icon">🏰</div>
                     <div class="clan-info">
-                        <div class="clan-name">${userClan}</div>
-                        <div class="clan-subtitle">Il tuo impero ti aspetta, comandante!</div>
+                        <strong>Clan: ${userClan}</strong>
+                        <p>Accedi alle sezioni dedicate del tuo clan</p>
                     </div>
-                    <div class="clan-power-indicator"></div>
                 </div>
             `;
         } else {
@@ -523,8 +416,8 @@ class DashboardManager {
                 <div class="clan-status-card clan-none">
                     <div class="clan-icon">⚠️</div>
                     <div class="clan-info">
-                        <div class="clan-name">Senza Alleanze</div>
-                        <div class="clan-subtitle">Unisciti a un clan per conquistare insieme!</div>
+                        <strong>Non hai un clan</strong>
+                        <p>Unisciti per accedere a funzionalità esclusive!</p>
                     </div>
                 </div>
             `;
@@ -565,19 +458,14 @@ class DashboardManager {
     getLoadingHTML() {
         return `
             <div class="dashboard-loading">
-                <div class="loading-castle">🏰</div>
-                <div class="loading-text">
-                    <h2>Preparando il Comando...</h2>
-                    <p>Caricamento della tua fortezza digitale</p>
-                </div>
-                <div class="loading-bar">
-                    <div class="loading-progress"></div>
-                </div>
+                <div class="loading-icon">⏳</div>
+                <h2>Caricamento Dashboard...</h2>
+                <p>Preparazione della tua area personale</p>
             </div>
         `;
     }
 
-    // Utility per ottenere thread (invariate)
+    // Utility per ottenere thread
     async getThreadsFromSection(section) {
         const dataPath = getDataPath(section, 'threads');
         if (!dataPath) return [];
@@ -630,17 +518,12 @@ class DashboardManager {
         }, 30000); // Refresh ogni 30 secondi
     }
 
-    // Cleanup migliorato
+    // Cleanup
     cleanup() {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
             this.refreshInterval = null;
         }
-        
-        // Pulisci i timer di animazione
-        this.animationTimers.forEach(timer => clearTimeout(timer));
-        this.animationTimers = [];
-        
         this.latestThreadsCache.clear();
     }
 }
