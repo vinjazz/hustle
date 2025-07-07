@@ -473,13 +473,37 @@ function showMentionAutocomplete(query, inputElement) {
 function positionAutocomplete(inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
     const rect = inputElement.getBoundingClientRect();
+    
+    // Calcola posizione ottimale
+    let top = rect.bottom + 5;
+    let left = rect.left;
+    
+    // Verifica se c'è spazio sotto, altrimenti metti sopra
+    const viewportHeight = window.innerHeight;
+    const autocompleteHeight = 200; // altezza massima stimata
+    
+    if (top + autocompleteHeight > viewportHeight) {
+        top = rect.top - autocompleteHeight - 5;
+    }
+    
+    // Verifica che non esca dai bordi laterali
+    const viewportWidth = window.innerWidth;
+    const autocompleteWidth = 250;
+    
+    if (left + autocompleteWidth > viewportWidth) {
+        left = viewportWidth - autocompleteWidth - 10;
+    }
+    
+    if (left < 10) {
+        left = 10;
+    }
 
     autocomplete.style.position = 'fixed';
-    autocomplete.style.left = rect.left + 'px';
-    autocomplete.style.top = (rect.bottom + 5) + 'px';
+    autocomplete.style.left = left + 'px';
+    autocomplete.style.top = top + 'px';
     autocomplete.style.width = Math.min(300, rect.width) + 'px';
+    autocomplete.style.maxWidth = '300px';
 }
-
 function updateAutocompleteSelection(suggestions, selectedIndex) {
     suggestions.forEach((s, i) => {
         s.classList.toggle('selected', i === selectedIndex);
@@ -4618,16 +4642,37 @@ async function updateUserAvatar(avatarUrl) {
 
 // Update user avatar display in UI
 function updateUserAvatarDisplay(avatarUrl) {
+    const avatarContainer = document.getElementById('userAvatar');
     const avatarImg = document.getElementById('userAvatarImg');
     const avatarDefault = document.getElementById('userAvatarDefault');
 
     if (avatarUrl) {
+        // Mostra immagine avatar
         avatarImg.src = avatarUrl;
         avatarImg.style.display = 'block';
+        avatarImg.style.position = 'absolute';
+        avatarImg.style.top = '0';
+        avatarImg.style.left = '0';
+        avatarImg.style.width = '100%';
+        avatarImg.style.height = '100%';
+        avatarImg.style.borderRadius = '50%';
+        avatarImg.style.objectFit = 'cover';
+        avatarImg.style.zIndex = '2';
+        
+        // Nascondi completamente il default
         avatarDefault.style.display = 'none';
+        avatarDefault.style.visibility = 'hidden';
+        avatarDefault.style.opacity = '0';
     } else {
+        // Nascondi immagine avatar
         avatarImg.style.display = 'none';
+        avatarImg.style.visibility = 'hidden';
+        avatarImg.src = '';
+        
+        // Mostra default
         avatarDefault.style.display = 'flex';
+        avatarDefault.style.visibility = 'visible';
+        avatarDefault.style.opacity = '1';
     }
 
     // Aggiorna anche nei dati utente correnti

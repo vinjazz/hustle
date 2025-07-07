@@ -2029,18 +2029,35 @@ body::before {
 
 /* AUTOCOMPLETE MENZIONI */
 .mention-autocomplete {
-    position: absolute;
+    position: fixed !important; /* Cambiato da absolute a fixed */
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     backdrop-filter: blur(15px);
-    z-index: 1000;
+    z-index: 10000 !important; /* Aumentato per essere sopra alle modali */
     max-height: 200px;
     overflow-y: auto;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
     display: none;
+    min-width: 250px;
 }
 
+/* Assicurati che le modali non coprano l'autocomplete */
+.thread-creation-modal {
+    z-index: 9999; /* Sotto l'autocomplete */
+}
+
+.login-modal {
+    z-index: 9998;
+}
+
+.avatar-modal {
+    z-index: 9997;
+}
+
+.image-modal {
+    z-index: 9996;
+}
 .mention-autocomplete.show {
     display: block;
 }
@@ -3305,5 +3322,73 @@ textarea:focus,
     
     .message-header, .comment-header {
         flex-wrap: wrap;
+    }
+}
+
+
+/* CORREZIONE AVATAR USER-INFO */
+.user-avatar {
+    position: relative !important;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--gradient-secondary);
+    margin: 0 auto 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    border: 3px solid var(--border);
+    overflow: hidden;
+}
+
+.user-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    z-index: 2 !important;
+}
+
+.user-avatar-default {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 24px !important;
+    color: white !important;
+    z-index: 1 !important;
+}
+
+/* RESPONSIVE CORRECTIONS */
+@media (max-width: 768px) {
+    .notifications-bell.user-logged-in {
+        top: 80px !important;
+        right: 80px !important;
+        width: 45px !important;
+        height: 45px !important;
+        font-size: 18px !important;
+    }
+    
+    .mention-autocomplete {
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .notifications-bell.user-logged-in {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 16px !important;
     }
 }
