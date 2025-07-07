@@ -283,7 +283,7 @@ body::before {
    5. STATUS INDICATORS E TOP BAR
    ======================================== */
 
-.connection-status, .message-counter {
+.connection-status, .message-counter, .notifications-bell {
     position: fixed;
     top: 20px;
     padding: 8px 16px;
@@ -307,6 +307,11 @@ body::before {
 
 .message-counter {
     right: 180px;
+    background: var(--gradient-primary);
+}
+
+.notifications-bell {
+    right: 260px;
     background: var(--gradient-primary);
 }
 
@@ -1428,7 +1433,7 @@ button:disabled {
 .notifications-bell {
     position: fixed !important;
     top: 20px !important;
-    right: 240px !important; 
+    right: 260px !important; 
     background: var(--gradient-secondary) !important;
     color: white !important;
     border: none !important;
