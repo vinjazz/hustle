@@ -170,6 +170,11 @@ const sectionConfig = {
         description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
         type: 'dashboard'
     },
+	'salotto': {
+        title: '🏰 Salotto',
+        description: 'Dove rilassarsi e parlare del più e del meno',
+        type: 'forum'
+    },
     'eventi': {
         title: '📅 Eventi',
         description: 'Scopri tutti gli eventi in corso e futuri di Hustle Castle Council',
@@ -1335,9 +1340,9 @@ function updateAdminSectionsAccess() {
         adminSection.style.display = 'block';
     } else {
         adminSection.style.display = 'none';
-        // Se si è in una sezione admin, torna agli eventi
+        // Se si è in una sezione admin, torna al salotto
         if (currentSection.startsWith('admin-')) {
-            switchSection('eventi');
+            switchSection('salotto');
         }
     }
 
@@ -1950,7 +1955,7 @@ function initializeLocalData() {
     }
 
     // Aggiungi thread di esempio per sezioni generali se non esistono
-    const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+    const sections = ['salotto', 'eventi', 'oggetti', 'novita', 'associa-clan'];
     sections.forEach(section => {
         const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
         if (threads.length === 0) {
