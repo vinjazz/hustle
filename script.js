@@ -196,13 +196,13 @@ const sectionConfig = {
         title: '👥 Gestione Utenti',
         description: 'Pannello amministrativo per gestire utenti e clan',
         type: 'admin',
-        requiredRole: USER_ROLES.superuser
+        requiredRole: USER_ROLES.SUPERUSER
     },
     'admin-clans': {
         title: '🏰 Gestione Clan',
         description: 'Creazione e gestione dei clan',
         type: 'admin',
-        requiredRole: USER_ROLES.superuser
+        requiredRole: USER_ROLES.SUPERUSER
     },
     'clan-moderation': {
         title: '🛡️ Moderazione Clan',
@@ -1059,15 +1059,17 @@ function handleUserLogin(user) {
         notificationsBell.classList.add('user-logged-in');
     }
 
-    // Aggiorna UI
+    
+
+    // Carica dati utente
+    loadUserProfile();
+	initializeNotifications(); 
+	    // Aggiorna UI
     updateUserInterface();
 
     // Setup presenza utente
     setupUserPresence();
 
-    // Carica dati utente
-    loadUserProfile();
-	initializeNotifications(); 
 
     // Carica lista utenti e notifiche dopo il login
     setTimeout(() => {
