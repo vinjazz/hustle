@@ -1469,7 +1469,54 @@ function handleSubmit() {
         handleRegister();
     }
 }
+// Login con email e password
+async function handleLogin() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
 
+    if (!email || !password) {
+        showError('Inserisci email e password');
+        return;
+    }
+
+    // Verifica reCAPTCHA solo se App Check è attivo
+    if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
+        if (!window.verifyRecaptcha()) {
+            showError('🤖 Completa la verifica reCAPTCHA');
+            return;
+        }
+    }
+
+    showLoading(true);
+    hideError();
+
+    try {
+        if (window.useFirebase && firebaseReady && signInWithEmailAndPassword) {
+            // Login Firebase
+            await signInWithEmailAndPassword(window.firebaseAuth, email, password);
+        } else {
+            // Login locale (demo)
+            await simulateLogin(email, password);
+        }
+
+        showSuccess('Login effettuato con successo!');
+
+        // Reset reCAPTCHA dopo successo (solo se attivo)
+        if (window.useFirebase && window.appCheckEnabled) {
+            window.resetRecaptcha();
+        }
+    } catch (error) {
+        console.error('Errore login:', error);
+        showError(getErrorMessage(error));
+
+        // Reset reCAPTCHA in caso di errore (solo se attivo)
+        if (window.useFirebase && window.appCheckEnabled) {
+            window.resetRecaptcha();
+        }
+    } finally {
+        showLoading(false);
+    }
+}
 // Login con Google
 // Login con Google
 async function handleGoogleLogin() {
