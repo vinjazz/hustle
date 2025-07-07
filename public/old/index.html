@@ -537,6 +537,8 @@
         let currentThread = null;
         let currentThreadId = null;
         let currentThreadSection = null;
+		// Flag per evitare listener multipli
+		let commentImageUploadInitialized = false;
 
         // Ruoli utente - DEVE essere definito prima di tutto
         const USER_ROLES = {
@@ -581,6 +583,9 @@
 		window.toggleCommentImageUpload = toggleCommentImageUpload;
 		window.handleCommentImageSelect = handleCommentImageSelect;
 		window.removeCommentSelectedImage = removeCommentSelectedImage;
+		window.handleCommentImageSelect = handleCommentImageSelect;
+		window.removeCommentSelectedImage = removeCommentSelectedImage;
+		window.cleanupCommentImageUpload = cleanupCommentImageUpload;
 
         // Funzioni per la gestione dei ruoli
         function getCurrentUserRole() {
@@ -1719,6 +1724,7 @@
 
             // Pulisci listeners precedenti
             cleanupListeners();
+			cleanupCommentImageUpload();
 
             currentSection = sectionKey;
 
@@ -3206,10 +3212,13 @@
                 threadContentEl.innerHTML = contentHtml;
 
                 // Carica commenti
-                loadThreadComments(threadId, section);
+				loadThreadComments(threadId, section);
 
-                // Chiudi menu mobile se aperto
-                closeMobileMenu();
+				// Reset flag per permettere nuovo setup nei commenti
+				commentImageUploadInitialized = false;
+
+				// Chiudi menu mobile se aperto
+				closeMobileMenu();
 
             } catch (error) {
                 console.error('Errore apertura thread:', error);
@@ -3224,10 +3233,13 @@
             document.getElementById('new-thread-btn').style.display = 'block';
             
             // Pulisci dati thread
-            currentThread = null;
-            currentThreadId = null;
-            currentThreadSection = null;
-            
+            cleanupCommentImageUpload();
+
+			// Pulisci dati thread
+			currentThread = null;
+			currentThreadId = null;
+			currentThreadSection = null;
+						
             // Ricarica contenuto se necessario
             if (currentSection && sectionConfig[currentSection]) {
                 const section = sectionConfig[currentSection];
@@ -3375,7 +3387,7 @@ function displayThreadComments(comments) {
 				return;
 			}
 
-			const commentBtn = document.querySelector('.comment-input button');
+			const commentBtn = document.getElementById('submit-comment-btn');
 			const progressContainer = document.getElementById('comment-upload-progress');
 			
 			commentBtn.disabled = true;
@@ -3764,9 +3776,12 @@ function displayThreadComments(comments) {
                     }
                 });
                 threadListeners = {};
-            } catch (error) {
-                console.error('Errore pulizia listeners:', error);
-            }
+
+				// Pulisci upload commenti
+				cleanupCommentImageUpload();
+				} catch (error) {
+					console.error('Errore pulizia listeners:', error);
+				}
         }
 
         // Event listeners
@@ -3855,12 +3870,98 @@ function toggleCommentImageUpload() {
     const uploadSection = document.getElementById('comment-image-upload');
     const isVisible = uploadSection.classList.contains('show');
     
+    console.log('📷 Toggle upload commento, visibile:', isVisible);
+    
     if (isVisible) {
         uploadSection.classList.remove('show');
         removeCommentSelectedImage();
+        console.log('📷 Sezione upload nascosta');
     } else {
         uploadSection.classList.add('show');
-        setupCommentImageUpload();
+        // Setup solo se non è già stato fatto
+        if (!commentImageUploadInitialized) {
+            setupCommentImageUploadSafe();
+        }
+        console.log('📷 Sezione upload mostrata');
+    }
+}
+
+// Setup comment image upload SICURO (previene doppi listener)
+function setupCommentImageUploadSafe() {
+    const imageInput = document.getElementById('comment-image-input');
+    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+    
+    if (!imageInput || !imageLabel) {
+        console.log('❌ Elementi upload commento non trovati');
+        return;
+    }
+    
+    // Rimuovi TUTTI i listener esistenti prima di aggiungerne di nuovi
+    cleanupCommentImageListeners();
+    
+    console.log('🔧 Setup listener upload commento (SAFE)');
+    
+    // Aggiungi listener per il click sulla label
+    const clickHandler = () => {
+        console.log('🖱️ Click su label upload');
+        imageInput.click();
+    };
+    
+    // Aggiungi listener per la selezione file
+    const changeHandler = (event) => {
+        console.log('📁 File selezionato tramite input');
+        handleCommentImageSelect(event);
+    };
+    
+    // Salva riferimenti per cleanup futuro
+    imageLabel._commentClickHandler = clickHandler;
+    imageInput._commentChangeHandler = changeHandler;
+    
+    // Aggiungi listener
+    imageLabel.addEventListener('click', clickHandler);
+    imageInput.addEventListener('change', changeHandler);
+    
+    commentImageUploadInitialized = true;
+    console.log('✅ Listener upload commento configurati');
+}
+
+// Pulisci tutti i listener per evitare duplicati
+function cleanupCommentImageListeners() {
+    const imageInput = document.getElementById('comment-image-input');
+    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+    
+    if (imageInput && imageInput._commentChangeHandler) {
+        imageInput.removeEventListener('change', imageInput._commentChangeHandler);
+        delete imageInput._commentChangeHandler;
+        console.log('🧹 Rimosso listener change esistente');
+    }
+    
+    if (imageLabel && imageLabel._commentClickHandler) {
+        imageLabel.removeEventListener('click', imageLabel._commentClickHandler);
+        delete imageLabel._commentClickHandler;
+        console.log('🧹 Rimosso listener click esistente');
+    }
+}
+
+// Pulisci tutto quando si chiude il thread o si cambia sezione
+function cleanupCommentImageUpload() {
+    console.log('🧹 Cleanup completo upload commenti');
+    cleanupCommentImageListeners();
+    commentImageUploadInitialized = false;
+    removeCommentSelectedImage();
+    
+    const uploadSection = document.getElementById('comment-image-upload');
+    if (uploadSection) {
+        uploadSection.classList.remove('show');
+    }
+}
+function setupCommentImageUploadImmediate() {
+    const imageInput = document.getElementById('comment-image-input');
+    const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
+    
+    if (imageInput && imageLabel) {
+        imageInput.addEventListener('change', handleCommentImageSelect);
+        imageLabel.addEventListener('click', () => imageInput.click());
     }
 }
 
@@ -3869,22 +3970,33 @@ function setupCommentImageUpload() {
     const imageInput = document.getElementById('comment-image-input');
     const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
     
-    // Remove existing listeners
-    imageInput.removeEventListener('change', handleCommentImageSelect);
-    imageLabel.removeEventListener('click', () => imageInput.click());
-    
-    // Add new listeners
-    imageInput.addEventListener('change', handleCommentImageSelect);
-    imageLabel.addEventListener('click', () => imageInput.click());
+    if (imageInput && imageLabel) {
+        try {
+            imageInput.removeEventListener('change', handleCommentImageSelect);
+            imageLabel.removeEventListener('click', () => imageInput.click());
+        } catch (e) {
+            // Ignora errori se i listener non esistevano
+        }
+        
+        imageInput.addEventListener('change', handleCommentImageSelect);
+        imageLabel.addEventListener('click', () => imageInput.click());
+    }
 }
 
 // Handle comment image selection
 function handleCommentImageSelect(event) {
+	console.log('🖼️ Selezione immagine commento avviata');
+    
     const file = event.target.files[0];
     const preview = document.getElementById('comment-image-preview');
     const progressContainer = document.getElementById('comment-upload-progress');
     
-    if (!file) return;
+     if (!file) {
+        console.log('❌ Nessun file selezionato');
+        return;
+    }
+    
+    console.log('📁 File selezionato:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
