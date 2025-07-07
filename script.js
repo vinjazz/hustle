@@ -4442,7 +4442,7 @@ function createClanBadgeHTML(clan) {
 }
 
 // Get user display name with clan
-function getUserDisplayName(user) {
+function getUserDisplayNameWithClan(user) {
     const clan = user.clan && user.clan !== 'Nessuno' ? ` [${user.clan}]` : '';
     return `${user.username}${clan}`;
 }
