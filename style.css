@@ -1447,6 +1447,13 @@ button:disabled {
     opacity: 0 !important;
 }
 
+#notificationsBell {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+
 .notifications-bell.user-logged-in {
     display: flex !important;
     visibility: visible !important;
@@ -1457,6 +1464,8 @@ button:disabled {
     transform: scale(1.1) !important;
     box-shadow: 0 6px 20px rgba(45, 130, 181, 0.4) !important;
 }
+
+
 
 .notification-badge {
     position: absolute;
