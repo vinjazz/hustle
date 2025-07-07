@@ -2111,6 +2111,373 @@ function closeMobileMenu() {
     document.body.style.overflow = 'auto';
 }
 
+// Carica dashboard
+function loadDashboard() {
+    const threadList = document.getElementById('thread-list');
+
+    // Se l'utente non è ancora loggato, mostra messaggio di caricamento
+    if (!currentUser) {
+        threadList.innerHTML = `
+                    <div style="text-align: center; padding: 60px; color: #666;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
+                        <h2 style="color: #8B4513; margin-bottom: 10px;">Caricamento Dashboard...</h2>
+                        <p>Preparazione della tua area personale</p>
+                    </div>
+                `;
+        return;
+    }
+
+    const userName = currentUser.displayName || 'Guerriero';
+    const userClan = getCurrentUserClan();
+    const userRole = getCurrentUserRole();
+
+    let welcomeMessage = '';
+    const currentHour = new Date().getHours();
+    if (currentHour < 12) {
+        welcomeMessage = '🌅 Buongiorno';
+    } else if (currentHour < 18) {
+        welcomeMessage = '☀️ Buon pomeriggio';
+    } else {
+        welcomeMessage = '🌙 Buonasera';
+    }
+
+    let roleDisplay = '';
+    switch (userRole) {
+    case USER_ROLES.SUPERUSER:
+        roleDisplay = '<span class="user-role role-superuser">👑 SUPER ADMIN</span>';
+        break;
+    case USER_ROLES.CLAN_MOD:
+        roleDisplay = '<span class="user-role role-moderator">🛡️ MODERATORE</span>';
+        break;
+    default:
+        roleDisplay = '<span class="user-role role-user">⚔️ GUERRIERO</span>';
+    }
+
+    threadList.innerHTML = `
+                <div style="display: grid; gap: 25px;">
+                    <!-- Welcome Section -->
+                    <div style="background: linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(244, 164, 96, 0.1) 100%); border-radius: 15px; padding: 25px; border: 2px solid rgba(218, 165, 32, 0.3); position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.1;">🏰</div>
+                        <h2 style="color: #8B4513; margin-bottom: 15px; font-size: 28px;">
+                            ${welcomeMessage}, ${userName}! ${roleDisplay}
+                        </h2>
+                        <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
+                            Benvenuto nel forum ufficiale di Hustle Castle Council! Qui puoi discutere strategie, 
+                            condividere esperienze e rimanere aggiornato sugli ultimi eventi del gioco.
+                        </p>
+                        ${userClan !== 'Nessuno' ? `
+                            <div style="background: rgba(52, 152, 219, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #3498db;">
+                                <strong style="color: #3498db;">🏰 Clan: ${userClan}</strong>
+                                <p style="color: #666; font-size: 14px; margin-top: 5px;">Accedi alle sezioni dedicate del tuo clan dal menu laterale</p>
+                            </div>
+                        ` : `
+                            <div style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                <strong style="color: #e68900;">⚠️ Non hai un clan</strong>
+                                <p style="color: #666; font-size: 14px; margin-top: 5px;">Unisciti a un clan per accedere a funzionalità esclusive!</p>
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- Quick Navigation -->
+                    <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                        <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                            <span>🧭</span> Navigazione Rapida
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div class="dashboard-card" onclick="switchSection('eventi')" style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">📅</div>
+                                <h4 style="margin-bottom: 8px;">Eventi</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Scopri eventi in corso</p>
+                            </div>
+                            <div class="dashboard-card" onclick="switchSection('oggetti')" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">⚔️</div>
+                                <h4 style="margin-bottom: 8px;">Oggetti</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Guide su armi e armature</p>
+                            </div>
+                            <div class="dashboard-card" onclick="switchSection('novita')" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">🆕</div>
+                                <h4 style="margin-bottom: 8px;">Novità</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Ultimi aggiornamenti</p>
+                            </div>
+							<div class="dashboard-card" onclick="switchSection('associa-clan')" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;"> 🏠</div>
+                                <h4 style="margin-bottom: 8px;">Associa Clan</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Richiedi di associarti ad un clan</p>
+                            </div>
+                            <div class="dashboard-card" onclick="switchSection('chat-generale')" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; padding: 20px; border-radius: 10px; cursor: pointer; transition: transform 0.3s ease; text-align: center;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">💬</div>
+                                <h4 style="margin-bottom: 8px;">Chat</h4>
+                                <p style="font-size: 12px; opacity: 0.9;">Chiacchiera con la community</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats and Tips Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Forum Stats -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>📊</span> Statistiche Forum
+                            </h3>
+                            <div style="display: grid; gap: 15px;">
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">📝 Thread Totali</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalThreads}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">💬 Messaggi Chat</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalMessages}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">👥 Utenti Registrati</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalUsers}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(218, 165, 32, 0.1); border-radius: 8px;">
+                                    <span style="color: #666;">🏰 Clan Attivi</span>
+                                    <strong style="color: #8B4513;">${getForumStats().totalClans}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Tips -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>💡</span> Suggerimenti Rapidi
+                            </h3>
+                            <div style="display: grid; gap: 12px;">
+                                <div style="padding: 12px; background: rgba(46, 204, 113, 0.1); border-radius: 8px; border-left: 4px solid #2ecc71;">
+                                    <strong style="color: #27ae60; font-size: 14px;">🎯 Partecipa alle Discussioni</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Condividi le tue strategie nella sezione Eventi</p>
+                                </div>
+                                <div style="padding: 12px; background: rgba(52, 152, 219, 0.1); border-radius: 8px; border-left: 4px solid #3498db;">
+                                    <strong style="color: #2980b9; font-size: 14px;">🏰 Unisciti a un Clan</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Accedi a chat e funzionalità esclusive</p>
+                                </div>
+                                <div style="padding: 12px; background: rgba(155, 89, 182, 0.1); border-radius: 8px; border-left: 4px solid #9b59b6;">
+                                    <strong style="color: #8e44ad; font-size: 14px;">⚔️ Condividi Equipaggiamenti</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Mostra le tue armi leggendarie!</p>
+                                </div>
+                                <div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
+                                    <strong style="color: #d68910; font-size: 14px;">📢 Rimani Aggiornato</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Controlla regolarmente le Novità</p>
+                                </div>
+								<div style="padding: 12px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; border-left: 4px solid #e67e22;">
+                                    <strong style="color: #d68910; font-size: 14px;">📢 Unisciti ad un clan</strong>
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Cerca il tuo clan per e unisciti al gruppo</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions & Tips -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Quick Actions -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>⚡</span> Azioni Rapide
+                            </h3>
+                            <div style="display: grid; gap: 12px;">
+                                <button onclick="switchSection('eventi')" class="quick-action-btn" style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">📅</span>
+                                    <span>Controlla Eventi Attuali</span>
+                                </button>
+                                <button onclick="switchSection('chat-generale')" class="quick-action-btn" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">💬</span>
+                                    <span>Inizia una Conversazione</span>
+                                </button>
+                                <button onclick="showThreadCreationModal()" class="quick-action-btn" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">✍️</span>
+                                    <span>Crea Nuovo Thread</span>
+                                </button>
+                                ${userClan !== 'Nessuno' ? `
+                                    <button onclick="switchSection('clan-chat')" class="quick-action-btn" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 20px;">🏰</span>
+                                        <span>Chat del Clan</span>
+                                    </button>
+                                ` : `
+                                    <button onclick="alert('Unisciti a un clan per accedere a questa funzionalità!')" class="quick-action-btn" style="background: linear-gradient(135deg, #95a5a6, #7f8c8d); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px; opacity: 0.6;">
+                                        <span style="font-size: 20px;">🔒</span>
+                                        <span>Chat del Clan (Locked)</span>
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Daily Tips -->
+                        <div style="background: rgba(255, 255, 255, 0.8); border-radius: 15px; padding: 25px; border: 1px solid rgba(218, 165, 32, 0.3);">
+                            <h3 style="color: #8B4513; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                <span>🎯</span> Consiglio del Giorno
+                            </h3>
+                            <div id="daily-tip" style="padding: 20px; background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(155, 89, 182, 0.1)); border-radius: 10px; border-left: 4px solid #3498db;">
+                                <!-- Il consiglio verrà inserito qui -->
+                            </div>
+                            <div style="margin-top: 15px; text-align: center;">
+                                <button onclick="loadDailyTip()" style="background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db; color: #3498db; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.3s ease;">
+                                    🔄 Nuovo Consiglio
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Community Highlights -->
+                    <div style="background: linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(39, 174, 96, 0.1)); border-radius: 15px; padding: 25px; border: 2px solid #27ae60;">
+                        <h3 style="color: #27ae60; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                            <span>🌟</span> In Evidenza nella Community
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">🔥</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Thread Più Visto</h4>
+                                <p style="font-size: 12px; color: #666;">Guide alle Gemme Leggendarie</p>
+                                <p style="font-size: 11px; color: #999;">445 visualizzazioni</p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">👑</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Utente del Mese</h4>
+                                <p style="font-size: 12px; color: #666;">ProPlayer123</p>
+                                <p style="font-size: 11px; color: #999;">67 contributi</p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid rgba(39, 174, 96, 0.3);">
+                                <div style="font-size: 48px; margin-bottom: 10px;">🏆</div>
+                                <h4 style="color: #27ae60; margin-bottom: 8px;">Clan Più Attivo</h4>
+                                <p style="font-size: 12px; color: #666;">Draghi Rossi</p>
+                                <p style="font-size: 11px; color: #999;">25 membri attivi</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+    // Aggiungi stili hover per le dashboard cards
+    const style = document.createElement('style');
+    style.textContent = `
+                .dashboard-card:hover {
+                    transform: translateY(-5px) scale(1.02);
+                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+                }
+            `;
+    document.head.appendChild(style);
+
+    // Carica consigli del giorno dopo un breve delay
+    setTimeout(loadDailyTip, 300);
+}
+
+// Ottieni statistiche del forum
+function getForumStats() {
+    let totalThreads = 0;
+    let totalMessages = 0;
+    let totalUsers = 0;
+    let totalClans = 0;
+
+    try {
+        if (window.useFirebase) {
+            // In modalità Firebase, restituisci valori placeholder
+            return {
+                totalThreads: '50+',
+                totalMessages: '200+',
+                totalUsers: '15+',
+                totalClans: '5+'
+            };
+        } else {
+            // Modalità locale - conta i dati reali
+            const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+            sections.forEach(section => {
+                const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
+                totalThreads += threads.length;
+            });
+
+            const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
+            totalMessages += messages.length;
+
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            totalUsers = Object.keys(users).length;
+
+            const clanSet = new Set();
+            Object.values(users).forEach(user => {
+                if (user.clan && user.clan !== 'Nessuno') {
+                    clanSet.add(user.clan);
+                }
+            });
+            totalClans = clanSet.size;
+        }
+    } catch (error) {
+        console.error('Errore calcolo statistiche:', error);
+    }
+
+    return {
+        totalThreads: totalThreads || 0,
+        totalMessages: totalMessages || 0,
+        totalUsers: totalUsers || 0,
+        totalClans: totalClans || 0
+    };
+}
+
+// Carica consiglio del giorno
+function loadDailyTip() {
+    const tipContainer = document.getElementById('daily-tip');
+    if (!tipContainer)
+        return;
+
+    const tips = [{
+            icon: '⚔️',
+            title: 'Strategia di Combattimento',
+            content: 'Bilancia sempre la tua formazione: un tank robusto, DPS equilibrati e un supporto possono fare la differenza in arena!'
+        }, {
+            icon: '🏰',
+            title: 'Gestione del Castello',
+            content: 'Aggiorna sempre la sala del trono prima di potenziare altre stanze per massimizzare l\'efficienza delle risorse.'
+        }, {
+            icon: '💎',
+            title: 'Gemme e Equipaggiamento',
+            content: 'Non vendere mai le gemme leggendarie! Anche se sembrano deboli ora, potrebbero essere utili per upgrade futuri.'
+        }, {
+            icon: '🎯',
+            title: 'Eventi Speciali',
+            content: 'Partecipa sempre agli eventi temporanei: spesso offrono ricompense uniche che non puoi ottenere altrove!'
+        }, {
+            icon: '👥',
+            title: 'Vita di Clan',
+            content: 'Coordina sempre con il tuo clan prima delle guerre. La comunicazione è la chiave per la vittoria!'
+        }, {
+            icon: '📈',
+            title: 'Progressione Intelligente',
+            content: 'Non avere fretta di salire di Throne Room. Assicurati di avere equipaggiamento e truppe adeguate al tuo livello.'
+        }, {
+            icon: '🛡️',
+            title: 'Difesa del Castello',
+            content: 'Posiziona strategicamente le tue difese: mescola danni fisici e magici per contrastare diversi tipi di attacco.'
+        }, {
+            icon: '⏰',
+            title: 'Gestione del Tempo',
+            content: 'Ottimizza i tempi di training: inizia sempre con le truppe che richiedono più tempo prima di andare offline.'
+        }, {
+            icon: '🏆',
+            title: 'Arena e PvP',
+            content: 'Studia sempre gli avversari prima di attaccare. Una strategia ben pianificata vale più della forza bruta!'
+        }, {
+            icon: '💰',
+            title: 'Economia del Gioco',
+            content: 'Investi le gemme saggiamente: priorità a slot di barracks, mastro e velocizzazione di upgrade critici.'
+        }
+    ];
+
+    // Seleziona un consiglio basato sul giorno corrente per consistenza
+    const today = new Date().getDate();
+    const selectedTip = tips[today % tips.length];
+
+    tipContainer.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 15px;">
+                    <div style="font-size: 32px; flex-shrink: 0;">${selectedTip.icon}</div>
+                    <div>
+                        <h4 style="color: #3498db; margin: 0 0 8px 0; font-size: 16px;">${selectedTip.title}</h4>
+                        <p style="color: #666; margin: 0; line-height: 1.5; font-size: 14px;">${selectedTip.content}</p>
+                    </div>
+                </div>
+            `;
+}
+
+// Rendi la funzione globale
+window.loadDailyTip = loadDailyTip;
 
 // Carica contenuto amministrativo
 function loadAdminContent(sectionKey) {
