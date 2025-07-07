@@ -10,7 +10,7 @@ class DashboardManager {
     }
 
     // Carica dashboard principale
-     loadDashboard() {
+    loadDashboard() {
         const threadList = document.getElementById('thread-list');
 
         // Se l'utente non è ancora loggato, mostra loading
@@ -19,10 +19,7 @@ class DashboardManager {
             return;
         }
 
-        // Usa sempre il nickname se disponibile
-        const userName = (currentUserData && currentUserData.username) ? 
-                        currentUserData.username : 
-                        (currentUser.displayName || 'Guerriero');
+        const userName = currentUser.displayName || 'Guerriero';
         const userClan = getCurrentUserClan();
         const userRole = getCurrentUserRole();
 
@@ -38,11 +35,10 @@ class DashboardManager {
     // Carica contenuti con animazioni sequenziali
     loadContentWithAnimations() {
         const animations = [
-            { delay: 100, fn: () => this.loadStatsOverview() },
-            { delay: 300, fn: () => this.loadLatestNotifications() },
-            { delay: 500, fn: () => this.loadLatestGeneralThreads() },
-            { delay: 700, fn: () => this.loadLatestClanThreads() },
-            { delay: 900, fn: () => this.animateElements() }
+            { delay: 100, fn: () => this.loadLatestNotifications() },
+            { delay: 300, fn: () => this.loadLatestGeneralThreads() },
+            { delay: 500, fn: () => this.loadLatestClanThreads() },
+            { delay: 700, fn: () => this.animateElements() }
         ];
 
         animations.forEach(({ delay, fn }) => {
@@ -309,266 +305,22 @@ class DashboardManager {
         `).join('');
     }
 
-    // Carica statistiche overview con dati reali
-    async loadStatsOverview() {
-        try {
-            // Carica statistiche reali
-            const stats = await this.calculateRealStats();
-            
-            // Aggiorna i contatori con animazione
-            setTimeout(() => {
-                this.updateStatWithAnimation('total-threads', stats.totalThreads);
-                this.updateStatWithAnimation('total-messages', stats.todayMessages);
-                this.updateStatWithAnimation('online-users', stats.onlineUsers);
-                this.updateStatWithAnimation('clan-power', stats.clanPower);
-
-                // Anima i numeri
-                this.animateNumbers();
-            }, 800);
-            
-        } catch (error) {
-            console.error('Errore calcolo statistiche:', error);
-            // Fallback con dati di esempio
-            this.loadFallbackStats();
-        }
-    }
-
-    // Calcola statistiche reali
-    async calculateRealStats() {
-        const stats = {
-            totalThreads: 0,
-            todayMessages: 0,
-            onlineUsers: 0,
-            clanPower: 0
-        };
-
-        // 1. Conta thread totali approvati
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
-        const userClan = getCurrentUserClan();
-        
-        if (userClan !== 'Nessuno') {
-            sections.push('clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca');
-        }
-
-        for (const section of sections) {
-            try {
-                const threads = await this.getThreadsFromSection(section);
-                stats.totalThreads += threads.length;
-            } catch (error) {
-                console.warn(`Errore conteggio thread ${section}:`, error);
-            }
-        }
-
-        // 2. Conta messaggi di oggi
-        stats.todayMessages = await this.countTodayMessages();
-
-        // 3. Conta utenti "online" (registrati negli ultimi 30 giorni)
-        stats.onlineUsers = await this.countActiveUsers();
-
-        // 4. Calcola potere clan
-        stats.clanPower = await this.calculateClanPower(userClan);
-
-        return stats;
-    }
-
-    // Conta messaggi di oggi
-    async countTodayMessages() {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayTimestamp = today.getTime();
-        
-        let todayCount = 0;
-        const chatSections = ['chat-generale'];
-        const userClan = getCurrentUserClan();
-        
-        if (userClan !== 'Nessuno') {
-            chatSections.push('clan-chat');
-        }
-
-        for (const section of chatSections) {
-            try {
-                const messages = await this.getMessagesFromSection(section);
-                const todayMessages = messages.filter(msg => msg.timestamp >= todayTimestamp);
-                todayCount += todayMessages.length;
-            } catch (error) {
-                console.warn(`Errore conteggio messaggi ${section}:`, error);
-            }
-        }
-
-        return todayCount;
-    }
-
-    // Conta utenti attivi (registrati negli ultimi 30 giorni)
-    async countActiveUsers() {
-        try {
-            const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-            
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const usersRef = ref(window.firebaseDatabase, 'users');
-                const snapshot = await get(usersRef);
-                let activeCount = 0;
-                
-                if (snapshot.exists()) {
-                    snapshot.forEach((childSnapshot) => {
-                        const userData = childSnapshot.val();
-                        if (userData.createdAt && userData.createdAt >= thirtyDaysAgo) {
-                            activeCount++;
-                        }
-                    });
-                }
-                
-                return Math.max(activeCount, 1); // Almeno 1 (l'utente corrente)
-            } else {
-                // Modalità locale
-                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                const activeUsers = Object.values(users).filter(user => 
-                    user.createdAt && user.createdAt >= thirtyDaysAgo
-                );
-                return Math.max(activeUsers.length, 1);
-            }
-        } catch (error) {
-            console.error('Errore conteggio utenti attivi:', error);
-            return 1;
-        }
-    }
-
-    // Calcola potere clan basato su membri e attività
-    async calculateClanPower(userClan) {
-        if (userClan === 'Nessuno') {
-            return 0;
-        }
-
-        try {
-            let clanMembers = 0;
-            let clanThreads = 0;
-            let clanMessages = 0;
-
-            // Conta membri del clan
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const usersRef = ref(window.firebaseDatabase, 'users');
-                const snapshot = await get(usersRef);
-                
-                if (snapshot.exists()) {
-                    snapshot.forEach((childSnapshot) => {
-                        const userData = childSnapshot.val();
-                        if (userData.clan === userClan) {
-                            clanMembers++;
-                        }
-                    });
-                }
-            } else {
-                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                clanMembers = Object.values(users).filter(user => user.clan === userClan).length;
-            }
-
-            // Conta thread clan
-            const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
-            for (const section of clanSections) {
-                try {
-                    const threads = await this.getThreadsFromSection(section);
-                    clanThreads += threads.length;
-                } catch (error) {
-                    console.warn(`Errore conteggio thread clan ${section}:`, error);
-                }
-            }
-
-            // Conta messaggi clan (ultimi 7 giorni)
-            try {
-                const messages = await this.getMessagesFromSection('clan-chat');
-                const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-                clanMessages = messages.filter(msg => msg.timestamp >= weekAgo).length;
-            } catch (error) {
-                console.warn('Errore conteggio messaggi clan:', error);
-            }
-
-            // Formula: (membri * 100) + (thread * 50) + (messaggi * 10)
-            const power = (clanMembers * 100) + (clanThreads * 50) + (clanMessages * 10);
-            return Math.max(power, 100); // Minimo 100 di potere
-
-        } catch (error) {
-            console.error('Errore calcolo potere clan:', error);
-            return 100;
-        }
-    }
-
-    // Ottieni messaggi da una sezione
-    async getMessagesFromSection(section) {
-        const dataPath = getDataPath(section, 'messages');
-        if (!dataPath) return [];
-
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            try {
-                const messagesRef = ref(window.firebaseDatabase, dataPath);
-                const snapshot = await get(messagesRef);
-                const messages = [];
-                
-                if (snapshot.exists()) {
-                    snapshot.forEach((childSnapshot) => {
-                        messages.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-                }
-                return messages;
-            } catch (error) {
-                console.error(`Errore caricamento messaggi ${section}:`, error);
-                return [];
-            }
-        } else {
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            return JSON.parse(localStorage.getItem(storageKey) || '[]');
-        }
-    }
-
-    // Aggiorna statistica con animazione
-    updateStatWithAnimation(elementId, value) {
-        const element = document.getElementById(elementId);
-        if (!element) return;
-
-        if (value === 0 && elementId === 'clan-power') {
-            element.textContent = '-';
-        } else {
-            // Anima il conteggio da 0 al valore finale
-            let current = 0;
-            const increment = Math.max(1, Math.ceil(value / 30));
-            const timer = setInterval(() => {
-                current += increment;
-                if (current >= value) {
-                    current = value;
-                    clearInterval(timer);
-                }
-                element.textContent = this.formatNumber(current);
-            }, 50);
-        }
-    }
-
-    // Formatta i numeri per renderli più leggibili
-    formatNumber(num) {
-        if (num >= 1000000) {
-            return (num / 1000000).toFixed(1) + 'M';
-        } else if (num >= 1000) {
-            return (num / 1000).toFixed(1) + 'K';
-        }
-        return num.toLocaleString();
-    }
-
-    // Fallback con statistiche realistiche
-    loadFallbackStats() {
-        console.log('📊 Caricamento statistiche fallback');
+    // Carica statistiche overview
+    loadStatsOverview() {
+        // Simula il caricamento delle statistiche
         setTimeout(() => {
-            // Statistiche più realistiche per una demo
-            this.updateStatWithAnimation('total-threads', 12);
-            this.updateStatWithAnimation('total-messages', 8);
-            this.updateStatWithAnimation('online-users', 3);
+            document.getElementById('total-threads').textContent = Math.floor(Math.random() * 200) + 150;
+            document.getElementById('total-messages').textContent = Math.floor(Math.random() * 50) + 25;
+            document.getElementById('online-users').textContent = Math.floor(Math.random() * 20) + 5;
             
             const userClan = getCurrentUserClan();
             if (userClan !== 'Nessuno') {
-                this.updateStatWithAnimation('clan-power', 450);
+                document.getElementById('clan-power').textContent = Math.floor(Math.random() * 5000) + 2000;
             } else {
                 document.getElementById('clan-power').textContent = '-';
             }
 
+            // Anima i numeri
             this.animateNumbers();
         }, 800);
     }
@@ -626,6 +378,9 @@ class DashboardManager {
                 const threads = await this.getThreadsFromSection(section);
                 allThreads.push(...threads.map(t => ({...t, section})));
             }
+
+            // Carica anche le statistiche
+            this.loadStatsOverview();
 
             // Ordina per data e prendi i più recenti
             allThreads.sort((a, b) => b.createdAt - a.createdAt);
@@ -868,12 +623,11 @@ class DashboardManager {
 
         this.refreshInterval = setInterval(() => {
             if (currentSection === 'home' && currentUser) {
-                this.loadStatsOverview();
                 this.loadLatestNotifications();
                 this.loadLatestGeneralThreads();
                 this.loadLatestClanThreads();
             }
-        }, 60000); // Refresh ogni minuto per avere dati più aggiornati
+        }, 30000); // Refresh ogni 30 secondi
     }
 
     // Cleanup migliorato
