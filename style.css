@@ -358,7 +358,7 @@ body::before {
     background: var(--gradient-danger);
     color: white;
     border: none;
-    padding: 8px 16px;
+    padding: 16px 16px;
     border-radius: 8px;
     font-size: 0.8rem;
     cursor: pointer;
@@ -373,10 +373,10 @@ body::before {
 .avatar-upload-btn {
     background: var(--gradient-secondary);
     color: white;
-    padding: 4px 8px;
+    padding: 8px 8px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     transition: all 0.3s ease;
     border: none;
