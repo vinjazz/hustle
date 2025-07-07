@@ -196,13 +196,13 @@ const sectionConfig = {
         title: '👥 Gestione Utenti',
         description: 'Pannello amministrativo per gestire utenti e clan',
         type: 'admin',
-        requiredRole: USER_ROLES.SUPERUSER
+        requiredRole: USER_ROLES.superuser
     },
     'admin-clans': {
         title: '🏰 Gestione Clan',
         description: 'Creazione e gestione dei clan',
         type: 'admin',
-        requiredRole: USER_ROLES.SUPERUSER
+        requiredRole: USER_ROLES.superuser
     },
     'clan-moderation': {
         title: '🛡️ Moderazione Clan',
