@@ -1061,6 +1061,7 @@ function handleUserLogin(user) {
 
     // Carica dati utente
     loadUserProfile();
+	initializeNotifications(); 
 
     // Carica lista utenti e notifiche dopo il login
     setTimeout(() => {
