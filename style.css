@@ -297,7 +297,7 @@ body::before {
 }
 
 .connection-status {
-    right: 50px;
+    right: 70px;
     background: rgba(231, 76, 60, 0.9);
 }
 
@@ -306,7 +306,7 @@ body::before {
 }
 
 .message-counter {
-    right: 200px;
+    right: 230px;
     background: var(--gradient-primary);
 }
 
@@ -2351,12 +2351,12 @@ button:disabled {
     
     .connection-status {
         top: 80px;
-        right: 50px;
+        right: 70px;
     }
     
     .message-counter {
         top: 80px;
-        right: 200px;
+        right: 230px;
     }
     
     .notifications-bell.user-logged-in {
