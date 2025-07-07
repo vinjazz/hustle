@@ -1059,17 +1059,16 @@ function handleUserLogin(user) {
         notificationsBell.classList.add('user-logged-in');
     }
 
-    
-
-    // Carica dati utente
-    loadUserProfile();
-	initializeNotifications(); 
-	    // Aggiorna UI
+    // Aggiorna UI
     updateUserInterface();
 
     // Setup presenza utente
     setupUserPresence();
 
+    // Carica dati utente
+    loadUserProfile();
+	initializeNotifications(); 
+	
 
     // Carica lista utenti e notifiche dopo il login
     setTimeout(() => {
@@ -1296,37 +1295,37 @@ function updateUserRoleBadge() {
     userNameElement.appendChild(badge);
 }
 
-// Aggiorna accesso alle sezioni admin
-function updateAdminSectionsAccess() {
-    const adminSection = document.getElementById('adminSection');
-    const clanModerationItem = document.getElementById('clanModerationItem');
-
-    // Mostra sezioni admin globali solo al superuser
-    const canAccessGlobalAdmin = getCurrentUserRole() === USER_ROLES.SUPERUSER;
-
-    if (canAccessGlobalAdmin) {
-        adminSection.style.display = 'block';
-    } else {
-        adminSection.style.display = 'none';
-        // Se si è in una sezione admin, torna agli eventi
-        if (currentSection.startsWith('admin-')) {
-            switchSection('eventi');
+        // Aggiorna accesso alle sezioni admin
+        function updateAdminSectionsAccess() {
+            const adminSection = document.getElementById('adminSection');
+            const clanModerationItem = document.getElementById('clanModerationItem');
+            
+            // Mostra sezioni admin globali solo al superuser
+            const canAccessGlobalAdmin = getCurrentUserRole() === USER_ROLES.SUPERUSER;
+            
+            if (canAccessGlobalAdmin) {
+                adminSection.style.display = 'block';
+            } else {
+                adminSection.style.display = 'none';
+                // Se si è in una sezione admin, torna agli eventi
+                if (currentSection.startsWith('admin-')) {
+                    switchSection('eventi');
+                }
+            }
+            
+            // Mostra moderazione clan se è moderatore o superuser del clan
+            const canModerateClan = isClanModerator();
+            
+            if (canModerateClan) {
+                clanModerationItem.style.display = 'block';
+            } else {
+                clanModerationItem.style.display = 'none';
+                // Se si è nella sezione moderazione, torna alla chat clan
+                if (currentSection === 'clan-moderation') {
+                    switchSection('clan-chat');
+                }
+            }
         }
-    }
-
-    // Mostra moderazione clan se è moderatore o superuser del clan
-    const canModerateClan = isClanModerator();
-
-    if (canModerateClan) {
-        clanModerationItem.style.display = 'block';
-    } else {
-        clanModerationItem.style.display = 'none';
-        // Se si è nella sezione moderazione, torna alla chat clan
-        if (currentSection === 'clan-moderation') {
-            switchSection('clan-chat');
-        }
-    }
-}
 
 // Setup presenza utente
 function setupUserPresence() {
