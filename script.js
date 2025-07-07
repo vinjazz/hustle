@@ -141,12 +141,17 @@ function canAccessSection(sectionKey) {
     if (!section)
         return false;
 
-    // Controllo accesso clan
+    // Superuser accede SEMPRE
+    if (getCurrentUserRole() === USER_ROLES.SUPERUSER) {
+        return true;
+    }
+
+    // blocco utenti senza clan
     if (sectionKey.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
         return false;
     }
 
-    // Controllo accesso admin (solo superuser)
+    // se la sezione richiede superuser
     if (section.requiredRole === USER_ROLES.SUPERUSER && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
         return false;
     }
