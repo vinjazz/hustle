@@ -1366,10 +1366,12 @@ function updateUserInterface() {
 // Aggiorna accesso alle sezioni clan
 function updateClanSectionsAccess() {
     const userClan = getCurrentUserClan();
+    const userRole = getCurrentUserRole();
     const clanItems = document.querySelectorAll('.nav-item.clan-only');
 
     clanItems.forEach(item => {
-        if (userClan === 'Nessuno') {
+        // blocca solo se l'utente NON è superuser
+        if (userClan === 'Nessuno' && userRole !== USER_ROLES.SUPERUSER) {
             item.classList.add('disabled');
             item.style.pointerEvents = 'none';
         } else {
