@@ -311,7 +311,7 @@ body::before {
 }
 
 .notifications-bell {
-    right: 260px;
+    right: 500px;
     background: var(--gradient-primary);
 }
 
@@ -1433,7 +1433,7 @@ button:disabled {
 .notifications-bell {
     position: fixed !important;
     top: 20px !important;
-    right: 260px !important; 
+    right: 500px !important; 
     background: var(--gradient-secondary) !important;
     color: white !important;
     border: none !important;
@@ -2361,7 +2361,7 @@ button:disabled {
     
     .notifications-bell.user-logged-in {
         top: 80px !important;
-        right: 260px !important;
+        right: 500px !important;
         width: 45px !important;
         height: 45px !important;
         font-size: 18px !important;
