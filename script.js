@@ -141,7 +141,7 @@ function canAccessSection(sectionKey) {
     if (!section)
         return false;
 
-    // Superuser accede SEMPRE
+    // Superuser passa sempre
     if (getCurrentUserRole() === USER_ROLES.SUPERUSER) {
         return true;
     }
@@ -151,13 +151,14 @@ function canAccessSection(sectionKey) {
         return false;
     }
 
-    // se la sezione richiede superuser
+    // blocco admin se non superuser
     if (section.requiredRole === USER_ROLES.SUPERUSER && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
         return false;
     }
 
     return true;
 }
+
 
 // Configurazione sezioni - DEVE essere definito dopo USER_ROLES
 const sectionConfig = {
