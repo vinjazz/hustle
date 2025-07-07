@@ -1437,6 +1437,7 @@ function handleSubmit() {
 }
 
 // Login con Google
+// Login con Google
 async function handleGoogleLogin() {
     if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
         alert('Login con Google non disponibile in modalità demo');
@@ -1459,32 +1460,30 @@ async function handleGoogleLogin() {
         const snapshot = await get(userRef);
 
         if (!snapshot.exists()) {
-            // Nuovo utente Google - chiedi dati aggiuntivi
-            const username = user.displayName || prompt('Inserisci il tuo username:');
-            const clan = prompt('Inserisci il tuo clan (opzionale):') || 'Nessuno';
-
-            if (!username) {
-                throw new Error('Username richiesto');
-            }
-
-            // Determina ruolo per nuovo utente
+            // Nuovo utente Google - salva temporaneamente con dati minimi
             const userRole = await determineUserRole();
 
-            // Salva i dati utente
             await set(userRef, {
-                username: username,
+                username: '', // Sarà richiesto obbligatoriamente dopo il login
                 email: user.email,
-                clan: clan,
+                clan: 'Nessuno',
                 role: userRole,
                 createdAt: serverTimestamp(),
                 lastSeen: serverTimestamp(),
-                provider: 'google'
+                provider: 'google',
+                needsUsername: true // Flag per forzare la scelta del nickname
             });
 
             const roleMessage = userRole === USER_ROLES.SUPERUSER ?
                 ' Ti sono stati assegnati i privilegi di SUPERUSER!' : '';
             showSuccess(`Account Google creato con successo!${roleMessage}`);
         } else {
+            // Utente esistente - controlla se ha username
+            const userData = snapshot.val();
+            if (!userData.username || userData.username.trim() === '' || userData.needsUsername) {
+                // Forza la scelta del nickname anche per utenti esistenti
+                await update(userRef, { needsUsername: true });
+            }
             showSuccess('Login con Google effettuato con successo!');
         }
 
@@ -1517,6 +1516,7 @@ async function handleGoogleLogin() {
                 `;
     }
 }
+
 
 // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
 async function handleLogin() {

@@ -10,7 +10,7 @@ class DashboardManager {
     }
 
     // Carica dashboard principale
-    loadDashboard() {
+     loadDashboard() {
         const threadList = document.getElementById('thread-list');
 
         // Se l'utente non è ancora loggato, mostra loading
@@ -19,7 +19,10 @@ class DashboardManager {
             return;
         }
 
-        const userName = currentUser.displayName || 'Guerriero';
+        // Usa sempre il nickname se disponibile
+        const userName = (currentUserData && currentUserData.username) ? 
+                        currentUserData.username : 
+                        (currentUser.displayName || 'Guerriero');
         const userClan = getCurrentUserClan();
         const userRole = getCurrentUserRole();
 
