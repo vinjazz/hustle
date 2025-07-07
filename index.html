@@ -38,7 +38,7 @@
             // Prova ad inizializzare App Check, ma non bloccare se fallisce
             try {
                 const appCheck = initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAO3enrrmExtBdWX-AfrVgxn6xrmq'),
                     isTokenAutoRefreshEnabled: true
                 });
                 appCheckEnabled = true;
@@ -129,7 +129,7 @@
                     const container = document.getElementById('recaptcha-container');
                     if (container && container.innerHTML === '') {
                         grecaptcha.render('recaptcha-container', {
-                            'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
+                            'sitekey': '6LcMsncrAAAAAO3enrrmExtBdWX-AfrVgxn6xrmq',
                             'theme': 'dark',
                             'size': 'normal'
                         });
