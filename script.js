@@ -141,24 +141,18 @@ function canAccessSection(sectionKey) {
     if (!section)
         return false;
 
-    // Superuser passa sempre
-    if (getCurrentUserRole() === USER_ROLES.SUPERUSER) {
-        return true;
-    }
-
-    // blocco utenti senza clan
+    // Controllo accesso clan
     if (sectionKey.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
         return false;
     }
 
-    // blocco admin se non superuser
+    // Controllo accesso admin (solo superuser)
     if (section.requiredRole === USER_ROLES.SUPERUSER && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
         return false;
     }
 
     return true;
 }
-
 
 // Configurazione sezioni - DEVE essere definito dopo USER_ROLES
 const sectionConfig = {
@@ -1067,8 +1061,6 @@ function handleUserLogin(user) {
 
     // Carica dati utente
     loadUserProfile();
-	initializeNotifications(); 
-	
 
     // Carica lista utenti e notifiche dopo il login
     setTimeout(() => {
@@ -1295,37 +1287,37 @@ function updateUserRoleBadge() {
     userNameElement.appendChild(badge);
 }
 
-        // Aggiorna accesso alle sezioni admin
-        function updateAdminSectionsAccess() {
-            const adminSection = document.getElementById('adminSection');
-            const clanModerationItem = document.getElementById('clanModerationItem');
-            
-            // Mostra sezioni admin globali solo al superuser
-            const canAccessGlobalAdmin = getCurrentUserRole() === USER_ROLES.SUPERUSER;
-            
-            if (canAccessGlobalAdmin) {
-                adminSection.style.display = 'block';
-            } else {
-                adminSection.style.display = 'none';
-                // Se si è in una sezione admin, torna agli eventi
-                if (currentSection.startsWith('admin-')) {
-                    switchSection('eventi');
-                }
-            }
-            
-            // Mostra moderazione clan se è moderatore o superuser del clan
-            const canModerateClan = isClanModerator();
-            
-            if (canModerateClan) {
-                clanModerationItem.style.display = 'block';
-            } else {
-                clanModerationItem.style.display = 'none';
-                // Se si è nella sezione moderazione, torna alla chat clan
-                if (currentSection === 'clan-moderation') {
-                    switchSection('clan-chat');
-                }
-            }
+// Aggiorna accesso alle sezioni admin
+function updateAdminSectionsAccess() {
+    const adminSection = document.getElementById('adminSection');
+    const clanModerationItem = document.getElementById('clanModerationItem');
+
+    // Mostra sezioni admin globali solo al superuser
+    const canAccessGlobalAdmin = getCurrentUserRole() === USER_ROLES.SUPERUSER;
+
+    if (canAccessGlobalAdmin) {
+        adminSection.style.display = 'block';
+    } else {
+        adminSection.style.display = 'none';
+        // Se si è in una sezione admin, torna agli eventi
+        if (currentSection.startsWith('admin-')) {
+            switchSection('eventi');
         }
+    }
+
+    // Mostra moderazione clan se è moderatore o superuser del clan
+    const canModerateClan = isClanModerator();
+
+    if (canModerateClan) {
+        clanModerationItem.style.display = 'block';
+    } else {
+        clanModerationItem.style.display = 'none';
+        // Se si è nella sezione moderazione, torna alla chat clan
+        if (currentSection === 'clan-moderation') {
+            switchSection('clan-chat');
+        }
+    }
+}
 
 // Setup presenza utente
 function setupUserPresence() {
@@ -1367,12 +1359,10 @@ function updateUserInterface() {
 // Aggiorna accesso alle sezioni clan
 function updateClanSectionsAccess() {
     const userClan = getCurrentUserClan();
-    const userRole = getCurrentUserRole();
     const clanItems = document.querySelectorAll('.nav-item.clan-only');
 
     clanItems.forEach(item => {
-        // blocca solo se l'utente NON è superuser
-        if (userClan === 'Nessuno' && userRole !== USER_ROLES.SUPERUSER) {
+        if (userClan === 'Nessuno') {
             item.classList.add('disabled');
             item.style.pointerEvents = 'none';
         } else {

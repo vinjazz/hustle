@@ -193,9 +193,9 @@
 <div id="notificationsPanel" class="notifications-panel">
     <div class="notifications-header">
         <h3>🔔 Notifiche</h3>
-        <button class="mark-all-read" onclick="markAllNotificationsAsRead().then(() => loadNotifications())">
-			Segna tutte come lette
-		</button>
+        <button class="mark-all-read" onclick="markAllNotificationsAsRead()">
+            Segna tutte come lette
+        </button>
     </div>
     <div id="notificationsList" class="notifications-list">
         <div class="notifications-empty">
@@ -290,14 +290,22 @@
             <h1>🏰 Hustle Castle Council</h1>
         </div>
         
+        <!-- User Info con Avatar -->
         <div class="user-info">
-            <div class="user-avatar"></div>
+            <div class="user-avatar" id="userAvatar">
+                <img id="userAvatarImg" src="" alt="Avatar" style="display: none; width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                <div id="userAvatarDefault" class="user-avatar-default">👤</div>
+            </div>
             <div style="display: inline-block; vertical-align: middle;">
                 <div class="user-name">
                     <span id="currentUsername">Ospite</span>
                     <span id="userStatus" class="offline-indicator"></span>
                 </div>
                 <div class="user-clan">Clan: <span id="currentClan">Nessuno</span></div>
+                <div class="avatar-controls" id="avatarControls" style="margin-top: 8px; display: none;">
+                    <label for="avatar-upload" class="avatar-upload-btn">📷 Cambia Avatar</label>
+                    <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+                </div>
                 <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
             </div>
         </div>
@@ -531,6 +539,28 @@
                 <button class="btn-create-thread" onclick="createThread()">Crea Thread</button>
                 <button class="btn-cancel-thread" onclick="hideThreadCreationModal()">Annulla</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Avatar Modal -->
+    <div id="avatarModal" class="avatar-modal" style="display: none;">
+        <div class="avatar-modal-content">
+            <h3>🖼️ Imposta il tuo Avatar</h3>
+            <div class="avatar-preview-container">
+                <div class="avatar-preview-large">
+                    <img id="avatarPreviewLarge" src="" alt="Preview">
+                </div>
+                <div class="avatar-preview-small">
+                    <img id="avatarPreviewSmall" src="" alt="Preview piccolo">
+                    <p>Anteprima</p>
+                </div>
+            </div>
+            <div class="avatar-modal-buttons">
+                <button class="btn-save-avatar" onclick="saveAvatarChanges()">💾 Salva Avatar</button>
+                <button class="btn-cancel-avatar" onclick="cancelAvatarChange()">❌ Annulla</button>
+                <button class="btn-remove-avatar" onclick="removeAvatar()">🗑️ Rimuovi Avatar</button>
+            </div>
+            <div id="avatar-upload-progress" class="upload-progress" style="display: none;"></div>
         </div>
     </div>
 
