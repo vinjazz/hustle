@@ -16,15 +16,16 @@
         import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
         
         // 🔥 CONFIGURAZIONE FIREBASE - INIZIALIZZAZIONE SINGOLA
-        const firebaseConfig = {
-            apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
-            authDomain: "hustlecastlecouncil.firebaseapp.com",
-            projectId: "hustlecastlecouncil",
-            storageBucket: "hustlecastlecouncil.firebasestorage.app",
-            messagingSenderId: "778970862600",
-            appId: "1:778970862600:web:ba81f607bb6792362eadbd",
-            measurementId: "G-N6XQ6W4PN7"
-        };
+         const firebaseConfig = {
+			apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
+			authDomain: "hustlecastlecouncil.firebaseapp.com",
+			databaseURL: "https://hustlecastlecouncil-default-rtdb.firebaseio.com",
+			projectId: "hustlecastlecouncil",
+			storageBucket: "hustlecastlecouncil.firebasestorage.app",
+			messagingSenderId: "778970862600",
+			appId: "1:778970862600:web:4244e17938ccf62c2eadbd",
+			measurementId: "G-R3GMPZCXP3"
+		  };
         
         // Inizializza Firebase UNA SOLA VOLTA
         let useFirebase = true;
@@ -38,7 +39,7 @@
             // Prova ad inizializzare App Check, ma non bloccare se fallisce
             try {
                 const appCheck = initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAO3enrrmExtBdWX-AfrVgxn6xrmq'),
+                    provider: new ReCaptchaV3Provider('6LeY63orAAAAABxhBIYs14yn3eBqOIgAwLJRYcHu'),
                     isTokenAutoRefreshEnabled: true
                 });
                 appCheckEnabled = true;
@@ -129,7 +130,7 @@
                     const container = document.getElementById('recaptcha-container');
                     if (container && container.innerHTML === '') {
                         grecaptcha.render('recaptcha-container', {
-                            'sitekey': '6LcMsncrAAAAAO3enrrmExtBdWX-AfrVgxn6xrmq',
+                            'sitekey': '6LeY63orAAAAABxhBIYs14yn3eBqOIgAwLJRYcHu',
                             'theme': 'dark',
                             'size': 'normal'
                         });
