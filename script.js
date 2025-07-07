@@ -1023,6 +1023,11 @@ function handleUserLogin(user) {
 
     // Nascondi modal login
     document.getElementById('loginModal').style.display = 'none';
+	
+	 const notificationsBell = document.getElementById('notificationsBell');
+    if (notificationsBell) {
+        notificationsBell.classList.add('user-logged-in');
+    }
 
     // Aggiorna UI
     updateUserInterface();
@@ -1052,6 +1057,11 @@ function handleUserLogin(user) {
 // Gestione logout utente
 function handleUserLogout() {
     console.log('👤 Utente disconnesso');
+	// CORREZIONE: Nascondi campanella notifiche
+    const notificationsBell = document.getElementById('notificationsBell');
+    if (notificationsBell) {
+        notificationsBell.classList.remove('user-logged-in');
+    }
 
     // Pulisci listeners
     cleanupListeners();

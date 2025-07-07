@@ -125,11 +125,11 @@ body::before {
 }
 
 /* NOTIFICATIONS */
-/* SISTEMA NOTIFICHE - VERSIONE UNIFICATA */
+
 .notifications-bell {
     position: fixed !important;
     top: 20px !important;
-    right: 240px !important; /* Posizionata tra connection status (20px) e message counter (350px) */
+    right: 240px !important; 
     background: var(--gradient-secondary) !important;
     color: white !important;
     border: none !important;
@@ -138,12 +138,19 @@ body::before {
     height: 50px !important;
     font-size: 20px !important;
     cursor: pointer !important;
-    z-index: 9999 !important;
+    z-index: 1000 !important; /* Ridotto da 9999 */
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
     transition: all 0.3s ease !important;
-    display: flex !important;
+    display: none !important; /* Nascosta di default */
     align-items: center !important;
     justify-content: center !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* Mostra campanella solo quando utente è loggato */
+.notifications-bell.user-logged-in {
+    display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
 }
@@ -153,13 +160,6 @@ body::before {
     box-shadow: 0 6px 20px rgba(45, 130, 181, 0.4) !important;
 }
 
-/* Forza visibilità campanella notifiche */
-#notificationsBell {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 9999 !important;
-}
 .notification-badge {
     position: absolute;
     top: -5px;
@@ -1720,50 +1720,6 @@ body::before {
 
 /* AGGIUNGI QUESTE NUOVE REGOLE AL TUO style.css ESISTENTE */
 
-/* SISTEMA NOTIFICHE */
-.notifications-bell {
-    position: fixed;
-    top: 20px;
-    right: 200px;
-    background: var(--gradient-secondary);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    font-size: 20px;
-    cursor: pointer;
-    z-index: 1000;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    position: relative;
-    transition: all 0.3s ease;
-}
-
-.notifications-bell:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 20px rgba(45, 130, 181, 0.4);
-}
-
-.notification-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: var(--error);
-    color: white;
-    border-radius: 50%;
-    min-width: 20px;
-    height: 20px;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    animation: pulse 2s infinite;
-}
-
-.notification-badge.hidden {
-    display: none;
-}
 
 /* MENU NOTIFICHE */
 .notifications-panel {
@@ -2520,26 +2476,6 @@ textarea:focus,
     opacity: 1;
 }
 
-/* AGGIUNGI QUESTE NUOVE REGOLE AL TUO style.css ESISTENTE */
-
-/* SISTEMA NOTIFICHE */
-.notifications-bell {
-    position: fixed;
-    top: 20px;
-    right: 200px;
-    background: var(--gradient-secondary);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    font-size: 20px;
-    cursor: pointer;
-    z-index: 1000;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    position: relative;
-    transition: all 0.3s ease;
-}
 
 .notifications-bell:hover {
     transform: scale(1.1);
@@ -2991,18 +2927,6 @@ textarea:focus,
     .toast-header {
         margin-bottom: 6px;
     }
-}
-
-#notificationsBell {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 1001 !important;
-}
-
-/* Debug: aggiungi bordo temporaneo per vedere la campanella */
-.notifications-bell {
-    /* border: 2px solid red !important; */ /* Decommentare per debug */
 }
 
 
