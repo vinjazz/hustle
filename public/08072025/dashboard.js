@@ -242,6 +242,7 @@ class DashboardManager {
     // Cards navigazione rapida con design aggiornato
     getQuickNavCards() {
         const navItems = [
+			{ icon: '🏰', title: 'Salotto', subtitle: 'Rilassati in libertà', section: 'salotto', gradient: 'yellow' },
             { icon: '📅', title: 'Eventi', subtitle: 'Scopri eventi in corso', section: 'eventi', gradient: 'red' },
             { icon: '⚔️', title: 'Oggetti', subtitle: 'Guide armi e armature', section: 'oggetti', gradient: 'purple' },
             { icon: '🆕', title: 'Novità', subtitle: 'Ultimi aggiornamenti', section: 'novita', gradient: 'blue' },
@@ -343,7 +344,7 @@ class DashboardManager {
         };
 
         // 1. Conta thread totali approvati
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+        const sections = ['salotto','eventi', 'oggetti', 'novita', 'associa-clan'];
         const userClan = getCurrentUserClan();
         
         if (userClan !== 'Nessuno') {
@@ -617,7 +618,7 @@ class DashboardManager {
     // Carica ultimi thread generali con statistiche
     async loadLatestGeneralThreads() {
         const container = document.getElementById('dashboard-general-threads');
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+        const sections = ['salotto','eventi', 'oggetti', 'novita', 'associa-clan'];
         
         try {
             const allThreads = [];
@@ -778,6 +779,7 @@ class DashboardManager {
 
     getSectionIcon(section) {
         const icons = {
+			'salotto': '🏰',
             'eventi': '📅',
             'oggetti': '⚔️',
             'novita': '🆕',
