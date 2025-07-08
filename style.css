@@ -800,6 +800,22 @@ button:disabled {
 }
 
 /* Header del messaggio (nome utente) */
+.message-avatar-small .comment-avatar {
+    /* Dimensioni perfette per chat */
+    width: 32px;
+    height: 32px;
+    overflow: hidden;
+    position: relative;
+}
+
+.message-avatar-small .comment-avatar img {
+    /* Immagine perfettamente centrata */
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+
+
 .message-author-header {
     margin-bottom: 0.3rem;
     display: flex;

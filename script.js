@@ -3709,8 +3709,8 @@ function loadMessages(sectionKey) {
 }
 
 // Mostra messaggi
-// 🆕 SOSTITUISCI la funzione displayMessages esistente con questa:
-function displayMessages(messages) {
+// Mostra messaggi stile WhatsApp con avatar potenziati
+async function displayMessages(messages) {
     const chatMessages = document.getElementById('chat-messages');
 
     if (messages.length === 0) {
@@ -3726,9 +3726,16 @@ function displayMessages(messages) {
     let lastAuthor = '';
     let lastTimestamp = 0;
 
-    messages.forEach((msg, index) => {
-        // Trova dati utente per avatar e clan
+    // Pre-carica tutti gli utenti necessari
+    const uniqueUserIds = [...new Set(messages.map(msg => msg.authorId).filter(Boolean))];
+    await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
+
+    for (let index = 0; index < messages.length; index++) {
+        const msg = messages[index];
+        
+        // Trova dati utente per avatar e clan (ora dovrebbero essere tutti caricati)
         const user = allUsers.find(u => u.uid === msg.authorId) || {
+            uid: msg.authorId || 'unknown',
             username: msg.author,
             clan: 'Nessuno',
             avatarUrl: null
@@ -3777,12 +3784,11 @@ function displayMessages(messages) {
 
         lastAuthor = msg.author;
         lastTimestamp = msg.timestamp;
-    });
+    }
 
     chatMessages.innerHTML = htmlContent;
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
-
 // 🆕 AGGIUNGI queste nuove funzioni:
 function formatTimeShort(timestamp) {
     if (!timestamp) return '';
