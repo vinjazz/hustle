@@ -22,23 +22,22 @@
     // 1. CONTROLLO PREREQUISITI
     // ===============================================
     
-    function checkPrerequisites() {
-        const required = {
-            badgeSystem: window.badgeSystem,
-            sectionConfig: window.sectionConfig,
-            currentUser: window.currentUser,
-            getCurrentUserClan: window.getCurrentUserClan
-        };
-        
-        const missing = Object.keys(required).filter(key => !required[key]);
-        if (missing.length > 0) {
-            console.warn('⚠️ Badge Integration: Prerequisiti mancanti:', missing);
-            return false;
-        }
-        
-        return true;
+  function checkPrerequisites() {
+    const required = {
+        badgeSystem: window.badgeSystem,
+        sectionConfig: window.sectionConfig,
+        currentUser: window.currentUser,
+        getCurrentUserClan: typeof window.getCurrentUserClan === 'function'
+    };
+
+    const missing = Object.keys(required).filter(key => !required[key]);
+    if (missing.length > 0) {
+        console.warn('⚠️ Badge Integration: Prerequisiti mancanti:', missing);
+        return false;
     }
-    
+
+    return true;
+}
     // ===============================================
     // 2. UTILITY FUNCTIONS (SOLO SE NON ESISTONO)
     // ===============================================
