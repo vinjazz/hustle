@@ -170,9 +170,6 @@
     <link href="style.css" rel="stylesheet">
     <link href="dashboard.css" rel="stylesheet">
     
-    <!-- ✅ NUOVO: Badge System CSS -->
-    <link href="badge_manager.css" rel="stylesheet">
-    
     <!-- Username Modal Styles -->
     <style>
         /* Username Modal Styles */
@@ -404,142 +401,6 @@
                 padding: 1.2rem;
             }
         }
-
-        /* ✅ NUOVO: Badge Control Panel Styles */
-        .badge-control-panel {
-            position: fixed;
-            top: 50%;
-            right: 20px;
-            transform: translateY(-50%);
-            width: 280px;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 15px;
-            backdrop-filter: blur(15px);
-            z-index: 1500;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            animation: slideInFromRight 0.3s ease;
-        }
-        
-        .badge-control-header {
-            padding: 15px 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--gradient-primary);
-            color: white;
-            border-radius: 15px 15px 0 0;
-        }
-        
-        .badge-control-header h4 {
-            margin: 0;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        
-        .close-badge-panel {
-            background: none;
-            border: none;
-            color: white;
-            cursor: pointer;
-            font-size: 16px;
-            padding: 0;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .badge-control-content {
-            padding: 15px;
-        }
-        
-        .badge-stats {
-            margin-bottom: 15px;
-        }
-        
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 12px;
-        }
-        
-        .stat-label {
-            color: var(--text-secondary);
-        }
-        
-        .stat-value {
-            color: var(--accent-4);
-            font-weight: 600;
-        }
-        
-        .badge-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 15px;
-        }
-        
-        .badge-action-btn {
-            background: var(--gradient-secondary);
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .badge-action-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(45, 130, 181, 0.4);
-        }
-        
-        .badge-action-btn.badge-danger {
-            background: var(--gradient-danger);
-        }
-        
-        .badge-debug-btn {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 10px;
-            cursor: pointer;
-            width: 100%;
-        }
-        
-        .nav-item.admin-only {
-            display: none;
-        }
-        
-        @keyframes slideInFromRight {
-            from {
-                opacity: 0;
-                transform: translateY(-50%) translateX(100%);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(-50%) translateX(0);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .badge-control-panel {
-                top: auto;
-                bottom: 20px;
-                right: 10px;
-                left: 10px;
-                width: auto;
-                transform: none;
-            }
-        }
     </style>
 </head>
 <body>
@@ -560,42 +421,6 @@
         🔔
         <span id="notificationBadge" class="notification-badge hidden">0</span>
     </button>
-
-    <!-- ✅ NUOVO: Badge Control Panel (Solo per admin/debug) -->
-    <div id="badgeControlPanel" class="badge-control-panel" style="display: none;">
-        <div class="badge-control-header">
-            <h4>🏷️ Controllo Badge</h4>
-            <button onclick="toggleBadgeControlPanel()" class="close-badge-panel">✕</button>
-        </div>
-        <div class="badge-control-content">
-            <div class="badge-stats">
-                <div class="stat-item">
-                    <span class="stat-label">Contenuti nuovi:</span>
-                    <span id="badgeStatsTotal" class="stat-value">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Sezioni con badge:</span>
-                    <span id="badgeStatsSections" class="stat-value">0</span>
-                </div>
-            </div>
-            <div class="badge-actions">
-                <button onclick="window.forceBadgeRefresh()" class="badge-action-btn">
-                    🔄 Aggiorna Badge
-                </button>
-                <button onclick="window.showTestBadges()" class="badge-action-btn">
-                    🧪 Test Badge
-                </button>
-                <button onclick="window.resetVisitTracking()" class="badge-action-btn badge-danger">
-                    🗑️ Reset Visite
-                </button>
-            </div>
-            <div class="badge-debug">
-                <button onclick="window.debugBadges()" class="badge-debug-btn">
-                    🔍 Debug Info
-                </button>
-            </div>
-        </div>
-    </div>
 
     <!-- Notifications Panel -->
     <div id="notificationsPanel" class="notifications-panel">
@@ -747,7 +572,6 @@
         </div>
     </div>
 
-    <!-- ✅ MODIFICATO: Sidebar con supporto badge completo -->
     <div class="sidebar">
         <div class="logo">
             <h1>🏰 Hustle Castle Council</h1>
@@ -777,7 +601,6 @@
             <div class="nav-title">🏠 Comando</div>
             <div class="nav-item active" data-section="home">
                 <span>🏰 Dashboard</span>
-                <!-- I badge verranno aggiunti dinamicamente qui -->
             </div>
         </div>
 
@@ -785,23 +608,18 @@
             <div class="nav-title">🌍 Generale</div>
             <div class="nav-item" data-section="eventi">
                 <span>📅 Eventi</span>
-                <!-- Badge per eventi verrà aggiunto qui -->
             </div>
             <div class="nav-item" data-section="oggetti">
                 <span>⚔️ Oggetti</span>
-                <!-- Badge per oggetti verrà aggiunto qui -->
             </div>
             <div class="nav-item" data-section="novita">
                 <span>🆕 Novità</span>
-                <!-- Badge per novità verrà aggiunto qui -->
             </div>
             <div class="nav-item" data-section="chat-generale">
                 <span>💬 Chat Generale</span>
-                <!-- Badge per chat verrà aggiunto qui -->
             </div>
 			<div class="nav-item" data-section="associa-clan">
                 <span>🏠 Associa Clan</span>
-                <!-- Badge per associa-clan verrà aggiunto qui -->
             </div>
         </div>
 
@@ -813,37 +631,27 @@
             <div class="nav-item" data-section="admin-clans">
                 <span>🏰 Gestione Clan</span>
             </div>
-            <!-- ✅ NUOVO: Controllo badge per admin -->
-            <div class="nav-item admin-only" onclick="toggleBadgeControlPanel()">
-                <span>🏷️ Gestione Badge</span>
-            </div>
         </div>
 
         <div class="nav-section">
             <div class="nav-title">🛡️ Clan: <span id="sidebarClan">Nessuno</span></div>
             <div class="nav-item clan-only" data-section="clan-moderation" id="clanModerationItem" style="display: none;">
                 <span>🛡️ Moderazione</span>
-                <!-- Badge per moderazione verrà aggiunto qui -->
             </div>
             <div class="nav-item clan-only" data-section="clan-chat">
                 <span>💬 Chat Clan</span>
-                <!-- Badge per chat clan verrà aggiunto qui -->
             </div>
             <div class="nav-item clan-only" data-section="clan-war">
                 <span>⚔️ Guerra</span>
-                <!-- Badge per guerra verrà aggiunto qui -->
             </div>
             <div class="nav-item clan-only" data-section="clan-premi">
                 <span>🏆 Premi</span>
-                <!-- Badge per premi verrà aggiunto qui -->
             </div>
             <div class="nav-item clan-only" data-section="clan-consigli">
                 <span>💡 Consigli</span>
-                <!-- Badge per consigli verrà aggiunto qui -->
             </div>
 			<div class="nav-item clan-only" data-section="clan-bacheca">
                 <span>🏰 Bacheca</span>
-                <!-- Badge per bacheca verrà aggiunto qui -->
             </div>
         </div>
     </div>
@@ -1050,88 +858,5 @@
     <script src="script.js"></script>
     <script src="username_handler.js"></script>
     <script src="dashboard.js"></script>
-
-	<script src="badge_system.js"></script>
-	<script src="badge_integration_fixed.js"></script>
-	<script src="badge_diagnostic.js"></script>
-	<script src="badge_quick_fixes.js"></script>
-	<script src="badge_system_fix.js"></script>
-	<script src="badge_login_fix.js"></script>
-    
-    
-    <!-- ✅ NUOVO: Script di inizializzazione badge -->
-    <script>
-        // Inizializzazione badge system quando tutto è caricato
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🏷️ Inizializzazione Badge System...');
-            
-            // Verifica che tutti i moduli siano caricati
-            if (typeof window.badgeSystem === 'undefined') {
-                console.error('❌ Badge System non caricato!');
-                return;
-            }
-            
-            // Funzioni di controllo badge per admin
-            window.toggleBadgeControlPanel = function() {
-                const panel = document.getElementById('badgeControlPanel');
-                const isVisible = panel.style.display !== 'none';
-                
-                if (isVisible) {
-                    panel.style.display = 'none';
-                } else {
-                    panel.style.display = 'block';
-                    updateBadgeControlStats();
-                }
-            };
-            
-            window.updateBadgeControlStats = function() {
-                if (!window.badgeSystem || !window.badgeSystem.isInitialized) return;
-                
-                const stats = window.badgeSystem.getStats();
-                document.getElementById('badgeStatsTotal').textContent = stats.totalNewContent;
-                document.getElementById('badgeStatsSections').textContent = stats.sectionsWithNewContent;
-            };
-            
-            // Auto-aggiornamento statistiche ogni 30 secondi
-            setInterval(() => {
-                const panel = document.getElementById('badgeControlPanel');
-                if (panel && panel.style.display !== 'none') {
-                    updateBadgeControlStats();
-                }
-            }, 30000);
-            
-            console.log('✅ Badge System UI inizializzato');
-        });
-        
-        // Gestione visibilità pannello admin basata sui permessi
-        document.addEventListener('userLoggedIn', function(event) {
-            const user = event.detail.user;
-            
-            // Mostra controlli badge solo per admin
-            setTimeout(() => {
-                if (typeof getCurrentUserRole === 'function' && 
-                    getCurrentUserRole() === 'superuser') {
-                    
-                    const adminBadgeItem = document.querySelector('.nav-item.admin-only');
-                    if (adminBadgeItem) {
-                        adminBadgeItem.style.display = 'block';
-                    }
-                }
-            }, 2000);
-        });
-        
-        document.addEventListener('userLoggedOut', function() {
-            // Nascondi pannello badge al logout
-            const panel = document.getElementById('badgeControlPanel');
-            if (panel) {
-                panel.style.display = 'none';
-            }
-            
-            const adminBadgeItem = document.querySelector('.nav-item.admin-only');
-            if (adminBadgeItem) {
-                adminBadgeItem.style.display = 'none';
-            }
-        });
-    </script>
 </body>
 </html>
