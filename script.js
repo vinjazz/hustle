@@ -103,6 +103,97 @@ window.createThread = createThread;
 window.addComment = addComment;
 window.getUserDisplayName = getUserDisplayName;
 
+
+// ===============================================
+// AVATAR SYSTEM - FUNZIONI NUOVE
+// ===============================================
+
+// Enhanced user data loading with avatar support - DEVE ESSERE DEFINITA PRIMA
+async function loadUserWithAvatar(userId) {
+    if (!userId) return null;
+    
+    // Cerca prima nella cache
+    let user = allUsers.find(u => u.uid === userId);
+    if (user) return user;
+    
+    // Se non trovato, carica dal database
+    try {
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
+            const userRef = ref(window.firebaseDatabase, `users/${userId}`);
+            const snapshot = await get(userRef);
+            if (snapshot.exists()) {
+                user = { uid: userId, ...snapshot.val() };
+                // Aggiungi alla cache
+                const existingIndex = allUsers.findIndex(u => u.uid === userId);
+                if (existingIndex >= 0) {
+                    allUsers[existingIndex] = user;
+                } else {
+                    allUsers.push(user);
+                }
+                return user;
+            }
+        } else {
+            // Modalità locale
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            for (const email in users) {
+                if (users[email].uid === userId) {
+                    user = users[email];
+                    // Aggiungi alla cache
+                    const existingIndex = allUsers.findIndex(u => u.uid === userId);
+                    if (existingIndex >= 0) {
+                        allUsers[existingIndex] = user;
+                    } else {
+                        allUsers.push(user);
+                    }
+                    return user;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Errore caricamento utente:', error);
+    }
+    
+    return null;
+}
+
+// Formato orario breve per chat (stile WhatsApp)
+function formatTimeShort(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('it-IT', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+}
+
+// Formato data per separatori temporali
+function formatDate(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffTime = now - date;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Oggi';
+    if (diffDays === 1) return 'Ieri';
+    if (diffDays < 7) return date.toLocaleDateString('it-IT', { weekday: 'long' });
+    
+    return date.toLocaleDateString('it-IT', { 
+        day: 'numeric', 
+        month: 'long',
+        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+}
+
+// Aggiorna avatar utente nella cache
+function updateUserAvatarInCache(userId, avatarUrl) {
+    const userIndex = allUsers.findIndex(u => u.uid === userId);
+    if (userIndex >= 0) {
+        allUsers[userIndex].avatarUrl = avatarUrl;
+        console.log(`📷 Avatar aggiornato nella cache per ${allUsers[userIndex].username}`);
+    }
+}
+
 console.log('✅ Patch Username Google applicata con successo!');
 // Funzioni per la gestione dei ruoli
 function getCurrentUserRole() {
@@ -929,6 +1020,7 @@ function handleToastAction(toastId, actionIndex) {
 // CARICAMENTO UTENTI PER AUTOCOMPLETE
 // ==============================================
 
+// Carica lista utenti per autocomplete con avatar
 async function loadUsersList() {
     try {
         let users = [];
@@ -952,14 +1044,18 @@ async function loadUsersList() {
             users = Object.values(localUsers);
         }
 
+        // Aggiorna cache globale
         allUsers = users;
-        console.log('👥 Caricati', users.length, 'utenti per autocomplete');
+        console.log('👥 Caricati', users.length, 'utenti per autocomplete con avatar');
+
+        // Log per debug degli avatar
+        const usersWithAvatar = users.filter(u => u.avatarUrl).length;
+        console.log(`📷 ${usersWithAvatar} utenti hanno un avatar caricato`);
 
     } catch (error) {
         console.error('Errore caricamento utenti:', error);
     }
 }
-
 // Inizializza l'applicazione
 function initializeApp() {
     console.log('🔥 Inizializzazione applicazione...');
@@ -3404,7 +3500,8 @@ function loadThreadComments(threadId, section) {
 }
 
 // Mostra commenti thread
-function displayThreadComments(comments) {
+// Mostra commenti thread con avatar potenziati
+async function displayThreadComments(comments) {
     const commentsContainer = document.getElementById('thread-comments');
 
     if (comments.length === 0) {
@@ -3416,9 +3513,19 @@ function displayThreadComments(comments) {
         return;
     }
 
+    // Pre-carica tutti gli utenti necessari con gestione errori
+    const uniqueUserIds = [...new Set(comments.map(comment => comment.authorId).filter(Boolean))];
+    try {
+        await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
+    } catch (error) {
+        console.warn('Errore pre-caricamento avatar commenti:', error);
+        // Continua comunque con quello che abbiamo
+    }
+
     commentsContainer.innerHTML = comments.map(comment => {
         // Trova dati utente per avatar e clan
         const user = allUsers.find(u => u.uid === comment.authorId) || {
+            uid: comment.authorId || 'unknown',
             username: comment.author,
             clan: 'Nessuno',
             avatarUrl: null
@@ -3734,84 +3841,6 @@ async function displayMessages(messages) {
         console.warn('Errore pre-caricamento avatar:', error);
         // Continua comunque con quello che abbiamo
     }
-
-    for (let index = 0; index < messages.length; index++) {
-        const msg = messages[index];
-        
-        // Trova dati utente per avatar e clan (ora dovrebbero essere tutti caricati)
-        const user = allUsers.find(u => u.uid === msg.authorId) || {
-            uid: msg.authorId || 'unknown',
-            username: msg.author,
-            clan: 'Nessuno',
-            avatarUrl: null
-        };
-
-        const isOwnMessage = currentUser && msg.authorId === currentUser.uid;
-        const isNewAuthor = msg.author !== lastAuthor;
-        const timeDiff = msg.timestamp - lastTimestamp;
-        const showTimestamp = timeDiff > 300000; // 5 minuti
-
-        // Separatore temporale se molto tempo è passato
-        if (showTimestamp && index > 0) {
-            htmlContent += `
-                <div class="message-time-separator">
-                    <span>${formatDate(msg.timestamp)}</span>
-                </div>
-            `;
-        }
-
-        // Container del messaggio
-        htmlContent += `
-            <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
-                ${!isOwnMessage && isNewAuthor ? `
-                    <div class="message-avatar-small">
-                        ${createAvatarHTML(user, 'small')}
-                    </div>
-                ` : `<div class="message-avatar-spacer"></div>`}
-                
-                <div class="message-bubble ${isOwnMessage ? 'own-bubble' : 'other-bubble'}">
-                    ${!isOwnMessage && isNewAuthor ? `
-                        <div class="message-author-header">
-                            <span class="message-author-name">${msg.author}</span>
-                            ${createClanBadgeHTML(user.clan)}
-                        </div>
-                    ` : ''}
-                    
-                    <div class="message-text">${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
-                    
-                    <div class="message-meta">
-                        <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
-                        ${isOwnMessage ? '<span class="message-status">✓</span>' : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-
-        lastAuthor = msg.author;
-        lastTimestamp = msg.timestamp;
-    }
-
-    chatMessages.innerHTML = htmlContent;
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-    const chatMessages = document.getElementById('chat-messages');
-
-    if (messages.length === 0) {
-        chatMessages.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: #666;">
-                Nessun messaggio in questa chat. Inizia la conversazione!
-            </div>
-        `;
-        return;
-    }
-
-    let htmlContent = '';
-    let lastAuthor = '';
-    let lastTimestamp = 0;
-
-    // Pre-carica tutti gli utenti necessari
-    const uniqueUserIds = [...new Set(messages.map(msg => msg.authorId).filter(Boolean))];
-    await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
 
     for (let index = 0; index < messages.length; index++) {
         const msg = messages[index];
@@ -4511,6 +4540,7 @@ function updateAvatarUploadProgress(progress) {
 }
 
 // Update user avatar in database
+// Hook per aggiornare cache quando l'avatar cambia
 async function updateUserAvatar(avatarUrl) {
     if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
         const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/avatarUrl`);
@@ -4530,8 +4560,13 @@ async function updateUserAvatar(avatarUrl) {
             }
         }
     }
+    
+    // Aggiorna cache
+    updateUserAvatarInCache(currentUser.uid, avatarUrl);
+    
+    // Ricarica la lista utenti per aggiornare la cache
+    await loadUsersList();
 }
-
 // Update user avatar display in UI
 function updateUserAvatarDisplay(avatarUrl) {
     const avatarContainer = document.getElementById('userAvatar');
@@ -4578,18 +4613,27 @@ function updateUserAvatarDisplay(avatarUrl) {
 // ===============================================
 
 // Create avatar HTML
+// Create avatar HTML with enhanced support
 function createAvatarHTML(user, size = 'small') {
     const sizeClass = size === 'large' ? 'user-avatar' :
         size === 'medium' ? 'message-avatar' : 'comment-avatar';
 
-    if (user.avatarUrl) {
-        return `<div class="${sizeClass}"><img src="${user.avatarUrl}" alt="Avatar ${user.username}"></div>`;
+    // Verifica se l'utente ha un avatar
+    const hasAvatar = user.avatarUrl && user.avatarUrl.trim() !== '';
+    
+    if (hasAvatar) {
+        return `
+            <div class="${sizeClass}">
+                <img src="${user.avatarUrl}" 
+                     alt="Avatar ${user.username}"
+                     onerror="this.style.display='none'; this.parentNode.innerHTML='${user.username ? user.username.charAt(0).toUpperCase() : '👤'}';">
+            </div>
+        `;
     } else {
         const initial = user.username ? user.username.charAt(0).toUpperCase() : '👤';
         return `<div class="${sizeClass}">${initial}</div>`;
     }
 }
-
 // Create clan badge HTML
 function createClanBadgeHTML(clan) {
     if (!clan || clan === 'Nessuno') {
