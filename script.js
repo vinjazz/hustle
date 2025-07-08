@@ -1149,6 +1149,7 @@ function initializeApp() {
     setupEventListeners();
     initializeNotifications();
     switchSection('home');
+    window.firebaseReady = true; 
 }
 
 // Gestione login utente
