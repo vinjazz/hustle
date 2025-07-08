@@ -45,11 +45,11 @@ class NotificationBadges {
 
         try {
             if (window.useFirebase && window.firebaseDatabase && window.firebaseReady) {
-                // Carica da Firebase
+                // Carica da Firebase - usa il path users esistente
                 const ref = window.firebaseImports.ref;
                 const get = window.firebaseImports.get;
                 
-                const lastVisitedRef = ref(window.firebaseDatabase, `userActivity/${this.currentUser.uid}/lastVisited`);
+                const lastVisitedRef = ref(window.firebaseDatabase, `users/${this.currentUser.uid}/lastVisited`);
                 const snapshot = await get(lastVisitedRef);
                 
                 if (snapshot.exists()) {
@@ -74,8 +74,11 @@ class NotificationBadges {
 
             console.log('📊 Ultima visita caricata:', this.lastVisited);
         } catch (error) {
-            console.error('Errore caricamento ultima visita:', error);
+            console.warn('⚠️ Errore caricamento ultima visita:', error.message);
+            console.log('🔄 Fallback a modalità locale...');
+            // Fallback a modalità locale
             this.lastVisited = this.getDefaultLastVisited();
+            this.saveLastVisitedLocal();
         }
     }
 
@@ -86,15 +89,20 @@ class NotificationBadges {
         try {
             if (window.useFirebase && window.firebaseDatabase && window.firebaseReady) {
                 const ref = window.firebaseImports.ref;
-                const set = window.firebaseImports.set;
+                const update = window.firebaseImports.update;
                 
-                const lastVisitedRef = ref(window.firebaseDatabase, `userActivity/${this.currentUser.uid}/lastVisited`);
-                await set(lastVisitedRef, this.lastVisited);
+                // Usa update invece di set per non sovrascrivere altri dati utente
+                const updates = {};
+                updates[`users/${this.currentUser.uid}/lastVisited`] = this.lastVisited;
+                await update(ref(window.firebaseDatabase), updates);
             } else {
                 this.saveLastVisitedLocal();
             }
         } catch (error) {
-            console.error('Errore salvataggio ultima visita:', error);
+            console.warn('⚠️ Errore salvataggio Firebase:', error.message);
+            console.log('🔄 Salvataggio locale come fallback...');
+            // Fallback a salvataggio locale
+            this.saveLastVisitedLocal();
         }
     }
 
