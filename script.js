@@ -4878,16 +4878,7 @@ window.resetVisitTracking = function() {
     }
 };
 
-// Debounce per aggiornamenti badge frequenti
-let badgeUpdateTimeout;
-function debouncedBadgeUpdate(sectionKey) {
-    clearTimeout(badgeUpdateTimeout);
-    badgeUpdateTimeout = setTimeout(() => {
-        if (window.badgeSystem && window.badgeSystem.isInitialized) {
-            window.badgeSystem.refreshSectionBadge(sectionKey);
-        }
-    }, 1000);
-}
+
 
 // Observer per rilevare quando vengono aggiunti nuovi elementi nav
 const navObserver = new MutationObserver((mutations) => {
