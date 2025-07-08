@@ -800,29 +800,27 @@ button:disabled {
 }
 
 /* Header del messaggio (nome utente) */
-.message-avatar-small .comment-avatar {
-    /* Dimensioni perfette per chat */
-    width: 32px;
-    height: 32px;
-    overflow: hidden;
-    position: relative;
+.message-avatar img, .comment-avatar img, .thread-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 2 !important;
+    display: block !important;
 }
-
-.message-avatar-small .comment-avatar img {
-    /* Immagine perfettamente centrata */
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-
-
 .message-author-header {
     margin-bottom: 0.3rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
-
+.comment-avatar.has-image {
+    font-size: 0 !important;
+    color: transparent !important;
+}
 .message-author-name {
     font-weight: 600;
     font-size: 0.85rem;

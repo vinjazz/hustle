@@ -3817,6 +3817,7 @@ function loadMessages(sectionKey) {
 
 // Mostra messaggi
 // Mostra messaggi stile WhatsApp con avatar potenziati
+// Mostra messaggi stile WhatsApp con avatar potenziati
 async function displayMessages(messages) {
     const chatMessages = document.getElementById('chat-messages');
 
@@ -3901,7 +3902,6 @@ async function displayMessages(messages) {
     chatMessages.innerHTML = htmlContent;
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
-// 🆕 AGGIUNGI queste nuove funzioni:
 function formatTimeShort(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
