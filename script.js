@@ -3519,7 +3519,6 @@ async function displayThreadComments(comments) {
         await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
     } catch (error) {
         console.warn('Errore pre-caricamento avatar commenti:', error);
-        // Continua comunque con quello che abbiamo
     }
 
     commentsContainer.innerHTML = comments.map(comment => {
@@ -3538,12 +3537,13 @@ async function displayThreadComments(comments) {
             commentContentHtml += `<div class="comment-text">${highlightMentions(escapeHtml(comment.content), currentUser?.uid)}</div>`;
         }
 
-        // Aggiungi immagine se presente
+        // Aggiungi immagine se presente - SOLO QUESTE DEVONO APRIRE IL MODAL
         if (comment.imageUrl) {
             commentContentHtml += `
                 <div class="comment-image">
                     <img src="${comment.imageUrl}" 
                          alt="${comment.imageName || 'Immagine del commento'}" 
+                         class="comment-main-image"
                          onclick="openImageModal('${comment.imageUrl}', '${comment.imageName || 'Immagine del commento'}')"
                          title="Clicca per ingrandire">
                 </div>
@@ -3568,6 +3568,8 @@ async function displayThreadComments(comments) {
     // Scroll to bottom
     commentsContainer.scrollTop = commentsContainer.scrollHeight;
 }
+
+
 // Aggiungi commento
 async function addComment() {
     if (!currentUser) {
@@ -3739,6 +3741,14 @@ function addEmoticon(type, emoticon) {
 
 // Apri modal immagine a schermo intero
 function openImageModal(imageUrl, imageName) {
+    // Non aprire il modal se l'elemento cliccato è un avatar
+    if (event && event.target) {
+        if (event.target.classList.contains('avatar-image') || 
+            event.target.closest('.user-avatar, .message-avatar, .comment-avatar, .user-avatar-default')) {
+            return false;
+        }
+    }
+
     const modal = document.getElementById('imageModal');
     const modalImage = document.getElementById('modalImage');
 
@@ -4626,6 +4636,8 @@ function createAvatarHTML(user, size = 'small') {
             <div class="${sizeClass}">
                 <img src="${user.avatarUrl}" 
                      alt="Avatar ${user.username}"
+                     class="avatar-image"
+                     onclick="event.stopPropagation(); return false;"
                      onerror="this.style.display='none'; this.parentNode.innerHTML='${user.username ? user.username.charAt(0).toUpperCase() : '👤'}';">
             </div>
         `;
@@ -4634,6 +4646,42 @@ function createAvatarHTML(user, size = 'small') {
         return `<div class="${sizeClass}">${initial}</div>`;
     }
 }
+
+// 2. AGGIORNA LA FUNZIONE openImageModal per controllare se è un avatar
+function openImageModal(imageUrl, imageName) {
+    // Non aprire il modal se l'elemento cliccato è un avatar
+    if (event && event.target) {
+        if (event.target.classList.contains('avatar-image') || 
+            event.target.closest('.user-avatar, .message-avatar, .comment-avatar, .user-avatar-default')) {
+            return false;
+        }
+    }
+
+    const modal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+
+    modalImage.src = imageUrl;
+    modalImage.alt = imageName || 'Immagine';
+    modal.style.display = 'flex';
+
+    // Previeni scroll del body
+    document.body.style.overflow = 'hidden';
+}
+
+// 3. AGGIUNGI EVENT LISTENER PER PREVENIRE CLICK SUGLI AVATAR
+document.addEventListener('DOMContentLoaded', function() {
+    // Previeni il click sugli avatar
+    document.addEventListener('click', function(event) {
+        // Se è un avatar, previeni l'apertura del modal
+        if (event.target.classList.contains('avatar-image') || 
+            event.target.closest('.user-avatar, .message-avatar, .comment-avatar')) {
+            event.stopPropagation();
+            event.preventDefault();
+            return false;
+        }
+    }, true); // Usa capture per intercettare prima
+});
+
 // Create clan badge HTML
 function createClanBadgeHTML(clan) {
     if (!clan || clan === 'Nessuno') {
