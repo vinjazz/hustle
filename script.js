@@ -3726,6 +3726,89 @@ async function displayMessages(messages) {
     let lastAuthor = '';
     let lastTimestamp = 0;
 
+    // Pre-carica tutti gli utenti necessari con gestione errori
+    const uniqueUserIds = [...new Set(messages.map(msg => msg.authorId).filter(Boolean))];
+    try {
+        await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
+    } catch (error) {
+        console.warn('Errore pre-caricamento avatar:', error);
+        // Continua comunque con quello che abbiamo
+    }
+
+    for (let index = 0; index < messages.length; index++) {
+        const msg = messages[index];
+        
+        // Trova dati utente per avatar e clan (ora dovrebbero essere tutti caricati)
+        const user = allUsers.find(u => u.uid === msg.authorId) || {
+            uid: msg.authorId || 'unknown',
+            username: msg.author,
+            clan: 'Nessuno',
+            avatarUrl: null
+        };
+
+        const isOwnMessage = currentUser && msg.authorId === currentUser.uid;
+        const isNewAuthor = msg.author !== lastAuthor;
+        const timeDiff = msg.timestamp - lastTimestamp;
+        const showTimestamp = timeDiff > 300000; // 5 minuti
+
+        // Separatore temporale se molto tempo è passato
+        if (showTimestamp && index > 0) {
+            htmlContent += `
+                <div class="message-time-separator">
+                    <span>${formatDate(msg.timestamp)}</span>
+                </div>
+            `;
+        }
+
+        // Container del messaggio
+        htmlContent += `
+            <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
+                ${!isOwnMessage && isNewAuthor ? `
+                    <div class="message-avatar-small">
+                        ${createAvatarHTML(user, 'small')}
+                    </div>
+                ` : `<div class="message-avatar-spacer"></div>`}
+                
+                <div class="message-bubble ${isOwnMessage ? 'own-bubble' : 'other-bubble'}">
+                    ${!isOwnMessage && isNewAuthor ? `
+                        <div class="message-author-header">
+                            <span class="message-author-name">${msg.author}</span>
+                            ${createClanBadgeHTML(user.clan)}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="message-text">${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
+                    
+                    <div class="message-meta">
+                        <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
+                        ${isOwnMessage ? '<span class="message-status">✓</span>' : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        lastAuthor = msg.author;
+        lastTimestamp = msg.timestamp;
+    }
+
+    chatMessages.innerHTML = htmlContent;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+    const chatMessages = document.getElementById('chat-messages');
+
+    if (messages.length === 0) {
+        chatMessages.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #666;">
+                Nessun messaggio in questa chat. Inizia la conversazione!
+            </div>
+        `;
+        return;
+    }
+
+    let htmlContent = '';
+    let lastAuthor = '';
+    let lastTimestamp = 0;
+
     // Pre-carica tutti gli utenti necessari
     const uniqueUserIds = [...new Set(messages.map(msg => msg.authorId).filter(Boolean))];
     await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
