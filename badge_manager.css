@@ -581,3 +581,35 @@
     -ms-user-select: none;
     pointer-events: none;
 }
+
+
+.section-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #ff4757;
+    color: white;
+    border-radius: 50%;
+    padding: 4px 6px;
+    font-size: 11px;
+    font-weight: bold;
+    min-width: 18px;
+    text-align: center;
+    z-index: 10;
+}
+
+.section-badge.badge-double-digit {
+    border-radius: 10px;
+    padding: 4px 8px;
+}
+
+.section-badge.badge-high-count {
+    background: #ff3838;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
