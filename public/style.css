@@ -1071,68 +1071,7 @@ button:disabled {
 .chat-messages::-webkit-scrollbar-thumb:hover {
     background: var(--gradient-primary);
 }
-/* ========================================
-   AVATAR FIX - AGGIUNGI ALLA FINE
-   ======================================== */
 
-/* Avatar piccolo per chat - OVERRIDE */
-.message-avatar-small {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 50% !important;
-    margin-right: 0.5rem !important;
-    flex-shrink: 0 !important;
-    align-self: flex-end !important;
-    margin-bottom: 0.3rem !important;
-}
-
-.message-avatar-small .comment-avatar {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 14px !important;
-    border: 2px solid var(--border) !important;
-    overflow: hidden !important;
-    position: relative !important;
-    background: var(--gradient-secondary) !important;
-    color: white !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-weight: 600 !important;
-    border-radius: 50% !important;
-}
-
-.message-avatar-small .comment-avatar img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-    border-radius: 50% !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    z-index: 2 !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-}
-
-.message-avatar-small .comment-avatar.has-image {
-    font-size: 0 !important;
-    color: transparent !important;
-}
-
-/* Avatar generali - OVERRIDE */
-.message-avatar img, .comment-avatar img, .thread-avatar img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-    border-radius: 50% !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    z-index: 2 !important;
-    display: block !important;
-}
 /* ========================================
    11. THREAD VIEW
    ======================================== */
@@ -2676,7 +2615,166 @@ button:disabled {
 }
 
 /* ========================================
-   24. RESPONSIVE DESIGN
+   24. AVATAR FIX - PREVIENE APERTURA MODAL
+   ======================================== */
+
+/* Previeni il cursore pointer sugli avatar */
+.avatar-image {
+    cursor: default !important;
+    pointer-events: auto !important;
+}
+
+/* Assicurati che gli avatar non abbiano effetti hover che suggeriscono clickabilità */
+.user-avatar img,
+.message-avatar img, 
+.comment-avatar img,
+.avatar-image {
+    cursor: default !important;
+    transition: none !important;
+}
+
+.user-avatar img:hover,
+.message-avatar img:hover,
+.comment-avatar img:hover,
+.avatar-image:hover {
+    transform: none !important;
+    box-shadow: none !important;
+    border-color: var(--border) !important;
+}
+
+/* Mantieni il cursore pointer solo per le immagini dei contenuti */
+.thread-image img,
+.comment-image img,
+.comment-main-image {
+    cursor: pointer !important;
+}
+
+.thread-image img:hover,
+.comment-image img:hover,
+.comment-main-image:hover {
+    transform: scale(1.02) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3) !important;
+    border-color: var(--accent-2) !important;
+}
+
+/* Specifico per l'avatar dell'utente corrente (che può essere cambiato) */
+.user-info .user-avatar {
+    position: relative;
+}
+
+.user-info .user-avatar img {
+    cursor: default !important;
+}
+
+/* Solo quando ci sono i controlli avatar visibili, abilita il click */
+.avatar-controls:not([style*="display: none"]) + * .user-avatar img,
+.avatar-controls[style*="display: block"] + * .user-avatar img {
+    cursor: pointer !important;
+}
+
+/* Assicurati che gli avatar mantengano la loro forma */
+.user-avatar,
+.message-avatar,
+.comment-avatar {
+    border-radius: 50% !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+.user-avatar img,
+.message-avatar img,
+.comment-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    z-index: 2 !important;
+}
+
+/* Stile per distinguere le immagini cliccabili dalle non cliccabili */
+.comment-main-image,
+.thread-image img {
+    border: 2px solid transparent !important;
+    transition: all 0.3s ease !important;
+}
+
+.comment-main-image:hover,
+.thread-image img:hover {
+    border-color: var(--accent-2) !important;
+}
+
+/* Fix per assicurarsi che gli avatar piccoli nella chat non siano cliccabili */
+.message-avatar-small .comment-avatar,
+.message-avatar-small .comment-avatar img {
+    cursor: default !important;
+    pointer-events: none !important;
+}
+
+/* Reset pointer events per tutto il container dell'avatar */
+.message-avatar-small,
+.comment-with-avatar > .comment-avatar,
+.comment-with-avatar > .user-avatar,
+.comment-with-avatar > .message-avatar {
+    pointer-events: none !important;
+}
+
+/* Ma mantieni pointer events per il contenuto dei commenti */
+.comment-content,
+.message-text,
+.thread-content {
+    pointer-events: auto !important;
+}
+
+/* Stile specifico per indicare che le immagini dei contenuti sono cliccabili */
+.thread-image,
+.comment-image {
+    position: relative;
+}
+
+.thread-image img::after,
+.comment-image img::after {
+    content: '🔍';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.thread-image:hover img::after,
+.comment-image:hover img::after {
+    opacity: 1;
+}
+
+/* Assicurati che il modal non si apra per errore */
+.image-modal {
+    pointer-events: auto !important;
+}
+
+/* Avatar generali - OVERRIDE per immagini nei contenuti */
+.message-avatar img, .comment-avatar img, .thread-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 2 !important;
+    display: block !important;
+}
+
+/* ========================================
+   25. RESPONSIVE DESIGN
    ======================================== */
 
 @media (max-width: 1024px) {
