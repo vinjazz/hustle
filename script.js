@@ -3709,6 +3709,7 @@ function loadMessages(sectionKey) {
 }
 
 // Mostra messaggi
+// 🆕 SOSTITUISCI la funzione displayMessages esistente con questa:
 function displayMessages(messages) {
     const chatMessages = document.getElementById('chat-messages');
 
@@ -3721,7 +3722,11 @@ function displayMessages(messages) {
         return;
     }
 
-    chatMessages.innerHTML = messages.map(msg => {
+    let htmlContent = '';
+    let lastAuthor = '';
+    let lastTimestamp = 0;
+
+    messages.forEach((msg, index) => {
         // Trova dati utente per avatar e clan
         const user = allUsers.find(u => u.uid === msg.authorId) || {
             username: msg.author,
@@ -3729,24 +3734,82 @@ function displayMessages(messages) {
             avatarUrl: null
         };
 
-        return `
-            <div class="message-with-avatar">
-                ${createAvatarHTML(user, 'medium')}
-                <div class="message-content">
-                    <div class="message-header">
-                        <span class="message-author-name">${msg.author}</span>
-                        ${createClanBadgeHTML(user.clan)}
-                        <span class="message-time">${formatTime(msg.timestamp)}</span>
+        const isOwnMessage = currentUser && msg.authorId === currentUser.uid;
+        const isNewAuthor = msg.author !== lastAuthor;
+        const timeDiff = msg.timestamp - lastTimestamp;
+        const showTimestamp = timeDiff > 300000; // 5 minuti
+
+        // Separatore temporale se molto tempo è passato
+        if (showTimestamp && index > 0) {
+            htmlContent += `
+                <div class="message-time-separator">
+                    <span>${formatDate(msg.timestamp)}</span>
+                </div>
+            `;
+        }
+
+        // Container del messaggio
+        htmlContent += `
+            <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
+                ${!isOwnMessage && isNewAuthor ? `
+                    <div class="message-avatar-small">
+                        ${createAvatarHTML(user, 'small')}
                     </div>
+                ` : `<div class="message-avatar-spacer"></div>`}
+                
+                <div class="message-bubble ${isOwnMessage ? 'own-bubble' : 'other-bubble'}">
+                    ${!isOwnMessage && isNewAuthor ? `
+                        <div class="message-author-header">
+                            <span class="message-author-name">${msg.author}</span>
+                            ${createClanBadgeHTML(user.clan)}
+                        </div>
+                    ` : ''}
+                    
                     <div class="message-text">${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
+                    
+                    <div class="message-meta">
+                        <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
+                        ${isOwnMessage ? '<span class="message-status">✓</span>' : ''}
+                    </div>
                 </div>
             </div>
         `;
-    }).join('');
 
+        lastAuthor = msg.author;
+        lastTimestamp = msg.timestamp;
+    });
+
+    chatMessages.innerHTML = htmlContent;
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// 🆕 AGGIUNGI queste nuove funzioni:
+function formatTimeShort(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('it-IT', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+}
+
+function formatDate(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffTime = now - date;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Oggi';
+    if (diffDays === 1) return 'Ieri';
+    if (diffDays < 7) return date.toLocaleDateString('it-IT', { weekday: 'long' });
+    
+    return date.toLocaleDateString('it-IT', { 
+        day: 'numeric', 
+        month: 'long',
+        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+}
 function saveLocalMessage(section, messageData) {
     const dataPath = getDataPath(section, 'messages');
     if (!dataPath) return;
