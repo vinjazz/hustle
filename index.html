@@ -59,6 +59,12 @@
         const database = useFirebase ? getDatabase(app) : null;
         const storage = useFirebase ? getStorage(app) : null;
         const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
+
+
+        // ✅ Listener per impostare window.currentUser
+        onAuthStateChanged(auth, (user) => {
+            window.currentUser = user;
+        });
         
         // Esponi Firebase globalmente per compatibilità
         window.firebaseApp = app;
