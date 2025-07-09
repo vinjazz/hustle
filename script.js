@@ -269,6 +269,11 @@ const sectionConfig = {
         description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
         type: 'dashboard'
     },
+    'salotto': {
+        title: '🛋️ Salotto',
+        description: 'Un posto per chiacchierare del più e del meno, fuori dagli schemi del gioco.',
+        type: 'forum'
+    },
 	'salotto': {
         title: '🏰 Salotto',
         description: 'Dove rilassarsi e parlare del più e del meno',
@@ -2234,6 +2239,17 @@ function initializeLocalData() {
 
 function getExampleThreads(section) {
     const examples = {
+'oggetti': [{
+                id: 'salotto_thread_1',
+                title: 'Salotto',
+                content: 'Un posto per chiacchierare del più e del meno, fuori dagli schemi del gioco.',
+                author: 'Admin',
+                createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
+                replies: 5,
+                views: 42,
+                status: 'approved'
+            }
+        ],
         'eventi': [{
                 id: 'evt_demo_1',
                 title: '🎃 Evento Halloween - Strategie e Premi',

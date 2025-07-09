@@ -2101,6 +2101,7 @@ async function handleLogout() {
     } catch (error) {
         console.error('Errore logout:', error);
     }
+    window.location.reload();
 }
 
 // Inizializza dati di esempio per modalità locale

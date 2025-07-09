@@ -970,7 +970,7 @@ function showSectionSelectionModal() {
     modal.className = 'section-selection-modal';
     modal.innerHTML = `
         <div class="section-selection-content">
-            <h3>🎯 Dove vuoi creare il thread?</h3>
+            <h3>Dove vuoi creare il thread?</h3>
             <p>Seleziona la sezione più appropriata per il tuo thread:</p>
             
             <div class="section-selection-grid">
