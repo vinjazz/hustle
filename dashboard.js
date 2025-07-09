@@ -246,6 +246,7 @@ class DashboardManager {
             { icon: '📅', title: 'Eventi', subtitle: 'Scopri eventi in corso', section: 'eventi', gradient: 'red' },
             { icon: '⚔️', title: 'Oggetti', subtitle: 'Guide armi e armature', section: 'oggetti', gradient: 'purple' },
             { icon: '🆕', title: 'Novità', subtitle: 'Ultimi aggiornamenti', section: 'novita', gradient: 'blue' },
+            { icon: '🛋️', title: 'Salotto', subtitle: 'Per parlare del più e del meno', section: 'salotto', gradient: 'yellow'},
             { icon: '💬', title: 'Chat', subtitle: 'Chiacchiera con tutti', section: 'chat-generale', gradient: 'green' }
         ];
 
@@ -344,7 +345,7 @@ class DashboardManager {
         };
 
         // 1. Conta thread totali approvati
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+        const sections = ['eventi', 'oggetti', 'novita','salotto', 'associa-clan'];
         const userClan = getCurrentUserClan();
         
         if (userClan !== 'Nessuno') {
@@ -618,7 +619,7 @@ class DashboardManager {
     // Carica ultimi thread generali - FIX APPLICATO
     async loadLatestGeneralThreads() {
         const container = document.getElementById('dashboard-general-threads');
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+        const sections = ['eventi', 'oggetti', 'novita','salotto', 'associa-clan'];
         
         try {
             const allThreads = [];
@@ -732,6 +733,7 @@ class DashboardManager {
             'eventi': 'Eventi',
             'oggetti': 'Oggetti',
             'novita': 'Novità',
+            'salotto': 'Salotto',
             'associa-clan': 'Associa Clan',
             'clan-war': 'Guerra',
             'clan-premi': 'Premi',
@@ -1020,6 +1022,12 @@ function getAvailableSectionsForUser() {
             name: 'Novità',
             icon: '🆕',
             description: 'Ultime notizie e aggiornamenti'
+        },
+        {
+            key: 'salotto',
+            name: 'Salotto',
+            icon: '🛋️',
+            description: 'Dove rilassarsi e parlare del più e del meno'
         },
         {
             key: 'associa-clan',
