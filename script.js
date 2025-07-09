@@ -1158,7 +1158,8 @@ function initializeApp() {
     // Setup UI
     setupEventListeners();
     initializeNotifications();
-    switchSection('home');
+    // Defer initial section switch to allow all scripts to load, fixing race condition
+    setTimeout(() => switchSection('home'), 0);
 }
 
 // Gestione login utente
@@ -1363,45 +1364,6 @@ function loadLocalUserProfile() {
     }
 }
 
-// Carica profilo locale
-function loadLocalUserProfile() {
-    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-    const userData = users[currentUser.email];
-
-    if (userData) {
-        // Controlla se questo utente dovrebbe essere superuser
-        const realUsers = Object.values(users).filter(user =>
-                !user.uid.startsWith('super_admin_') &&
-                !user.uid.startsWith('clan_mod_') &&
-                !user.uid.startsWith('user_'));
-
-        // Se è il primo utente reale e non ha ruolo superuser, assegnaglielo
-        if (realUsers.length > 0 && realUsers[0].uid === userData.uid) {
-            if (!userData.role || userData.role === USER_ROLES.USER) {
-                userData.role = USER_ROLES.SUPERUSER;
-                users[currentUser.email] = userData;
-                localStorage.setItem('hc_local_users', JSON.stringify(users));
-                console.log('🎉 Utente promosso a SUPERUSER:', currentUser.email);
-
-                // Mostra notifica
-                setTimeout(() => {
-                    alert('🎉 Congratulazioni! Sei stato promosso a SUPERUSER come primo utente registrato!');
-                }, 1000);
-            }
-        }
-
-        currentUserData = userData;
-        document.getElementById('currentUsername').textContent = userData.username;
-        document.getElementById('currentClan').textContent = userData.clan || 'Nessuno';
-        document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
-        updateUserRoleBadge();
-
-        // Aggiorna dashboard se è la sezione corrente
-        if (currentSection === 'home') {
-            loadDashboard();
-        }
-    }
-}
 
 // Aggiorna badge ruolo utente
 function updateUserRoleBadge() {
