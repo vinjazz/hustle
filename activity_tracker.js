@@ -38,7 +38,7 @@ class ActivityTracker {
         this.startAutoRefresh();
         
         // Mostra info modalità
-        if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) {
+        if (!window.useFirebase || !window.firebaseDatabase || !window.getFirebaseReady()) {
             console.log('✅ Activity Tracker inizializzato (modalità locale - refresh ogni 30s)');
         } else {
             console.log('✅ Activity Tracker inizializzato con real-time');
@@ -48,8 +48,9 @@ class ActivityTracker {
     // Carica dati attività utente
     async loadUserActivityData() {
         try {
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
                 try {
+                    const { ref, get } = window.firebaseImports;
                     // Prova prima a caricare da users/${userId}/activity (più sicuro)
                     const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
                     const snapshot = await get(userActivityRef);
@@ -119,8 +120,9 @@ class ActivityTracker {
         this.saveToLocalStorage();
         
         // Prova anche Firebase se disponibile
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
             try {
+                const { ref, set } = window.firebaseImports;
                 // Prova a salvare in users/${userId}/activity
                 const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
                 await set(userActivityRef, data);
@@ -134,7 +136,7 @@ class ActivityTracker {
     // Calcola tutti i badge
     async calculateAllBadges() {
         const sections = ['eventi', 'oggetti', 'novita', 'associa-clan', 'chat-generale'];
-        const userClan = getCurrentUserClan();
+        const userClan = window.getCurrentUserClan();
         
         if (userClan !== 'Nessuno') {
             sections.push('clan-chat', 'clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca');
@@ -180,13 +182,14 @@ class ActivityTracker {
 
     // Conta nuovi messaggi
     async countNewMessages(section, sinceTime) {
-        const dataPath = getDataPath(section, 'messages');
+        const dataPath = window.getDataPath(section, 'messages');
         if (!dataPath) return 0;
         
         let count = 0;
         
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
             try {
+                const { ref, get } = window.firebaseImports;
                 const messagesRef = ref(window.firebaseDatabase, dataPath);
                 const snapshot = await get(messagesRef);
                 
@@ -218,13 +221,14 @@ class ActivityTracker {
 
     // Conta nuovi thread
     async countNewThreads(section, sinceTime) {
-        const dataPath = getDataPath(section, 'threads');
+        const dataPath = window.getDataPath(section, 'threads');
         if (!dataPath) return 0;
         
         let count = 0;
         
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
             try {
+                const { ref, get } = window.firebaseImports;
                 const threadsRef = ref(window.firebaseDatabase, dataPath);
                 const snapshot = await get(threadsRef);
                 
@@ -257,7 +261,7 @@ class ActivityTracker {
     
     // Conta da localStorage
     countFromLocalStorage(section, dataType, sinceTime) {
-        const dataPath = getDataPath(section, dataType);
+        const dataPath = window.getDataPath(section, dataType);
         if (!dataPath) return 0;
         
         const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
@@ -365,7 +369,7 @@ class ActivityTracker {
         if (!this.isTracking) return;
         
         // Se l'utente non è nella sezione, aggiorna il badge
-        if (currentSection !== section) {
+        if (window.getCurrentSection() !== section) {
             await this.updateSectionBadge(section);
         }
     }
@@ -400,7 +404,7 @@ class ActivityTracker {
         
         // Ricalcola solo per sezioni non visitate recentemente
         const sectionsToUpdate = Object.keys(window.sectionConfig).filter(section => {
-            return section !== currentSection && 
+            return section !== window.getCurrentSection() && 
                    (!this.lastVisitTimes[section] || 
                     Date.now() - this.lastVisitTimes[section] > 60000); // Più di 1 minuto
         });
@@ -438,7 +442,7 @@ class ActivityTracker {
 
     // Setup listeners real-time per Firebase
     setupRealtimeListeners() {
-        if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) {
+        if (!window.useFirebase || !window.firebaseDatabase || !window.getFirebaseReady()) {
             console.log('⚠️ Real-time non disponibile in modalità locale');
             return;
         }
@@ -449,7 +453,7 @@ class ActivityTracker {
         
         // Monitora tutte le sezioni
         const sections = ['eventi', 'oggetti', 'novita', 'associa-clan', 'chat-generale'];
-        const userClan = getCurrentUserClan();
+        const userClan = window.getCurrentUserClan();
         
         if (userClan !== 'Nessuno') {
             sections.push('clan-chat', 'clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca');
@@ -466,17 +470,18 @@ class ActivityTracker {
         if (!sectionConfig) return;
         
         const dataType = sectionConfig.type === 'chat' ? 'messages' : 'threads';
-        const dataPath = getDataPath(section, dataType);
+        const dataPath = window.getDataPath(section, dataType);
         if (!dataPath) return;
         
         try {
+            const { ref, onValue } = window.firebaseImports;
             const dataRef = ref(window.firebaseDatabase, dataPath);
             
             // Listener per nuovi contenuti con gestione errori
             const callback = onValue(dataRef, 
                 (snapshot) => {
                     // Se non siamo in questa sezione, controlla per nuovi contenuti
-                    if (currentSection !== section && this.isTracking) {
+                    if (window.getCurrentSection() !== section && this.isTracking) {
                         this.checkForNewContent(section, snapshot);
                     }
                 },
@@ -533,6 +538,9 @@ class ActivityTracker {
     // Rimuovi listeners real-time
     removeRealtimeListeners() {
         if (!this.realtimeListeners) return;
+        
+        const { off } = window.firebaseImports || {};
+        if (!off) return;
         
         Object.entries(this.realtimeListeners).forEach(([section, listener]) => {
             if (listener.ref && listener.callback) {
