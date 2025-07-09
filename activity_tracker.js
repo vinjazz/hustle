@@ -37,33 +37,40 @@ class ActivityTracker {
         // Setup auto-refresh ogni 30 secondi (come backup)
         this.startAutoRefresh();
         
-        console.log('✅ Activity Tracker inizializzato con real-time');
+        // Mostra info modalità
+        if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) {
+            console.log('✅ Activity Tracker inizializzato (modalità locale - refresh ogni 30s)');
+        } else {
+            console.log('✅ Activity Tracker inizializzato con real-time');
+        }
     }
 
     // Carica dati attività utente
     async loadUserActivityData() {
         try {
             if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                // Carica da Firebase
-                const userActivityRef = ref(window.firebaseDatabase, `userActivity/${currentUser.uid}`);
-                const snapshot = await get(userActivityRef);
-                
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    this.lastLogoutTime = data.lastLogout || Date.now();
-                    this.lastVisitTimes = data.lastVisitTimes || {};
-                } else {
-                    // Prima volta, imposta timestamp corrente
-                    this.lastLogoutTime = Date.now();
-                    this.lastVisitTimes = {};
-                    await this.saveUserActivityData();
+                try {
+                    // Prova prima a caricare da users/${userId}/activity (più sicuro)
+                    const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
+                    const snapshot = await get(userActivityRef);
+                    
+                    if (snapshot.exists()) {
+                        const data = snapshot.val();
+                        this.lastLogoutTime = data.lastLogout || Date.now();
+                        this.lastVisitTimes = data.lastVisitTimes || {};
+                    } else {
+                        // Prima volta, imposta timestamp corrente
+                        this.lastLogoutTime = Date.now();
+                        this.lastVisitTimes = {};
+                    }
+                } catch (firebaseError) {
+                    console.warn('⚠️ Accesso Firebase negato, uso fallback locale:', firebaseError.message);
+                    // Fallback to localStorage
+                    this.loadFromLocalStorage();
                 }
             } else {
                 // Modalità locale
-                const storageKey = `hc_activity_${currentUser.uid}`;
-                const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
-                this.lastLogoutTime = data.lastLogout || Date.now();
-                this.lastVisitTimes = data.lastVisitTimes || {};
+                this.loadFromLocalStorage();
             }
             
             console.log('📊 Dati attività caricati:', {
@@ -73,9 +80,30 @@ class ActivityTracker {
             
         } catch (error) {
             console.error('Errore caricamento dati attività:', error);
+            // Fallback sicuro
             this.lastLogoutTime = Date.now();
             this.lastVisitTimes = {};
+            // Salva in locale come backup
+            this.saveToLocalStorage();
         }
+    }
+    
+    // Carica da localStorage
+    loadFromLocalStorage() {
+        const storageKey = `hc_activity_${currentUser.uid}`;
+        const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        this.lastLogoutTime = data.lastLogout || Date.now();
+        this.lastVisitTimes = data.lastVisitTimes || {};
+    }
+    
+    // Salva in localStorage
+    saveToLocalStorage() {
+        const storageKey = `hc_activity_${currentUser.uid}`;
+        const data = {
+            lastLogout: this.lastLogoutTime,
+            lastVisitTimes: this.lastVisitTimes
+        };
+        localStorage.setItem(storageKey, JSON.stringify(data));
     }
 
     // Salva dati attività utente
@@ -87,16 +115,19 @@ class ActivityTracker {
             lastVisitTimes: this.lastVisitTimes
         };
         
-        try {
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const userActivityRef = ref(window.firebaseDatabase, `userActivity/${currentUser.uid}`);
+        // Salva sempre in localStorage come backup
+        this.saveToLocalStorage();
+        
+        // Prova anche Firebase se disponibile
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            try {
+                // Prova a salvare in users/${userId}/activity
+                const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
                 await set(userActivityRef, data);
-            } else {
-                const storageKey = `hc_activity_${currentUser.uid}`;
-                localStorage.setItem(storageKey, JSON.stringify(data));
+                console.log('✅ Attività salvata su Firebase');
+            } catch (firebaseError) {
+                console.warn('⚠️ Impossibile salvare su Firebase, usando solo localStorage:', firebaseError.message);
             }
-        } catch (error) {
-            console.error('Errore salvataggio dati attività:', error);
         }
     }
 
@@ -169,16 +200,17 @@ class ActivityTracker {
                     });
                 }
             } catch (error) {
-                console.error(`Errore conteggio messaggi ${section}:`, error);
+                if (error.code === 'PERMISSION_DENIED') {
+                    console.warn(`⚠️ Permessi negati per messaggi ${section}, uso cache locale`);
+                } else {
+                    console.error(`Errore conteggio messaggi ${section}:`, error);
+                }
+                // Fallback to localStorage
+                return this.countFromLocalStorage(section, 'messages', sinceTime);
             }
         } else {
             // Modalità locale
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            count = messages.filter(msg => 
-                msg.timestamp > sinceTime && 
-                msg.authorId !== currentUser.uid
-            ).length;
+            return this.countFromLocalStorage(section, 'messages', sinceTime);
         }
         
         return count;
@@ -207,19 +239,41 @@ class ActivityTracker {
                     });
                 }
             } catch (error) {
-                console.error(`Errore conteggio thread ${section}:`, error);
+                if (error.code === 'PERMISSION_DENIED') {
+                    console.warn(`⚠️ Permessi negati per thread ${section}, uso cache locale`);
+                } else {
+                    console.error(`Errore conteggio thread ${section}:`, error);
+                }
+                // Fallback to localStorage
+                return this.countFromLocalStorage(section, 'threads', sinceTime);
             }
         } else {
             // Modalità locale
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            count = threads.filter(thread => 
+            return this.countFromLocalStorage(section, 'threads', sinceTime);
+        }
+        
+        return count;
+    }
+    
+    // Conta da localStorage
+    countFromLocalStorage(section, dataType, sinceTime) {
+        const dataPath = getDataPath(section, dataType);
+        if (!dataPath) return 0;
+        
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const items = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        
+        if (dataType === 'messages') {
+            return items.filter(msg => 
+                msg.timestamp > sinceTime && 
+                msg.authorId !== currentUser.uid
+            ).length;
+        } else {
+            return items.filter(thread => 
                 thread.createdAt > sinceTime && 
                 (!thread.status || thread.status === 'approved')
             ).length;
         }
-        
-        return count;
     }
 
     // Aggiorna tutti i badge nell'UI
@@ -418,13 +472,22 @@ class ActivityTracker {
         try {
             const dataRef = ref(window.firebaseDatabase, dataPath);
             
-            // Listener per nuovi contenuti
-            const callback = onValue(dataRef, (snapshot) => {
-                // Se non siamo in questa sezione, controlla per nuovi contenuti
-                if (currentSection !== section && this.isTracking) {
-                    this.checkForNewContent(section, snapshot);
+            // Listener per nuovi contenuti con gestione errori
+            const callback = onValue(dataRef, 
+                (snapshot) => {
+                    // Se non siamo in questa sezione, controlla per nuovi contenuti
+                    if (currentSection !== section && this.isTracking) {
+                        this.checkForNewContent(section, snapshot);
+                    }
+                },
+                (error) => {
+                    if (error.code === 'PERMISSION_DENIED') {
+                        console.warn(`⚠️ Permessi negati per ${section}, listener disabilitato`);
+                    } else {
+                        console.error(`Errore listener ${section}:`, error);
+                    }
                 }
-            });
+            );
             
             // Salva riferimento per pulizia
             this.realtimeListeners[section] = { ref: dataRef, callback };
