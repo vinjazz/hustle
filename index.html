@@ -170,6 +170,27 @@
     <link href="style.css" rel="stylesheet">
     <link href="dashboard.css" rel="stylesheet">
     
+    <!-- ======================================= -->
+    <!-- SISTEMA DI NAVIGAZIONE (NUOVO)         -->
+    <!-- ======================================= -->
+    <script>
+        // Configurazione sistema di navigazione
+        window.navigationConfig = {
+            enableMobileFeatures: true,    // Abilita breadcrumb e gesti mobile
+            enableDebugMode: false,        // Abilita logging per debug (cambia in true se serve)
+            enableVibration: true,         // Vibrazione su mobile Android
+            enableGestures: true,          // Swipe da sinistra per tornare indietro
+            toastDuration: 3000           // Durata toast in millisecondi
+        };
+    </script>
+    
+    <!-- Stili e script del sistema di navigazione -->
+    <link href="navigation-styles.css" rel="stylesheet">
+    <script src="browser-navigation.js"></script>
+    <script src="mobile-navigation.js"></script>
+    <script src="navigation-init.js"></script>
+    <!-- ======================================= -->
+    
     <!-- Username Modal Styles -->
     <style>
         /* Username Modal Styles */
@@ -730,7 +751,8 @@
             <!-- Thread View -->
             <div class="thread-view" id="thread-view">
                 <div style="width: 100%; display: flex; flex-direction: column; height: 100%;">
-                    <button class="back-btn" onclick="backToForum()">← Torna al Forum</button>
+                    <!-- MODIFICATO: Aggiunto title per tooltip -->
+                    <button class="back-btn" onclick="backToForum()" title="Torna al forum (Escape o swipe da sinistra)">← Torna al Forum</button>
                     
                     <div class="thread-header">
                         <h1 id="thread-title">Titolo Thread</h1>

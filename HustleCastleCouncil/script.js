@@ -269,9 +269,14 @@ const sectionConfig = {
         description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
         type: 'dashboard'
     },
-	'salotto': {
-        title: '🏰 Salotto',
+ 'salotto': {
+        title: '🛋️ Salotto',
         description: 'Dove rilassarsi e parlare del più e del meno',
+        type: 'forum'
+    },
+    'segnalazioni': {
+        title: '📢 Segnalazioni',
+        description: 'Segnala bug o problemi tecnici riscontrati nel forum o nel gioco.',
         type: 'forum'
     },
     'eventi': {
@@ -2190,7 +2195,7 @@ function initializeLocalData() {
     }
 
     // Aggiungi thread di esempio per sezioni generali se non esistono
-    const sections = ['salotto', 'eventi', 'oggetti', 'novita', 'associa-clan'];
+    const sections = ['salotto', 'eventi', 'oggetti', 'novita', 'associa-clan', 'segnalazioni'];
     sections.forEach(section => {
         const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
         if (threads.length === 0) {
@@ -2234,6 +2239,28 @@ function initializeLocalData() {
 
 function getExampleThreads(section) {
     const examples = {
+'oggetti': [{
+                id: 'salotto_thread_1',
+                title: 'Salotto',
+                content: 'Un posto per chiacchierare del più e del meno, fuori dagli schemi del gioco.',
+                author: 'Admin',
+                createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
+                replies: 5,
+                views: 42,
+                status: 'approved'
+            }
+        ],
+        'segnalazioni': [{
+                id: 'bug_report_1',
+                title: '🐞 Bug - Non riesco a equipaggiare l\'armatura del drago',
+                content: 'Quando provo a equipaggiare l\'armatura del drago, il gioco si blocca e devo riavviare. Succede solo con quel pezzo.',
+                author: 'BugHunter',
+                createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
+                replies: 2,
+                views: 18,
+                status: 'approved'
+            }
+        ],
         'eventi': [{
                 id: 'evt_demo_1',
                 title: '🎃 Evento Halloween - Strategie e Premi',

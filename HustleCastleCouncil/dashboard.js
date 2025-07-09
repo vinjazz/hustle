@@ -246,6 +246,8 @@ class DashboardManager {
             { icon: '📅', title: 'Eventi', subtitle: 'Scopri eventi in corso', section: 'eventi', gradient: 'red' },
             { icon: '⚔️', title: 'Oggetti', subtitle: 'Guide armi e armature', section: 'oggetti', gradient: 'purple' },
             { icon: '🆕', title: 'Novità', subtitle: 'Ultimi aggiornamenti', section: 'novita', gradient: 'blue' },
+            { icon: '🛋️', title: 'Salotto', subtitle: 'Per parlare del più e del meno', section: 'salotto', gradient: 'yellow'},
+            { icon: '📢', title: 'Segnalazioni', subtitle: 'Segnala bug o problemi', section: 'segnalazioni', gradient: 'orange'},
             { icon: '💬', title: 'Chat', subtitle: 'Chiacchiera con tutti', section: 'chat-generale', gradient: 'green' }
         ];
 
@@ -344,7 +346,7 @@ class DashboardManager {
         };
 
         // 1. Conta thread totali approvati
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+        const sections = ['eventi', 'oggetti', 'novita','salotto', 'segnalazioni', 'associa-clan'];
         const userClan = getCurrentUserClan();
         
         if (userClan !== 'Nessuno') {
@@ -618,7 +620,7 @@ class DashboardManager {
     // Carica ultimi thread generali - FIX APPLICATO
     async loadLatestGeneralThreads() {
         const container = document.getElementById('dashboard-general-threads');
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+        const sections = ['eventi', 'oggetti', 'novita','salotto', 'segnalazioni', 'associa-clan'];
         
         try {
             const allThreads = [];
@@ -732,6 +734,8 @@ class DashboardManager {
             'eventi': 'Eventi',
             'oggetti': 'Oggetti',
             'novita': 'Novità',
+            'salotto': 'Salotto',
+            'segnalazioni': 'Segnalazioni',
             'associa-clan': 'Associa Clan',
             'clan-war': 'Guerra',
             'clan-premi': 'Premi',
@@ -807,6 +811,8 @@ class DashboardManager {
             'eventi': '📅',
             'oggetti': '⚔️',
             'novita': '🆕',
+            'salotto': '🛋️',
+            'segnalazioni': '📢',
             'associa-clan': '🏠',
             'clan-war': '⚔️',
             'clan-premi': '🏆',
@@ -1020,6 +1026,18 @@ function getAvailableSectionsForUser() {
             name: 'Novità',
             icon: '🆕',
             description: 'Ultime notizie e aggiornamenti'
+        },
+        {
+            key: 'salotto',
+            name: 'Salotto',
+            icon: '🛋️',
+            description: 'Dove rilassarsi e parlare del più e del meno'
+        },
+        {
+            key: 'segnalazioni',
+            name: 'Segnalazioni',
+            icon: '📢',
+            description: 'Segnala bug o problemi tecnici'
         },
         {
             key: 'associa-clan',
