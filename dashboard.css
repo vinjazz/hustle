@@ -352,6 +352,7 @@
 .nav-card-purple::before { background: var(--gradient-primary); }
 .nav-card-blue::before { background: var(--gradient-secondary); }
 .nav-card-green::before { background: var(--gradient-success); }
+.nav-card-orange::before { background: linear-gradient(90deg, #ff8c00, #ffc107); }
 
 .quick-nav-card:hover {
     transform: translateY(-6px) scale(1.02);
@@ -690,6 +691,7 @@
 .action-green { background: var(--gradient-success); }
 .action-purple { background: var(--gradient-primary); }
 .action-blue { background: var(--gradient-secondary); }
+.action-orange { background: linear-gradient(90deg, #ff8c00, #ffc107); }
 
 .quick-action-btn:hover {
     transform: translateY(-6px) scale(1.05);
