@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "yes",
+    "public": "HustleCastleCouncil",
     "ignore": [
       "firebase.json",
       "**/.*",
