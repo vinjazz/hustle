@@ -170,27 +170,6 @@
     <link href="style.css" rel="stylesheet">
     <link href="dashboard.css" rel="stylesheet">
     
-    <!-- ======================================= -->
-    <!-- SISTEMA DI NAVIGAZIONE (NUOVO)         -->
-    <!-- ======================================= -->
-    <script>
-        // Configurazione sistema di navigazione
-        window.navigationConfig = {
-            enableMobileFeatures: true,    // Abilita breadcrumb e gesti mobile
-            enableDebugMode: false,        // Abilita logging per debug (cambia in true se serve)
-            enableVibration: true,         // Vibrazione su mobile Android
-            enableGestures: true,          // Swipe da sinistra per tornare indietro
-            toastDuration: 3000           // Durata toast in millisecondi
-        };
-    </script>
-    
-    <!-- Stili e script del sistema di navigazione -->
-    <link href="navigation-styles.css" rel="stylesheet">
-    <script src="browser-navigation.js"></script>
-    <script src="mobile-navigation.js"></script>
-    <script src="navigation-init.js"></script>
-    <!-- ======================================= -->
-    
     <!-- Username Modal Styles -->
     <style>
         /* Username Modal Styles */
@@ -882,10 +861,33 @@
         <img id="modalImage" src="" alt="Immagine a schermo intero">
     </div>
 
-    <!-- Scripts -->
+    <!-- ======================================= -->
+    <!-- PRIMA carica i tuoi script esistenti   -->
+    <!-- ======================================= -->
     <script src="script.js"></script>
     <script src="username_handler.js"></script>
     <script src="dashboard.js"></script>
     <script src="activity_tracker.js"></script>
+
+    <!-- ======================================= -->
+    <!-- POI carica il sistema di navigazione    -->
+    <!-- ======================================= -->
+    <script>
+        // Configurazione sistema di navigazione (DOPO che tutto è caricato)
+        window.navigationConfig = {
+            enableMobileFeatures: true,    // Abilita breadcrumb e gesti mobile
+            enableDebugMode: false,        // Abilita logging per debug (cambia in true se serve)
+            enableVibration: true,         // Vibrazione su mobile Android
+            enableGestures: true,          // Swipe da sinistra per tornare indietro
+            toastDuration: 3000,          // Durata toast in millisecondi
+            initDelay: 2000               // Ritardo maggiore per assicurarsi che tutto sia pronto
+        };
+    </script>
+    
+    <!-- Stili e script del sistema di navigazione - ALLA FINE -->
+    <link href="navigation-styles.css" rel="stylesheet">
+    <script src="browser-navigation.js"></script>
+    <script src="mobile-navigation.js"></script>
+    <script src="navigation-init.js"></script>
 </body>
 </html>
