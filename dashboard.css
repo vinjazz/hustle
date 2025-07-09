@@ -353,6 +353,7 @@
 .nav-card-blue::before { background: var(--gradient-secondary); }
 .nav-card-green::before { background: var(--gradient-success); }
 .nav-card-orange::before { background: linear-gradient(90deg, #ff8c00, #ffc107); }
+.nav-card-yellow::before { background: linear-gradient(90deg, #a8cc24d2, #e4f500); }
 
 .quick-nav-card:hover {
     transform: translateY(-6px) scale(1.02);
