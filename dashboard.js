@@ -1,5 +1,6 @@
 // ===============================================
 // DASHBOARD MODULE - Modern Dark Theme Design
+// VERSIONE COMPLETA CON TUTTI I FIX
 // ===============================================
 
 class DashboardManager {
@@ -10,7 +11,7 @@ class DashboardManager {
     }
 
     // Carica dashboard principale
-     loadDashboard() {
+    loadDashboard() {
         const threadList = document.getElementById('thread-list');
 
         // Se l'utente non è ancora loggato, mostra loading
@@ -168,7 +169,7 @@ class DashboardManager {
         `;
     }
 
-    // Griglia contenuti principali (senza consiglio del giorno)
+    // Griglia contenuti principali
     getContentGrid() {
         return `
             <div class="dashboard-content-grid">
@@ -223,7 +224,7 @@ class DashboardManager {
         `;
     }
 
-    // Azioni rapide migliorate
+    // Azioni rapide migliorate - FIX APPLICATO
     getQuickActionsSection(userClan) {
         return `
             <div class="dashboard-section">
@@ -261,7 +262,7 @@ class DashboardManager {
         `).join('');
     }
 
-    // Bottoni azioni rapide aggiornati
+    // Bottoni azioni rapide aggiornati - FIX APPLICATO
     getQuickActionButtons(userClan) {
         const actions = [
             {
@@ -614,9 +615,132 @@ class DashboardManager {
         `).join('');
     }
 
-    
+    // Carica ultimi thread generali - FIX APPLICATO
+    async loadLatestGeneralThreads() {
+        const container = document.getElementById('dashboard-general-threads');
+        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+        
+        try {
+            const allThreads = [];
+            
+            for (const section of sections) {
+                const threads = await this.getThreadsFromSection(section);
+                allThreads.push(...threads.map(t => ({...t, section})));
+            }
 
-    
+            // Ordina per data e prendi i più recenti
+            allThreads.sort((a, b) => b.createdAt - a.createdAt);
+            const recentThreads = allThreads.slice(0, 4);
+
+            if (recentThreads.length === 0) {
+                container.innerHTML = this.getEmptyState('📝', 'Nessun thread recente');
+                return;
+            }
+
+            // FIX: SOLO NAVIGAZIONE ALLE SEZIONI
+            container.innerHTML = recentThreads.map(thread => `
+                <div class="thread-item-small dashboard-thread-preview" 
+                     onclick="navigateToSection('${thread.section}', '${thread.id}')"
+                     data-section="${thread.section}"
+                     title="Clicca per andare alla sezione ${this.getSectionName(thread.section)}">
+                    <div class="thread-small-icon">${this.getSectionIcon(thread.section)}</div>
+                    <div class="thread-small-content">
+                        <div class="thread-small-title">${thread.title}</div>
+                        <div class="thread-small-meta">
+                            <span class="thread-author">${thread.author}</span>
+                            <span class="thread-time">${formatTime(thread.createdAt)}</span>
+                            <span class="thread-stats">💬 ${thread.replies || 0}</span>
+                        </div>
+                    </div>
+                    <div class="thread-preview-arrow">→</div>
+                    <div class="thread-section-label">${this.getSectionName(thread.section)}</div>
+                </div>
+            `).join('');
+
+        } catch (error) {
+            console.error('Errore caricamento thread generali:', error);
+            container.innerHTML = this.getErrorState();
+        }
+    }
+
+    // Carica ultimi thread clan - FIX APPLICATO
+    async loadLatestClanThreads() {
+        const container = document.getElementById('dashboard-clan-threads');
+        const userClan = getCurrentUserClan();
+
+        if (userClan === 'Nessuno') {
+            container.innerHTML = `
+                <div class="empty-state-enhanced">
+                    <div class="empty-icon">🏠</div>
+                    <div class="empty-title">Nessun Clan</div>
+                    <div class="empty-subtitle">Unisciti a un clan per accedere a contenuti esclusivi</div>
+                    <button class="join-clan-btn" onclick="switchSection('associa-clan')">
+                        <span>Trova un Clan</span>
+                        <span class="btn-arrow">→</span>
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        try {
+            const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
+            const allClanThreads = [];
+
+            for (const section of clanSections) {
+                const threads = await this.getClanThreadsFromSection(section);
+                allClanThreads.push(...threads.map(t => ({...t, section})));
+            }
+
+            allClanThreads.sort((a, b) => b.createdAt - a.createdAt);
+            const recentClanThreads = allClanThreads.slice(0, 4);
+
+            if (recentClanThreads.length === 0) {
+                container.innerHTML = this.getEmptyState('🏰', 'Nessuna attività clan recente');
+                return;
+            }
+
+            // FIX: SOLO NAVIGAZIONE ALLE SEZIONI
+            container.innerHTML = recentClanThreads.map(thread => `
+                <div class="thread-item-small clan-thread dashboard-thread-preview" 
+                     onclick="navigateToSection('${thread.section}', '${thread.id}')"
+                     data-section="${thread.section}"
+                     title="Clicca per andare alla sezione ${this.getSectionName(thread.section)}">
+                    <div class="thread-small-icon clan-icon">${this.getSectionIcon(thread.section)}</div>
+                    <div class="thread-small-content">
+                        <div class="thread-small-title">${thread.title}</div>
+                        <div class="thread-small-meta">
+                            <span class="thread-author">${thread.author}</span>
+                            <span class="thread-time">${formatTime(thread.createdAt)}</span>
+                            <span class="thread-stats clan-stats">💬 ${thread.replies || 0}</span>
+                        </div>
+                    </div>
+                    <div class="clan-badge">🏰</div>
+                    <div class="thread-section-label">${this.getSectionName(thread.section)}</div>
+                </div>
+            `).join('');
+
+        } catch (error) {
+            console.error('Errore caricamento thread clan:', error);
+            container.innerHTML = this.getErrorState();
+        }
+    }
+
+    // Funzione per ottenere nome sezione leggibile
+    getSectionName(section) {
+        const names = {
+            'eventi': 'Eventi',
+            'oggetti': 'Oggetti',
+            'novita': 'Novità',
+            'associa-clan': 'Associa Clan',
+            'clan-war': 'Guerra',
+            'clan-premi': 'Premi',
+            'clan-consigli': 'Consigli',
+            'clan-bacheca': 'Bacheca'
+        };
+        return names[section] || section;
+    }
+
     // Utility per stati vuoti migliorati
     getEmptyState(icon, message) {
         return `
@@ -724,7 +848,7 @@ class DashboardManager {
         `;
     }
 
-    // Utility per ottenere thread (invariate)
+    // Utility per ottenere thread
     async getThreadsFromSection(section) {
         const dataPath = getDataPath(section, 'threads');
         if (!dataPath) return [];
@@ -775,7 +899,7 @@ class DashboardManager {
                 this.loadLatestGeneralThreads();
                 this.loadLatestClanThreads();
             }
-        }, 60000); // Refresh ogni minuto per avere dati più aggiornati
+        }, 60000); // Refresh ogni minuto
     }
 
     // Cleanup migliorato
@@ -793,214 +917,387 @@ class DashboardManager {
     }
 }
 
+// ===============================================
+// DASHBOARD QUICK ACTIONS FIX - Thread Creation
+// ===============================================
+
+// Il problema: le azioni rapide della dashboard aprono il modal di creazione thread
+// ma currentSection è "home", quindi il thread non sa dove essere salvato
+
+// 1. OVERRIDE della funzione showThreadCreationModal quando siamo nella dashboard
+const originalShowThreadCreationModal = window.showThreadCreationModal;
+
+window.showThreadCreationModal = function(targetSection = null) {
+    console.log('🎯 Apertura modal creazione thread');
+    console.log('- Sezione corrente:', currentSection);
+    console.log('- Sezione target:', targetSection);
+    
+    // Se siamo nella dashboard, chiedi dove creare il thread
+    if (currentSection === 'home' && !targetSection) {
+        showSectionSelectionModal();
+        return;
+    }
+    
+    // Se abbiamo una sezione target, vai lì prima di aprire il modal
+    if (targetSection && targetSection !== currentSection) {
+        console.log(`🔄 Reindirizzamento a sezione: ${targetSection}`);
+        switchSection(targetSection);
+        
+        // Aspetta che la sezione sia caricata, poi apri il modal
+        setTimeout(() => {
+            originalShowThreadCreationModal.call(this);
+        }, 500);
+        return;
+    }
+    
+    // Esegui la funzione originale
+    originalShowThreadCreationModal.call(this);
+};
+
+// 2. Modal per selezione sezione quando si crea thread dalla dashboard
+function showSectionSelectionModal() {
+    // Rimuovi modal esistente se presente
+    const existingModal = document.getElementById('sectionSelectionModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Ottieni sezioni disponibili per l'utente
+    const availableSections = getAvailableSectionsForUser();
+    
+    const modal = document.createElement('div');
+    modal.id = 'sectionSelectionModal';
+    modal.className = 'section-selection-modal';
+    modal.innerHTML = `
+        <div class="section-selection-content">
+            <h3>🎯 Dove vuoi creare il thread?</h3>
+            <p>Seleziona la sezione più appropriata per il tuo thread:</p>
+            
+            <div class="section-selection-grid">
+                ${availableSections.map(section => `
+                    <button class="section-selection-btn" onclick="createThreadInSection('${section.key}')">
+                        <div class="section-icon">${section.icon}</div>
+                        <div class="section-info">
+                            <div class="section-name">${section.name}</div>
+                            <div class="section-desc">${section.description}</div>
+                        </div>
+                    </button>
+                `).join('')}
+            </div>
+            
+            <div class="section-selection-actions">
+                <button class="btn-cancel-selection" onclick="closeSectionSelectionModal()">
+                    Annulla
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+    
+    // Previeni scroll del body
+    document.body.style.overflow = 'hidden';
+}
+
+// 3. Funzione per ottenere sezioni disponibili per l'utente
+function getAvailableSectionsForUser() {
+    const sections = [
+        {
+            key: 'eventi',
+            name: 'Eventi',
+            icon: '📅',
+            description: 'Discussioni su eventi del gioco'
+        },
+        {
+            key: 'oggetti',
+            name: 'Oggetti',
+            icon: '⚔️',
+            description: 'Guide su armi e armature'
+        },
+        {
+            key: 'novita',
+            name: 'Novità',
+            icon: '🆕',
+            description: 'Ultime notizie e aggiornamenti'
+        },
+        {
+            key: 'associa-clan',
+            name: 'Associa Clan',
+            icon: '🏠',
+            description: 'Richieste di associazione ai clan'
+        }
+    ];
+    
+    // Aggiungi sezioni clan se l'utente appartiene a un clan
+    const userClan = getCurrentUserClan();
+    if (userClan !== 'Nessuno') {
+        sections.push(
+            {
+                key: 'clan-war',
+                name: 'Guerra Clan',
+                icon: '⚔️',
+                description: 'Strategie e coordinamento guerre'
+            },
+            {
+                key: 'clan-premi',
+                name: 'Premi Clan',
+                icon: '🏆',
+                description: 'Ricompense e achievement'
+            },
+            {
+                key: 'clan-consigli',
+                name: 'Consigli Clan',
+                icon: '💡',
+                description: 'Suggerimenti per i membri'
+            },
+            {
+                key: 'clan-bacheca',
+                name: 'Bacheca Clan',
+                icon: '🏰',
+                description: 'Messaggi importanti del clan'
+            }
+        );
+    }
+    
+    // Filtra sezioni in base ai permessi
+    return sections.filter(section => canAccessSection(section.key));
+}
+
+// 4. Funzione per creare thread in una sezione specifica
+window.createThreadInSection = function(sectionKey) {
+    console.log(`📝 Creazione thread in sezione: ${sectionKey}`);
+    
+    // Chiudi modal di selezione
+    closeSectionSelectionModal();
+    
+    // Vai alla sezione e apri il modal di creazione
+    switchSection(sectionKey);
+    
+    // Aspetta che la sezione sia caricata, poi apri il modal
+    setTimeout(() => {
+        showThreadCreationModal(sectionKey);
+    }, 600);
+};
+
+// 5. Funzione per chiudere modal di selezione sezione
+window.closeSectionSelectionModal = function() {
+    const modal = document.getElementById('sectionSelectionModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Ripristina scroll del body
+    document.body.style.overflow = 'auto';
+};
+
+// 6. OVERRIDE della funzione createThread per gestire meglio la sezione
+const originalCreateThread = window.createThread;
+
+window.createThread = async function() {
+    console.log('📝 Creazione thread avviata');
+    console.log('- Sezione corrente:', currentSection);
+    
+    // Verifica che non siamo nella dashboard
+    if (currentSection === 'home') {
+        console.error('❌ Tentativo di creare thread dalla dashboard!');
+        alert('Errore: seleziona prima una sezione per creare il thread.');
+        hideThreadCreationModal();
+        showSectionSelectionModal();
+        return;
+    }
+    
+    // Verifica accesso alla sezione
+    if (!canAccessSection(currentSection)) {
+        console.error('❌ Accesso negato alla sezione:', currentSection);
+        alert('Non hai i permessi per creare thread in questa sezione.');
+        hideThreadCreationModal();
+        return;
+    }
+    
+    // Esegui la creazione normale
+    return originalCreateThread.call(this);
+};
+
+// ===============================================
+// DASHBOARD THREAD NAVIGATION - PROBLEMA RISOLTO
+// ===============================================
+
+// Funzione globale per navigare alle sezioni (NON aprire thread)
+window.navigateToSection = function(targetSection, highlightThreadId = null) {
+    console.log(`🧭 Navigazione a sezione: ${targetSection} ${highlightThreadId ? `(evidenzia: ${highlightThreadId})` : ''}`);
+    
+    // Controlla accesso alla sezione
+    if (!canAccessSection(targetSection)) {
+        if (targetSection.startsWith('clan-')) {
+            alert('Devi appartenere a un clan per accedere a questa sezione!');
+            return;
+        } else if (targetSection.startsWith('admin-')) {
+            alert('Non hai i permessi per accedere a questa sezione!');
+            return;
+        }
+    }
+
+    // Vai alla sezione
+    switchSection(targetSection);
+    
+    // Se c'è un thread da evidenziare, lo facciamo dopo che la sezione è caricata
+    if (highlightThreadId) {
+        setTimeout(() => {
+            highlightThread(highlightThreadId);
+        }, 800);
+    }
+};
+
+// Funzione per evidenziare un thread nella lista (invece di aprirlo)
+window.highlightThread = function(threadId) {
+    console.log(`✨ Evidenziazione thread: ${threadId}`);
+    
+    // Cerca il thread nella lista
+    const threadElements = document.querySelectorAll(`[onclick*="${threadId}"]`);
+    
+    if (threadElements.length > 0) {
+        const threadElement = threadElements[0];
+        
+        // Scrolla verso l'elemento
+        threadElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+        
+        // Evidenzia temporaneamente
+        threadElement.classList.add('highlighted-thread');
+        
+        // Rimuovi evidenziazione dopo 3 secondi
+        setTimeout(() => {
+            threadElement.classList.remove('highlighted-thread');
+        }, 3000);
+        
+        console.log(`✅ Thread ${threadId} evidenziato`);
+    } else {
+        console.log(`⚠️ Thread ${threadId} non trovato nella lista`);
+    }
+};
+
+// Sovrascrive openThread per controllare la sezione corrente
+const originalOpenThread = window.openThread;
+window.openThread = function(threadId, section) {
+    // Controlla se siamo nella dashboard
+    if (currentSection === 'home') {
+        console.log('🚫 Tentativo di aprire thread dalla dashboard impedito');
+        console.log(`👉 Usa navigateToSection('${section}', '${threadId}') invece`);
+        
+        // Naviga alla sezione invece di aprire il thread
+        navigateToSection(section, threadId);
+        return;
+    }
+    
+    // Controlla se siamo nella sezione corretta
+    if (currentSection !== section) {
+        console.log(`⚠️ Tentativo di aprire thread ${threadId} dalla sezione sbagliata`);
+        console.log(`Sezione corrente: ${currentSection}, richiesta: ${section}`);
+        
+        // Naviga alla sezione corretta
+        navigateToSection(section, threadId);
+        return;
+    }
+    
+    // Esegui apertura normale
+    return originalOpenThread.call(this, threadId, section);
+};
+
+// ===============================================
+// GESTIONE EVENTI E CLEANUP
+// ===============================================
+
+// Gestione escape key per chiudere modal selezione sezione
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('sectionSelectionModal');
+        if (modal) {
+            closeSectionSelectionModal();
+        }
+    }
+});
+
+// Prevenzione click fuori dal modal
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('sectionSelectionModal');
+    if (modal && e.target === modal) {
+        closeSectionSelectionModal();
+    }
+});
+
+// Cleanup quando si cambia sezione
+const originalSwitchSection = window.switchSection;
+window.switchSection = function(sectionKey) {
+    // Chiudi modal di selezione se aperto
+    closeSectionSelectionModal();
+    
+    // Pulisci dashboard manager se stiamo uscendo dalla home
+    if (currentSection === 'home') {
+        window.dashboardManager.cleanup();
+    }
+    
+    // Esegui switch normale
+    return originalSwitchSection.call(this, sectionKey);
+};
+
+// ===============================================
+// INIZIALIZZAZIONE E ISTANZE GLOBALI
+// ===============================================
+
 // Istanza globale del dashboard manager
 window.dashboardManager = new DashboardManager();
 
 // Sovrascrive la funzione loadDashboard globale
 window.loadDashboard = function() {
-    window.dashboardManager.loadDashboard();
-};
-
-// Cleanup quando si cambia sezione
-const originalSwitchSection = window.switchSection;
-window.switchSection = function(sectionKey) {
-    if (currentSection === 'home') {
-        window.dashboardManager.cleanup();
-    }
-    return originalSwitchSection(sectionKey);
-};
-
-async openThreadFromDashboard(threadId, targetSection) {
-    try {
-        // Verifica che l'utente sia loggato
-        if (!currentUser) {
-            alert('Devi effettuare l\'accesso per visualizzare i thread');
-            return;
-        }
-        
-        // Verifica accesso alla sezione
-        if (!canAccessSection(targetSection)) {
-            if (targetSection.startsWith('clan-')) {
-                alert('Devi appartenere a un clan per accedere a questa sezione!');
-            } else {
-                alert('Non hai i permessi per accedere a questa sezione!');
-            }
-            return;
-        }
-        
-        console.log(`🔄 Apertura thread ${threadId} da dashboard -> ${targetSection}`);
-        
-        // Nascondi la dashboard immediatamente per evitare confusione
-        const forumContent = document.getElementById('forum-content');
-        if (forumContent) {
-            forumContent.style.display = 'none';
-        }
-        
-        // Mostra un loading state
-        this.showThreadTransitionLoading(threadId, targetSection);
-        
-        // Cambia sezione e aspetta che sia effettivamente cambiata
-        await this.switchSectionAndWait(targetSection);
-        
-        // Aspetta un frame per assicurarsi che la UI sia aggiornata
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        
-        // Ora apri il thread
-        await openThread(threadId, targetSection);
-        
-        console.log(`✅ Thread ${threadId} aperto correttamente`);
-        
-    } catch (error) {
-        console.error('Errore apertura thread dalla dashboard:', error);
-        alert('Errore nell\'apertura del thread. Riprova.');
-        
-        // Fallback: torna alla sezione senza aprire il thread
-        switchSection(targetSection);
-    } finally {
-        // Nascondi loading
-        this.hideThreadTransitionLoading();
-    }
-}
-
-async switchSectionAndWait(targetSection) {
-    return new Promise((resolve) => {
-        // Chiama switchSection normale
-        switchSection(targetSection);
-        
-        // Aspetta che currentSection sia effettivamente cambiata
-        const checkSection = () => {
-            if (currentSection === targetSection) {
-                resolve();
-            } else {
-                setTimeout(checkSection, 50);
-            }
-        };
-        
-        checkSection();
-        
-        // Timeout di sicurezza dopo 2 secondi
-        setTimeout(() => {
-            if (currentSection !== targetSection) {
-                console.warn(`⚠️ Timeout cambio sezione: ${currentSection} -> ${targetSection}`);
-            }
-            resolve();
-        }, 2000);
-    });
-}
-
-// 3. LOADING STATE PER TRANSIZIONE
-showThreadTransitionLoading(threadId, targetSection) {
-    const threadList = document.getElementById('thread-list');
-    if (threadList) {
-        threadList.innerHTML = `
-            <div class="thread-transition-loading">
-                <div class="transition-icon">🔄</div>
-                <div class="transition-title">Apertura Thread</div>
-                <div class="transition-subtitle">Passaggio a ${sectionConfig[targetSection]?.title || targetSection}...</div>
-                <div class="transition-progress">
-                    <div class="progress-bar"></div>
-                </div>
-            </div>
-        `;
-    }
-}
-
-hideThreadTransitionLoading() {
-    // Il loading verrà nascosto automaticamente quando si apre il thread
-}
-
-// 4. AGGIORNA I THREAD ITEMS PER USARE LA NUOVA FUNZIONE
-getThreadItemHTML(thread, section) {
-    return `
-        <div class="thread-item-small ${section.startsWith('clan-') ? 'clan-thread' : ''}" 
-             onclick="window.dashboardManager.openThreadFromDashboard('${thread.id}', '${section}')">
-            <div class="thread-small-icon ${section.startsWith('clan-') ? 'clan-icon' : ''}">${this.getSectionIcon(section)}</div>
-            <div class="thread-small-content">
-                <div class="thread-small-title">${thread.title}</div>
-                <div class="thread-small-meta">
-                    <span class="thread-author">${thread.author}</span>
-                    <span class="thread-time">${formatTime(thread.createdAt)}</span>
-                    <span class="thread-stats ${section.startsWith('clan-') ? 'clan-stats' : ''}">💬 ${thread.replies || 0}</span>
-                </div>
-            </div>
-            <div class="${section.startsWith('clan-') ? 'clan-badge' : 'thread-trending'}">
-                ${section.startsWith('clan-') ? '🏰' : ''}
-            </div>
-        </div>
-    `;
-}
-
-// 5. AGGIORNA loadLatestGeneralThreads
-async loadLatestGeneralThreads() {
-    const container = document.getElementById('dashboard-general-threads');
-    const sections = ['eventi', 'oggetti', 'novita', 'associa-clan'];
+    console.log('📊 Caricamento dashboard con tutti i fix applicati...');
     
-    try {
-        const allThreads = [];
+    // Esegui caricamento dashboard
+    window.dashboardManager.loadDashboard();
+    
+    // Applica fix dopo caricamento
+    setTimeout(() => {
+        // Marca i thread come preview
+        const dashboardThreads = document.querySelectorAll('.dashboard-thread-preview');
+        dashboardThreads.forEach(thread => {
+            thread.setAttribute('data-dashboard-preview', 'true');
+        });
         
-        for (const section of sections) {
-            const threads = await this.getThreadsFromSection(section);
-            allThreads.push(...threads.map(t => ({...t, section})));
-        }
+        console.log('✅ Tutti i fix dashboard applicati');
+    }, 1000);
+};
 
-        allThreads.sort((a, b) => b.createdAt - a.createdAt);
-        const recentThreads = allThreads.slice(0, 4);
+// ===============================================
+// FUNZIONI DI DEBUG
+// ===============================================
 
-        if (recentThreads.length === 0) {
-            container.innerHTML = this.getEmptyState('📝', 'Nessun thread recente');
-            return;
-        }
+// Funzione di debug per testare le azioni rapide
+window.debugQuickActions = function() {
+    console.log('🔍 Debug Azioni Rapide:');
+    console.log('- Sezione corrente:', currentSection);
+    console.log('- Sezioni disponibili:', getAvailableSectionsForUser().map(s => s.key));
+    console.log('- Modal selezione presente:', !!document.getElementById('sectionSelectionModal'));
+    
+    // Testa la funzione di creazione
+    console.log('🧪 Test apertura modal selezione...');
+    showSectionSelectionModal();
+};
 
-        container.innerHTML = recentThreads.map(thread => this.getThreadItemHTML(thread, thread.section)).join('');
+// Debug per thread navigation
+window.debugDashboardThreads = function() {
+    console.log('🔍 Debug Dashboard Threads:');
+    console.log('- Sezione corrente:', currentSection);
+    console.log('- Thread dashboard trovati:', document.querySelectorAll('.dashboard-thread-preview').length);
+    
+    // Mostra tutti i thread con onclick
+    const threadsWithClick = document.querySelectorAll('[onclick*="openThread"]');
+    console.log('- Thread con openThread:', threadsWithClick.length);
+    
+    threadsWithClick.forEach((thread, index) => {
+        console.log(`  ${index + 1}. ${thread.onclick}`);
+    });
+};
 
-    } catch (error) {
-        console.error('Errore caricamento thread generali:', error);
-        container.innerHTML = this.getErrorState();
-    }
-}
-
-// 6. AGGIORNA loadLatestClanThreads
-async loadLatestClanThreads() {
-    const container = document.getElementById('dashboard-clan-threads');
-    const userClan = getCurrentUserClan();
-
-    if (userClan === 'Nessuno') {
-        container.innerHTML = `
-            <div class="empty-state-enhanced">
-                <div class="empty-icon">🏠</div>
-                <div class="empty-title">Nessun Clan</div>
-                <div class="empty-subtitle">Unisciti a un clan per accedere a contenuti esclusivi</div>
-                <button class="join-clan-btn" onclick="switchSection('associa-clan')">
-                    <span>Trova un Clan</span>
-                    <span class="btn-arrow">→</span>
-                </button>
-            </div>
-        `;
-        return;
-    }
-
-    try {
-        const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
-        const allClanThreads = [];
-
-        for (const section of clanSections) {
-            const threads = await this.getClanThreadsFromSection(section);
-            allClanThreads.push(...threads.map(t => ({...t, section})));
-        }
-
-        allClanThreads.sort((a, b) => b.createdAt - a.createdAt);
-        const recentClanThreads = allClanThreads.slice(0, 4);
-
-        if (recentClanThreads.length === 0) {
-            container.innerHTML = this.getEmptyState('🏰', 'Nessuna attività clan recente');
-            return;
-        }
-
-        container.innerHTML = recentClanThreads.map(thread => this.getThreadItemHTML(thread, thread.section)).join('');
-
-    } catch (error) {
-        console.error('Errore caricamento thread clan:', error);
-        container.innerHTML = this.getErrorState();
-    }
-}
-
+console.log('🚀 Dashboard completo con tutti i fix caricato!');
