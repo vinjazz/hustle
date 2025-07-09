@@ -3179,3 +3179,267 @@ button:disabled {
     }
 }
 
+
+/* Fix Modal Login - Scrollabile su Mobile */
+.login-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Cambiato da center a flex-start */
+    z-index: 1000;
+    overflow-y: auto; /* Aggiungi scroll */
+    padding: 20px 0; /* Padding per sicurezza */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling iOS */
+}
+
+.login-form {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 400px;
+    backdrop-filter: blur(15px);
+    margin: auto; /* Centro automaticamente */
+    min-height: fit-content;
+    max-height: none; /* Rimuovi limitazione altezza */
+    position: relative; /* Importante per il posizionamento */
+    flex-shrink: 0; /* Previeni compressione */
+}
+
+/* Fix Username Modal - Stesso trattamento */
+.username-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Cambiato da center */
+    z-index: 2000;
+    backdrop-filter: blur(10px);
+    overflow-y: auto; /* Aggiungi scroll */
+    padding: 20px 0;
+    -webkit-overflow-scrolling: touch;
+}
+
+.username-modal-content {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 500px;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    position: relative;
+    margin: auto;
+    max-height: none;
+    flex-shrink: 0;
+}
+
+/* Specifico per iPhone e dispositivi con viewport piccolo */
+@media (max-height: 700px) {
+    .login-modal,
+    .username-modal {
+        align-items: flex-start !important;
+        padding: 10px 0;
+    }
+    
+    .login-form,
+    .username-modal-content {
+        margin: 10px auto;
+        padding: 1.5rem;
+        border-radius: 15px;
+    }
+    
+    .login-form h2,
+    .username-header h2 {
+        font-size: 1.3rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Riduci padding per form groups */
+    .login-form .form-group,
+    .username-form .form-group {
+        margin-bottom: 0.8rem;
+    }
+    
+    /* Riduci dimensioni input */
+    .login-form input,
+    .username-form input,
+    .username-form select,
+    .google-login-btn {
+        padding: 0.8rem;
+        font-size: 0.95rem;
+    }
+    
+    /* Riduci reCAPTCHA su mobile */
+    #recaptcha-container {
+        transform: scale(0.8);
+        transform-origin: center;
+        margin: 10px 0;
+    }
+    
+    /* Ottimizza username hints */
+    .username-hints {
+        padding: 0.8rem;
+        margin-top: 0.6rem;
+    }
+    
+    .hint-item {
+        font-size: 0.75rem;
+        margin-bottom: 0.2rem;
+    }
+}
+
+/* Fix specifico per iPhone piccoli (iPhone SE, 11 Pro, etc.) */
+@media (max-width: 480px) and (max-height: 900px) {
+    .login-modal,
+    .username-modal {
+        padding: 5px;
+        align-items: flex-start;
+    }
+    
+    .login-form,
+    .username-modal-content {
+        width: 95%;
+        margin: 5px auto;
+        padding: 1.2rem;
+        border-radius: 15px;
+    }
+    
+    .login-tabs {
+        margin-bottom: 1rem;
+        padding: 0.2rem;
+    }
+    
+    .login-tab {
+        padding: 0.6rem;
+        font-size: 0.9rem;
+    }
+    
+    /* Nascondi elementi non essenziali su schermi molto piccoli */
+    .divider {
+        margin: 0.8rem 0;
+    }
+    
+    .divider span {
+        font-size: 0.85rem;
+    }
+    
+    /* Ottimizza pulsanti per mobile */
+    .btn-primary,
+    .btn-save-username {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1rem;
+    }
+    
+    /* Ridimensiona reCAPTCHA per schermi piccoli */
+    #recaptcha-container {
+        transform: scale(0.75);
+        margin: 5px 0;
+    }
+    
+    /* Username modal specifico */
+    .username-header p {
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+    
+    .username-validation {
+        font-size: 0.75rem;
+        min-height: 18px;
+    }
+    
+    .form-help {
+        font-size: 0.75rem;
+    }
+    
+    .action-note {
+        font-size: 0.7rem;
+    }
+}
+
+/* Fix per dispositivi con notch (iPhone X e successivi) */
+@media (max-width: 480px) and (min-height: 800px) {
+    .login-modal,
+    .username-modal {
+        padding-top: max(20px, env(safe-area-inset-top));
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+}
+
+/* Assicurati che i modal non abbiano problemi di z-index */
+.login-modal {
+    z-index: 1000;
+}
+
+.username-modal {
+    z-index: 2000;
+}
+
+/* Fix per browser che non supportano backdrop-filter */
+@supports not (backdrop-filter: blur(15px)) {
+    .login-form,
+    .username-modal-content {
+        background: rgba(26, 27, 46, 0.95);
+    }
+}
+
+/* Fix per Safari mobile con problemi di overflow */
+@media screen and (-webkit-min-device-pixel-ratio: 2) {
+    .login-modal,
+    .username-modal {
+        -webkit-overflow-scrolling: touch;
+        overflow-y: auto;
+    }
+    
+    /* Forza rendering corretto su Safari */
+    .login-form,
+    .username-modal-content {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+    }
+}
+
+/* Loading spinner per username modal */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.username-loading .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top: 3px solid var(--accent-3);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Fix input focus su iOS */
+.login-form input:focus,
+.username-form input:focus,
+.username-form select:focus {
+    /* Previeni zoom automatico su iOS */
+    font-size: 16px;
+    transform: none;
+}
+
+/* Ridimensiona input se la font-size causa problemi */
+@media (max-width: 480px) {
+    .login-form input,
+    .username-form input,
+    .username-form select {
+        font-size: 16px !important; /* Previeni zoom iOS */
+    }
+}

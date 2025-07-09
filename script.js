@@ -1620,6 +1620,11 @@ async function handleLogin() {
 }
 // Login con Google
 // Login con Google
+// ===============================================
+// PATCH PER GOOGLE LOGIN - DA AGGIUNGERE A script.js
+// ===============================================
+
+// Login con Google - VERSIONE CORRETTA
 async function handleGoogleLogin() {
     if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
         alert('Login con Google non disponibile in modalità demo');
@@ -1634,6 +1639,7 @@ async function handleGoogleLogin() {
     `;
 
     try {
+        console.log('🔐 Iniziando login Google...');
         const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
         const user = result.user;
 
@@ -1644,64 +1650,89 @@ async function handleGoogleLogin() {
         const snapshot = await get(userRef);
 
         if (!snapshot.exists()) {
-            // NUOVO UTENTE - Prepara dati temporanei
             console.log('🆕 Nuovo utente Google, preparazione dati...');
             
+            // NUOVO UTENTE - Determina ruolo
             const userRole = await determineUserRole();
+            console.log('👤 Ruolo determinato:', userRole);
             
-            // Salva dati minimi temporanei
+            // Salva dati temporanei
             await set(userRef, {
                 username: '', // Vuoto temporaneamente
                 email: user.email,
                 clan: 'Nessuno',
                 role: userRole,
-                createdAt: serverTimestamp(),
-                lastSeen: serverTimestamp(),
+                createdAt: Date.now(), // Usa timestamp locale per compatibilità
+                lastSeen: Date.now(),
                 provider: 'google',
-                needsUsername: true // Flag per richiedere username
+                needsUsername: true
             });
 
-            console.log('✅ Dati temporanei salvati, mostrando modal username...');
+            console.log('✅ Dati temporanei salvati');
             
-            // Mostra modal per scegliere username
+            // Mostra modal per scegliere username con delay per assicurarsi che tutto sia caricato
             setTimeout(() => {
-                window.usernameManager.showUsernameModal(user);
-            }, 500);
+                if (window.usernameManager) {
+                    window.usernameManager.showUsernameModal(user);
+                } else {
+                    console.error('❌ usernameManager non disponibile');
+                    // Fallback: procedi senza username personalizzato
+                    handleUserLogin(user);
+                }
+            }, 100);
 
         } else {
-            // UTENTE ESISTENTE - Controlla se ha username
+            // UTENTE ESISTENTE
             const userData = snapshot.val();
             console.log('👤 Utente esistente trovato:', userData);
             
             if (userData.needsUsername === true || !userData.username || userData.username.trim() === '') {
-                console.log('⚠️ Utente senza username, mostrando modal...');
+                console.log('⚠️ Utente senza username valido, mostrando modal...');
                 
-                // Anche utenti esistenti devono scegliere username
                 setTimeout(() => {
-                    window.usernameManager.showUsernameModal(user, userData);
-                }, 500);
+                    if (window.usernameManager) {
+                        window.usernameManager.showUsernameModal(user, userData);
+                    } else {
+                        console.error('❌ usernameManager non disponibile');
+                        handleUserLogin(user);
+                    }
+                }, 100);
             } else {
                 console.log('✅ Utente con username completo, login completato');
                 showSuccess('Login con Google effettuato con successo!');
+                // Il login continua automaticamente tramite onAuthStateChanged
             }
         }
 
     } catch (error) {
-        console.error('Errore login Google:', error);
+        console.error('❌ Errore login Google:', error);
 
         let errorMessage = 'Errore nel login con Google';
-        if (error.code === 'auth/popup-closed-by-user') {
-            errorMessage = 'Login annullato dall\'utente';
-        } else if (error.code === 'auth/popup-blocked') {
-            errorMessage = 'Popup bloccato dal browser. Abilita i popup per questo sito.';
-        } else if (error.code === 'auth/network-request-failed') {
-            errorMessage = 'Errore di connessione. Controlla la tua connessione internet.';
-        } else if (error.message) {
-            errorMessage = error.message;
+        
+        // Gestione errori specifici
+        switch (error.code) {
+            case 'auth/popup-closed-by-user':
+                errorMessage = 'Login annullato dall\'utente';
+                break;
+            case 'auth/popup-blocked':
+                errorMessage = 'Popup bloccato dal browser. Abilita i popup per questo sito.';
+                break;
+            case 'auth/network-request-failed':
+                errorMessage = 'Errore di connessione. Controlla la tua connessione internet.';
+                break;
+            case 'auth/too-many-requests':
+                errorMessage = 'Troppi tentativi. Riprova tra qualche minuto.';
+                break;
+            default:
+                if (error.message) {
+                    errorMessage = error.message;
+                }
         }
 
         showError(errorMessage);
+        
     } finally {
+        // Ripristina pulsante
         googleBtn.disabled = false;
         googleBtn.innerHTML = `
             <svg width="20" height="20" viewBox="0 0 24 24">
@@ -1715,6 +1746,95 @@ async function handleGoogleLogin() {
     }
 }
 
+// Gestione login utente CORRETTA
+function handleUserLogin(user) {
+    console.log('👤 Gestione login per:', user.email);
+
+    // Controlla se l'utente ha bisogno di scegliere username
+    if (window.usernameManager) {
+        window.usernameManager.checkUserNeedsUsername(user).then(needsUsername => {
+            if (needsUsername) {
+                console.log('⚠️ Utente ha bisogno di username, mostrando modal...');
+                setTimeout(() => {
+                    window.usernameManager.showUsernameModal(user);
+                }, 500);
+                return; // Non procedere con il login completo
+            }
+            
+            // Procedi con login normale
+            completeUserLogin(user);
+        }).catch(error => {
+            console.error('Errore controllo username:', error);
+            completeUserLogin(user); // Procedi comunque
+        });
+    } else {
+        completeUserLogin(user);
+    }
+}
+
+// Completa il login utente
+function completeUserLogin(user) {
+    console.log('✅ Completando login per:', user.email);
+
+    // Nascondi tutti i modal
+    const loginModal = document.getElementById('loginModal');
+    const usernameModal = document.getElementById('usernameModal');
+    
+    if (loginModal) loginModal.style.display = 'none';
+    if (usernameModal) usernameModal.style.display = 'none';
+    
+    // Mostra campanella notifiche
+    const notificationsBell = document.getElementById('notificationsBell');
+    if (notificationsBell) {
+        notificationsBell.classList.add('user-logged-in');
+    }
+
+    // Aggiorna UI
+    updateUserInterface();
+
+    // Setup presenza utente
+    setupUserPresence();
+
+    // Carica dati utente
+    loadUserProfile();
+    
+    // Inizializza notifiche
+    initializeNotifications(); 
+
+    // Setup avatar e altri componenti
+    setTimeout(() => {
+        setupAvatarUpload();
+        if (currentUserData && currentUserData.avatarUrl) {
+            updateUserAvatarDisplay(currentUserData.avatarUrl);
+        }
+    }, 200);
+
+    // Aggiorna dashboard se è la sezione corrente
+    if (currentSection === 'home') {
+        setTimeout(() => {
+            loadDashboard();
+        }, 500);
+    }
+}
+
+// DEBUG: Funzione per testare il modal username
+window.testUsernameModal = function() {
+    if (window.usernameManager) {
+        const mockUser = {
+            uid: 'test_' + Date.now(),
+            email: 'test@example.com',
+            displayName: null
+        };
+        window.usernameManager.showUsernameModal(mockUser);
+    } else {
+        console.error('usernameManager non disponibile');
+    }
+};
+
+// Assicurati che le funzioni siano globali
+window.handleGoogleLogin = handleGoogleLogin;
+window.handleUserLogin = handleUserLogin;
+window.completeUserLogin = completeUserLogin;
 // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
 function handleUserLogin(user) {
     console.log('👤 Utente loggato:', user.email);
