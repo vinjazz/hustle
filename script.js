@@ -102,7 +102,6 @@ window.sendMessage = sendMessage;
 window.createThread = createThread;
 window.addComment = addComment;
 window.getUserDisplayName = getUserDisplayName;
-window.sectionConfig = sectionConfig;
 // Esporta currentSection globalmente per activity_tracker
 window.getCurrentSection = () => currentSection;
 // Esporta getDataPath globalmente per activity_tracker
@@ -343,6 +342,8 @@ const sectionConfig = {
         type: 'forum'
     }
 };
+
+window.sectionConfig = sectionConfig;
 
 function ensureNotificationsBellExists() {
     let bell = document.getElementById('notificationsBell');
