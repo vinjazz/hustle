@@ -1765,11 +1765,6 @@ function completeUserLogin(user) {
     
     // Inizializza notifiche
     initializeNotifications(); 
-    if (window.activityTracker) {
-    setTimeout(() => {
-        window.activityTracker.init();
-    }, 1000);
-}
 
     // Carica lista utenti e notifiche dopo il login
     setTimeout(() => {
@@ -1957,9 +1952,6 @@ async function simulateRegister(email, password, username, clan, role) {
     });
 }
 async function handleLogout() {
-    if (window.activityTracker) {
-    await window.activityTracker.recordLogout();
-    }
     try {
         if (window.useFirebase && window.firebaseAuth && firebaseReady && signOut) {
             await signOut(window.firebaseAuth);
@@ -2254,9 +2246,6 @@ function switchSection(sectionKey) {
     cleanupCommentImageUpload();
 
     currentSection = sectionKey;
-    if (window.activityTracker && currentUser) {
-    window.markSectionAsVisited(sectionKey);
-    }
 
     // Aggiorna header
     document.getElementById('section-title').textContent = section.title;
@@ -3328,9 +3317,6 @@ async function createThread() {
             alert('Thread creato! È in attesa di approvazione da parte del moderatore del clan.');
         } else {
             alert('Thread creato con successo!');
-            if (window.activityTracker) {
-                window.handleNewContent(currentSection, 'thread');
-            }
         }
     } catch (error) {
         console.error('Errore creazione thread:', error);
@@ -4047,10 +4033,6 @@ async function sendMessage() {
         }
 
         input.value = '';
-        if (window.activityTracker) {
-    window.handleNewContent(currentSection, 'message');
-}
-
     } catch (error) {
         console.error('Errore invio messaggio:', error);
         alert('Errore nell\'invio del messaggio');

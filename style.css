@@ -279,6 +279,57 @@ body::before {
     cursor: not-allowed;
 }
 
+/* Section Activity Badge */
+.section-badge {
+    background: var(--accent-4);
+    color: var(--primary-dark);
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: 15px;
+    animation: badgePulse 2s ease-in-out infinite;
+    box-shadow: 0 2px 8px rgba(66, 230, 164, 0.4);
+    z-index: 10;
+}
+
+.nav-item:hover .section-badge {
+    animation: badgeBounce 0.5s ease;
+}
+
+.nav-item.active .section-badge {
+    background: white;
+    color: var(--accent-2);
+}
+
+@keyframes badgePulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(66, 230, 164, 0.4);
+    }
+    50% {
+        transform: scale(1.1);
+        box-shadow: 0 2px 12px rgba(66, 230, 164, 0.6);
+    }
+}
+
+@keyframes badgeBounce {
+    0%, 100% {
+        transform: scale(1);
+    }
+    25% {
+        transform: scale(1.2);
+    }
+    75% {
+        transform: scale(0.9);
+    }
+}
 /* ========================================
    5. STATUS INDICATORS E TOP BAR
    ======================================== */
@@ -2969,6 +3020,13 @@ button:disabled {
         font-size: 0.6rem;
         padding: 1px 4px;
     }
+    .section-badge {
+    right: 10px;
+}
+
+.nav-item {
+    padding-right: 40px; /* Spazio per il badge */
+}
 }
 
 @media (max-width: 480px) {
@@ -3120,5 +3178,4 @@ button:disabled {
         display: none;
     }
 }
-
 
