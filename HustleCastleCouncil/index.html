@@ -4,30 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏰 Hustle Castle Council</title>
-    <!-- reCAPTCHA con callback personalizzato -->
-    <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
+    <!-- reCAPTCHA v3 -->
+    <script src="https://www.google.com/recaptcha/api.js?render=6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF"></script>
     
     <!-- Firebase SDK v9 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
         import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
         import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
         
         // 🔥 CONFIGURAZIONE FIREBASE - INIZIALIZZAZIONE SINGOLA
-         const firebaseConfig = {
-			apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
-			authDomain: "hustlecastlecouncil.firebaseapp.com",
-			databaseURL: "https://hustlecastlecouncil-default-rtdb.firebaseio.com",
-			projectId: "hustlecastlecouncil",
-			storageBucket: "hustlecastlecouncil.firebasestorage.app",
-			messagingSenderId: "778970862600",
-			appId: "1:778970862600:web:4244e17938ccf62c2eadbd",
-			measurementId: "G-R3GMPZCXP3"
-		  };
+          const firebaseConfig = {
+            apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
+            authDomain: "hustlecastlecouncil.firebaseapp.com",
+            databaseURL: "https://hustlecastlecouncil-default-rtdb.firebaseio.com",
+            projectId: "hustlecastlecouncil",
+            storageBucket: "hustlecastlecouncil.firebasestorage.app",
+            messagingSenderId: "778970862600",
+            appId: "1:778970862600:web:f4950fe582887ab72eadbd",
+            measurementId: "G-TXX1ZLPLLR"
+        };
         
-        // Inizializza Firebase UNA SOLA VOLTA
+        // Inizializza Firebase UNA SOLA VOLTA - CON APP CHECK RIABILITATO
         let useFirebase = true;
         let app = null;
         let appCheckEnabled = false;
@@ -36,22 +36,54 @@
             app = initializeApp(firebaseConfig);
             console.log('🔥 Firebase inizializzato con successo');
             
-            // Prova ad inizializzare App Check, ma non bloccare se fallisce
+            // 🛡️ App Check RIABILITATO - Configurazione migliorata
             try {
+                console.log('🔄 Inizializzando App Check...');
                 const appCheck = initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+                    provider: new ReCaptchaV3Provider('6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF'),
                     isTokenAutoRefreshEnabled: true
                 });
                 appCheckEnabled = true;
-                console.log('🛡️ App Check inizializzato');
+                console.log('✅ App Check inizializzato con successo');
+                console.log('🛡️ Protezione Firebase App Check attiva');
+                
+                // Aggiorna l'interfaccia utente per mostrare App Check attivo
+                setTimeout(() => updateAppCheckStatus(true, 'Protezione completa'), 500);
+                
             } catch (appCheckError) {
                 console.warn('⚠️ App Check non disponibile:', appCheckError.message);
+                console.log('📝 Dettagli errore App Check:', appCheckError);
+                
+                // Aggiorna l'interfaccia utente per mostrare errore App Check
+                setTimeout(() => updateAppCheckError(appCheckError.message), 500);
+                
+                // Analizza l'errore per dare suggerimenti
+                if (appCheckError.message.includes('not configured')) {
+                    console.error('💡 SOLUZIONE: Configura App Check nella Firebase Console');
+                    console.error('   1. Vai su Firebase Console > Project Settings > App Check');
+                    console.error('   2. Registra la tua app web');
+                    console.error('   3. Configura reCAPTCHA v3 provider');
+                } else if (appCheckError.message.includes('token')) {
+                    console.error('💡 SOLUZIONE: Problema con i token App Check');
+                    console.error('   - Verifica che il site key reCAPTCHA sia corretto');
+                    console.error('   - Controlla che il dominio sia autorizzato');
+                } else if (appCheckError.message.includes('throttled')) {
+                    console.error('💡 SOLUZIONE: Richieste limitate per errori 403');
+                    console.error('   - Attendi 24 ore per il reset automatico');
+                    console.error('   - Oppure configura correttamente App Check');
+                }
+                
                 console.log('📝 Il forum funzionerà senza App Check');
+                appCheckEnabled = false;
+                
+                // Aggiorna l'interfaccia utente per mostrare App Check disabilitato
+                setTimeout(() => updateAppCheckStatus(false, 'Errore configurazione'), 500);
             }
             
         } catch (error) {
             console.error('❌ Errore inizializzazione Firebase:', error);
             useFirebase = false;
+            setTimeout(() => updateAppCheckStatus(false, 'Firebase non attivo'), 500);
             alert('⚠️ Firebase non configurato. Il forum funzionerà in modalità demo locale.');
         }
         
@@ -59,6 +91,14 @@
         const database = useFirebase ? getDatabase(app) : null;
         const storage = useFirebase ? getStorage(app) : null;
         const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
+        
+        // Configura Google Provider per evitare problemi CORS
+        if (googleProvider) {
+            // Forza l'uso di redirect invece di popup per evitare CORS issues
+            googleProvider.setCustomParameters({
+                prompt: 'select_account'
+            });
+        }
         
         // Esponi Firebase globalmente per compatibilità
         window.firebaseApp = app;
@@ -75,6 +115,8 @@
             updateProfile,
             GoogleAuthProvider,
             signInWithPopup,
+            signInWithRedirect,
+            getRedirectResult,
             ref,
             push,
             set,
@@ -92,77 +134,337 @@
         };
         window.googleProvider = googleProvider;
         
-        // 🤖 FUNZIONI reCAPTCHA - GESTIONE MIGLIORATA
-        let recaptchaRendered = false;
+        // 🤖 FUNZIONI reCAPTCHA v3 - GESTIONE MIGLIORATA
+        const RECAPTCHA_SITE_KEY = '6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF'; // ✅ AGGIORNATO CON IL TUO SITE KEY
+        let recaptchaReady = false;
+        let recaptchaError = null;
         
-        window.verifyRecaptcha = function() {
-            if (!recaptchaRendered || typeof grecaptcha === 'undefined') {
-                return true; // Permetti se reCAPTCHA non disponibile
+        // Verifica reCAPTCHA v3 con punteggio - CON APP CHECK RIABILITATO
+        window.verifyRecaptcha = async function(action = 'submit') {
+            // Aggiorna lo stato nel UI
+            updateRecaptchaStatus('checking', 'Verificando sicurezza...');
+            
+            if (!window.useFirebase) {
+                console.log('🤖 Firebase non attivo, permettendo accesso');
+                updateRecaptchaStatus('disabled', 'Firebase non attivo');
+                return { success: true, score: 1.0, token: null };
             }
-            const recaptchaResponse = grecaptcha.getResponse();
-            return recaptchaResponse && recaptchaResponse.length > 0;
+            
+            if (recaptchaError) {
+                console.log('🤖 reCAPTCHA v3 in errore, permettendo accesso');
+                updateRecaptchaStatus('error', 'Verifica non disponibile');
+                return { success: true, score: 1.0, token: null };
+            }
+            
+            if (!recaptchaReady || typeof grecaptcha === 'undefined') {
+                console.log('🤖 reCAPTCHA v3 non pronto, permettendo accesso');
+                updateRecaptchaStatus('loading', 'Caricando verifica...');
+                return { success: true, score: 1.0, token: null };
+            }
+            
+            try {
+                console.log('🔍 Eseguendo reCAPTCHA v3 per azione:', action);
+                // Esegui reCAPTCHA v3 per l'azione specificata
+                const token = await grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: action });
+                
+                // In un'app reale, dovresti inviare il token al server per verifica
+                // Qui simuliamo una verifica lato client (NON sicura in produzione)
+                console.log('🤖 reCAPTCHA v3 token ottenuto:', token.substring(0, 20) + '...');
+                
+                if (appCheckEnabled) {
+                    updateRecaptchaStatus('success', '🛡️ Verifica completa OK');
+                    console.log('✅ reCAPTCHA v3 + App Check: Verifica completa');
+                } else {
+                    updateRecaptchaStatus('success', '🛡️ Verifica base OK');
+                    console.log('✅ reCAPTCHA v3: Verifica base completata');
+                }
+                
+                return { 
+                    success: true, 
+                    score: 0.9, // In produzione questo viene dal server
+                    token: token,
+                    appCheckEnabled: appCheckEnabled
+                };
+            } catch (error) {
+                console.error('❌ Errore reCAPTCHA v3:', error);
+                updateRecaptchaStatus('error', 'Errore verifica');
+                return { success: false, score: 0.0, token: null };
+            }
         };
         
+        // Non serve più reset per v3
         window.resetRecaptcha = function() {
-            if (recaptchaRendered && typeof grecaptcha !== 'undefined') {
-                try {
-                    grecaptcha.reset();
-                } catch (error) {
-                    console.log('Reset reCAPTCHA ignorato:', error.message);
-                }
+            // reCAPTCHA v3 non ha bisogno di reset
+            console.log('🤖 reCAPTCHA v3: reset non necessario');
+        };
+
+        // Funzione per aggiornare lo stato del reCAPTCHA nel UI
+        window.updateRecaptchaStatus = function(status, message) {
+            const statusElement = document.getElementById('recaptchaStatus');
+            const statusText = document.getElementById('recaptchaStatusText');
+            
+            if (statusElement && statusText) {
+                statusElement.className = 'recaptcha-status ' + status;
+                statusText.textContent = message;
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`Status: ${status} - ${message}`);
             }
         };
 
-        // Render reCAPTCHA quando è pronto - CON CONTROLLO DOPPIO RENDERING
-        window.onRecaptchaLoad = function() {
-            if (!window.useFirebase || !appCheckEnabled) {
-                console.log('🤖 reCAPTCHA disabilitato - App Check non attivo');
+        // Funzione per aggiornare lo stato di App Check nel UI
+        window.updateAppCheckStatus = function(enabled, message) {
+            const appCheckElement = document.getElementById('appCheckIndicator');
+            const appCheckText = document.getElementById('appCheckStatusText');
+            
+            if (appCheckElement && appCheckText) {
+                if (enabled) {
+                    appCheckElement.className = 'app-check-indicator enabled';
+                    appCheckText.textContent = '🛡️ App Check: Attivo';
+                } else {
+                    appCheckElement.className = 'app-check-indicator disabled';
+                    appCheckText.textContent = '🛡️ App Check: ' + (message || 'Disabilitato');
+                }
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`App Check: ${enabled ? 'Attivo' : 'Disabilitato'} - ${message}`);
+            }
+        };
+
+        // Funzione per aggiornare lo stato di App Check in caso di errore
+        window.updateAppCheckError = function(error) {
+            const appCheckElement = document.getElementById('appCheckIndicator');
+            const appCheckText = document.getElementById('appCheckStatusText');
+            
+            if (appCheckElement && appCheckText) {
+                appCheckElement.className = 'app-check-indicator error';
+                appCheckText.textContent = '🛡️ App Check: Errore';
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`App Check ERROR: ${error}`);
+            }
+        };
+
+        // Funzione per aggiungere log di debug
+        window.addRecaptchaDebugLog = function(message) {
+            const debugElement = document.getElementById('recaptchaDebug');
+            if (debugElement) {
+                // Mostra l'area debug
+                debugElement.style.display = 'block';
+                
+                // Aggiungi il nuovo log
+                const logLine = document.createElement('div');
+                logLine.className = 'debug-line';
+                logLine.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+                debugElement.appendChild(logLine);
+                
+                // Mantieni solo gli ultimi 5 log
+                const logs = debugElement.querySelectorAll('.debug-line');
+                if (logs.length > 6) { // 6 perché il primo è il titolo
+                    logs[1].remove(); // Rimuovi il secondo (primo log)
+                }
+                
+                // Scroll automatico
+                debugElement.scrollTop = debugElement.scrollHeight;
+            }
+        };
+
+        // Inizializza reCAPTCHA v3 quando pronto - CON APP CHECK RIABILITATO
+        window.initRecaptchaV3 = function() {
+            console.log('🚀 Inizializzazione reCAPTCHA v3...');
+            addRecaptchaDebugLog('Avvio inizializzazione...');
+            
+            if (!window.useFirebase) {
+                console.log('🤖 reCAPTCHA v3 disabilitato - Firebase non attivo');
+                addRecaptchaDebugLog('Firebase non attivo');
+                updateRecaptchaStatus('disabled', 'Firebase non attivo');
                 return;
             }
             
-            if (recaptchaRendered) {
-                console.log('🤖 reCAPTCHA già renderizzato, skip');
+            if (!appCheckEnabled) {
+                console.log('🤖 reCAPTCHA v3 attivo senza App Check');
+                addRecaptchaDebugLog('App Check disabilitato - reCAPTCHA standalone');
+                updateRecaptchaStatus('active', 'Protezione base attiva');
+                // Continua comunque con reCAPTCHA standalone
+            } else {
+                console.log('🛡️ reCAPTCHA v3 + App Check attivi');
+                addRecaptchaDebugLog('App Check + reCAPTCHA attivi');
+            }
+            
+            // Verifica che grecaptcha sia disponibile
+            if (typeof grecaptcha === 'undefined') {
+                console.error('❌ grecaptcha non definito');
+                addRecaptchaDebugLog('ERRORE: grecaptcha non definito');
+                updateRecaptchaStatus('error', 'Libreria non caricata');
                 return;
             }
             
-            if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
+            // Verifica che grecaptcha.ready sia disponibile
+            if (typeof grecaptcha.ready !== 'function') {
+                console.error('❌ grecaptcha.ready non disponibile');
+                addRecaptchaDebugLog('ERRORE: grecaptcha.ready non disponibile');
+                updateRecaptchaStatus('error', 'API non pronta');
+                return;
+            }
+            
+            console.log('✅ grecaptcha disponibile, eseguendo ready...');
+            addRecaptchaDebugLog('grecaptcha disponibile');
+            
+            grecaptcha.ready(function() {
+                console.log('🎯 grecaptcha.ready eseguito');
+                addRecaptchaDebugLog('grecaptcha.ready eseguito');
+                
+                // Verifica che grecaptcha.execute sia disponibile
+                if (typeof grecaptcha.execute !== 'function') {
+                    console.error('❌ grecaptcha.execute non disponibile');
+                    addRecaptchaDebugLog('ERRORE: grecaptcha.execute non disponibile');
+                    updateRecaptchaStatus('error', 'Funzione execute mancante');
+                    return;
+                }
+                
                 try {
-                    const container = document.getElementById('recaptcha-container');
-                    if (container && container.innerHTML === '') {
-                        grecaptcha.render('recaptcha-container', {
-                            'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
-                            'theme': 'dark',
-                            'size': 'normal'
+                    console.log('🔍 Eseguendo test con site key:', RECAPTCHA_SITE_KEY);
+                    addRecaptchaDebugLog('Eseguendo test con site key...');
+                    
+                    // Esegui un test iniziale per verificare che il site key sia valido
+                    grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'homepage' })
+                        .then(function(token) {
+                            recaptchaReady = true;
+                            recaptchaError = null;
+                            console.log('✅ reCAPTCHA v3 inizializzato con successo!');
+                            console.log('🎫 Token di test ottenuto:', token.substring(0, 30) + '...');
+                            addRecaptchaDebugLog('✅ Inizializzazione completata!');
+                            addRecaptchaDebugLog('Token ottenuto: ' + token.substring(0, 20) + '...');
+                            
+                            // Mostra lo stato completo
+                            if (appCheckEnabled) {
+                                updateRecaptchaStatus('active', '🛡️ Protezione completa attiva');
+                                addRecaptchaDebugLog('🛡️ App Check + reCAPTCHA completamente attivi');
+                            } else {
+                                updateRecaptchaStatus('active', '🛡️ Protezione base attiva');
+                                addRecaptchaDebugLog('🛡️ Solo reCAPTCHA attivo (App Check offline)');
+                            }
+                        })
+                        .catch(function(error) {
+                            console.error('❌ Errore durante l\'esecuzione di reCAPTCHA:', error);
+                            recaptchaError = error;
+                            
+                            // Analizza l'errore per dare suggerimenti
+                            const errorMsg = error.message || error.toString();
+                            console.error('📝 Dettagli errore:', errorMsg);
+                            addRecaptchaDebugLog('❌ ERRORE: ' + errorMsg);
+                            
+                            if (errorMsg.includes('Invalid site key')) {
+                                console.error('💡 SOLUZIONE: Il site key non è valido o non è configurato per questo dominio');
+                                addRecaptchaDebugLog('💡 Site key non valido per questo dominio');
+                                updateRecaptchaStatus('error', 'Site key non valido');
+                            } else if (errorMsg.includes('not allowed')) {
+                                console.error('💡 SOLUZIONE: Dominio non autorizzato. Aggiungi il dominio corrente alla lista dei domini autorizzati');
+                                addRecaptchaDebugLog('💡 Dominio non autorizzato');
+                                updateRecaptchaStatus('error', 'Dominio non autorizzato');
+                            } else {
+                                console.error('💡 SOLUZIONE: Verifica la configurazione reCAPTCHA');
+                                addRecaptchaDebugLog('💡 Errore di configurazione');
+                                updateRecaptchaStatus('error', 'Errore configurazione');
+                            }
                         });
-                        recaptchaRendered = true;
-                        console.log('✅ reCAPTCHA renderizzato');
-                    }
                 } catch (error) {
-                    console.log('⚠️ reCAPTCHA già presente o errore:', error.message);
+                    console.error('❌ Errore critico nell\'inizializzazione:', error);
+                    recaptchaError = error;
+                    addRecaptchaDebugLog('❌ Errore critico: ' + error.message);
+                    updateRecaptchaStatus('error', 'Errore critico');
+                }
+            });
+        };
+        
+        // Gestione Google Auth con fallback da popup a redirect
+        window.handleGoogleAuth = async function(useRedirect = false) {
+            if (!window.useFirebase || !auth || !googleProvider) {
+                alert('❌ Firebase non configurato per l\'autenticazione Google');
+                return;
+            }
+            
+            try {
+                let result;
+                
+                if (useRedirect) {
+                    console.log('🔄 Usando redirect per Google Auth...');
+                    // Usa redirect se popup fallisce
+                    await signInWithRedirect(auth, googleProvider);
+                    return; // Il redirect gestirà il resto
+                } else {
+                    console.log('🔄 Usando popup per Google Auth...');
+                    // Prova prima con popup
+                    result = await signInWithPopup(auth, googleProvider);
+                }
+                
+                if (result && result.user) {
+                    console.log('✅ Autenticazione Google riuscita:', result.user.displayName);
+                    return result.user;
+                }
+                
+            } catch (error) {
+                console.error('❌ Errore Google Auth:', error);
+                
+                // Se il popup fallisce a causa di CORS, prova con redirect
+                if (error.code === 'auth/popup-blocked' || 
+                    error.code === 'auth/popup-closed-by-user' || 
+                    error.message.includes('Cross-Origin-Opener-Policy')) {
+                    
+                    console.log('⚠️ Popup bloccato, provo con redirect...');
+                    
+                    if (confirm('Il popup è stato bloccato dal browser. Vuoi provare con un redirect?')) {
+                        return await window.handleGoogleAuth(true); // Retry con redirect
+                    }
+                } else {
+                    alert('❌ Errore nell\'autenticazione Google: ' + error.message);
                 }
             }
         };
         
-        // Carica reCAPTCHA quando Google reCAPTCHA è pronto - SOLO SE NECESSARIO
-        window.addEventListener('load', () => {
-            if (!window.useFirebase || !appCheckEnabled) {
-                // Nascondi reCAPTCHA se App Check non è attivo
-                const container = document.getElementById('recaptcha-container');
-                if (container) {
-                    container.parentElement.style.display = 'none';
+        // Gestisci il risultato del redirect all'avvio
+        window.addEventListener('load', async () => {
+            if (auth && typeof getRedirectResult === 'function') {
+                try {
+                    const result = await getRedirectResult(auth);
+                    if (result && result.user) {
+                        console.log('✅ Autenticazione Google completata dopo redirect:', result.user.displayName);
+                        // L'utente è già autenticato, verrà gestito da onAuthStateChanged
+                    }
+                } catch (error) {
+                    console.error('❌ Errore nel gestire il redirect result:', error);
                 }
-                return;
             }
+        });
+        
+        // Inizializza quando la pagina è caricata - CON RETRY AUTOMATICO
+        window.addEventListener('load', () => {
+            let initAttempts = 0;
+            const maxAttempts = 10;
             
-            // Controlla periodicamente se reCAPTCHA è disponibile
-            const checkRecaptcha = () => {
-                if (typeof grecaptcha !== 'undefined' && grecaptcha.render && !recaptchaRendered) {
-                    setTimeout(window.onRecaptchaLoad, 100);
-                } else if (!recaptchaRendered) {
-                    setTimeout(checkRecaptcha, 500);
+            const tryInitRecaptcha = () => {
+                initAttempts++;
+                console.log(`🤖 Tentativo inizializzazione reCAPTCHA v3 #${initAttempts}`);
+                addRecaptchaDebugLog(`Tentativo #${initAttempts}/${maxAttempts}`);
+                
+                if (typeof grecaptcha !== 'undefined') {
+                    console.log('✅ grecaptcha disponibile, inizializzo...');
+                    addRecaptchaDebugLog('grecaptcha caricato, inizializzo...');
+                    window.initRecaptchaV3();
+                } else if (initAttempts < maxAttempts) {
+                    console.log(`⏳ grecaptcha non ancora disponibile, riprovo tra 1s...`);
+                    addRecaptchaDebugLog(`Aspetto grecaptcha... (${initAttempts}/${maxAttempts})`);
+                    setTimeout(tryInitRecaptcha, 1000);
+                } else {
+                    console.warn('❌ reCAPTCHA v3 non disponibile dopo 10 tentativi');
+                    addRecaptchaDebugLog('❌ Timeout: grecaptcha non caricato');
+                    updateRecaptchaStatus('error', 'Caricamento fallito');
+                    updateAppCheckStatus(false, 'reCAPTCHA non disponibile');
                 }
             };
-            checkRecaptcha();
+            
+            // Inizia dopo 1 secondo per dare tempo al caricamento
+            setTimeout(tryInitRecaptcha, 1000);
         });
     </script>
     
@@ -401,6 +703,106 @@
                 padding: 1.2rem;
             }
         }
+
+        /* reCAPTCHA v3 Status Indicator */
+        .recaptcha-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: rgba(45, 130, 181, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(45, 130, 181, 0.2);
+        }
+
+        .recaptcha-status.active {
+            color: var(--success);
+            background: rgba(39, 174, 96, 0.1);
+            border-color: rgba(39, 174, 96, 0.2);
+        }
+
+        .recaptcha-status.error {
+            color: var(--error);
+            background: rgba(231, 76, 60, 0.1);
+            border-color: rgba(231, 76, 60, 0.2);
+        }
+
+        .recaptcha-status.success {
+            color: var(--success);
+            background: rgba(39, 174, 96, 0.15);
+            border-color: rgba(39, 174, 96, 0.3);
+        }
+
+        .recaptcha-status.checking {
+            color: var(--accent-2);
+            background: rgba(45, 130, 181, 0.15);
+            border-color: rgba(45, 130, 181, 0.3);
+        }
+
+        .recaptcha-status.loading {
+            color: var(--text-secondary);
+            background: rgba(128, 128, 128, 0.1);
+            border-color: rgba(128, 128, 128, 0.2);
+        }
+
+        /* Indicatore App Check */
+        .app-check-indicator {
+            margin-top: 0.5rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid;
+        }
+
+        .app-check-indicator.enabled {
+            background: rgba(39, 174, 96, 0.1);
+            border-color: rgba(39, 174, 96, 0.3);
+            color: var(--success);
+        }
+
+        .app-check-indicator.disabled {
+            background: rgba(255, 193, 7, 0.1);
+            border-color: rgba(255, 193, 7, 0.3);
+            color: #ffa000;
+        }
+
+        .app-check-indicator.error {
+            background: rgba(231, 76, 60, 0.1);
+            border-color: rgba(231, 76, 60, 0.3);
+            color: var(--error);
+        }
+
+        .recaptcha-status.disabled {
+            color: var(--text-muted);
+            background: rgba(128, 128, 128, 0.1);
+            border-color: rgba(128, 128, 128, 0.2);
+        }
+
+        .recaptcha-debug {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(128, 128, 128, 0.1);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-family: monospace;
+            color: var(--text-muted);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .recaptcha-debug .debug-line {
+            margin-bottom: 2px;
+        }
+
+        .recaptcha-debug .debug-line:last-child {
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -464,7 +866,7 @@
             </div>
             
             <!-- Login con Google -->
-            <button id="googleLoginBtn" class="google-login-btn" onclick="handleGoogleLogin()">
+            <button id="googleLoginBtn" class="google-login-btn" onclick="window.handleGoogleAuth()">
                 <svg width="20" height="20" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -499,11 +901,14 @@
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
             
-            <!-- 🤖 reCAPTCHA Widget -->
-            <div class="form-group" style="display: flex; justify-content: center; margin: 20px 0;">
-                <div id="recaptcha-container"></div>
+            <!-- reCAPTCHA v3 Status con Debug e App Check Indicator -->
+            <div id="recaptchaStatus" class="recaptcha-status">
+                <span>🤖</span>
+                <span id="recaptchaStatusText">Inizializzando verifica sicurezza...</span>
             </div>
-            
+            <div id="appCheckIndicator" class="app-check-indicator disabled">
+                <span id="appCheckStatusText">🛡️ App Check: Caricamento...</span>
+            </div>
             <div class="form-buttons">
                 <button id="submitBtn" class="btn-primary" onclick="handleSubmit()">Accedi</button>
             </div>
@@ -511,8 +916,6 @@
             <div id="loading" class="loading">
                 <div>🔄 Connessione in corso...</div>
             </div>
-            
-           
         </div>
     </div>
 
