@@ -448,10 +448,13 @@ function handleClickOutside(event) {
     }
 }
 
-function highlightMentions(text, currentUserId = null) {
-    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+function highlightMentions(html, currentUserId = null) {
+    if (!html || typeof html !== 'string') return '';
+    
+    // Regex per trovare @username, ma non all'interno di tag HTML
+    const mentionRegex = /@([a-zA-Z0-9_]+)(?![^<]*>)/g;
 
-    return text.replace(mentionRegex, (match, username) => {
+    return html.replace(mentionRegex, (match, username) => {
         const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (user) {
             const isSelf = user.uid === currentUserId;
@@ -461,6 +464,8 @@ function highlightMentions(text, currentUserId = null) {
         return match;
     });
 }
+
+console.log('✅ Patch formattazione HTML applicata con successo!');
 
 // ==============================================
 // AUTOCOMPLETE MENZIONI
@@ -3533,19 +3538,19 @@ async function openThread(threadId, section) {
         document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
         document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
 
-        // Contenuto del thread con immagine se presente
+        // Contenuto del thread con immagine se presente - CON FORMATTAZIONE HTML
         const threadContentEl = document.getElementById('thread-content');
-        let contentHtml = escapeHtml(thread.content || 'Nessun contenuto disponibile');
+        let contentHtml = processContent(thread.content || 'Nessun contenuto disponibile', true);
 
         if (thread.imageUrl) {
             contentHtml += `
-                        <div class="thread-image">
-                            <img src="${thread.imageUrl}" 
-                                 alt="${thread.imageName || 'Immagine del thread'}" 
-                                 onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
-                                 title="Clicca per ingrandire">
-                        </div>
-                    `;
+                <div class="thread-image">
+                    <img src="${thread.imageUrl}" 
+                         alt="${thread.imageName || 'Immagine del thread'}" 
+                         onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
+                         title="Clicca per ingrandire">
+                </div>
+            `;
         }
 
         threadContentEl.innerHTML = contentHtml;
@@ -3701,12 +3706,14 @@ async function displayThreadComments(comments) {
 
         let commentContentHtml = '';
 
-        // Aggiungi testo del commento se presente
+        // Aggiungi testo del commento se presente - CON FORMATTAZIONE HTML
         if (comment.content && comment.content.trim()) {
-            commentContentHtml += `<div class="comment-text">${highlightMentions(escapeHtml(comment.content), currentUser?.uid)}</div>`;
+            const processedContent = processContent(comment.content, true);
+            const contentWithMentions = highlightMentions(processedContent, currentUser?.uid);
+            commentContentHtml += `<div class="comment-text">${contentWithMentions}</div>`;
         }
 
-        // Aggiungi immagine se presente - SOLO QUESTE DEVONO APRIRE IL MODAL
+        // Aggiungi immagine se presente
         if (comment.imageUrl) {
             commentContentHtml += `
                 <div class="comment-image">
@@ -4019,13 +4026,12 @@ async function displayMessages(messages) {
         await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
     } catch (error) {
         console.warn('Errore pre-caricamento avatar:', error);
-        // Continua comunque con quello che abbiamo
     }
 
     for (let index = 0; index < messages.length; index++) {
         const msg = messages[index];
         
-        // Trova dati utente per avatar e clan (ora dovrebbero essere tutti caricati)
+        // Trova dati utente per avatar e clan
         const user = allUsers.find(u => u.uid === msg.authorId) || {
             uid: msg.authorId || 'unknown',
             username: msg.author,
@@ -4047,6 +4053,10 @@ async function displayMessages(messages) {
             `;
         }
 
+        // Processa il messaggio con formattazione HTML
+        const processedMessage = processContent(msg.message, true);
+        const messageWithMentions = highlightMentions(processedMessage, currentUser?.uid);
+
         // Container del messaggio
         htmlContent += `
             <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
@@ -4064,7 +4074,7 @@ async function displayMessages(messages) {
                         </div>
                     ` : ''}
                     
-                    <div class="message-text">${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
+                    <div class="message-text">${messageWithMentions}</div>
                     
                     <div class="message-meta">
                         <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
@@ -4081,6 +4091,7 @@ async function displayMessages(messages) {
     chatMessages.innerHTML = htmlContent;
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
 function formatTimeShort(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -4940,3 +4951,129 @@ window.debugNotifications = function () {
     console.log('- Badge visibile:', badge ? !badge.classList.contains('hidden') : false);
     console.log('- Badge testo:', badge ? badge.textContent : 'N/A');
 };
+function sanitizeHtml(html) {
+    if (!html || typeof html !== 'string') return '';
+    
+    // Lista dei tag HTML permessi (sicuri)
+    const allowedTags = {
+        'b': [],
+        'strong': [],
+        'i': [],
+        'em': [],
+        'u': [],
+        'br': [],
+        'p': [],
+        'div': [],
+        'span': ['class'],
+        'h1': [], 'h2': [], 'h3': [], 'h4': [], 'h5': [], 'h6': [],
+        'ul': [], 'ol': [], 'li': [],
+        'blockquote': [],
+        'code': [],
+        'pre': [],
+        'a': ['href', 'title', 'target'],
+        'img': ['src', 'alt', 'title', 'width', 'height'],
+        'table': [], 'tr': [], 'td': [], 'th': [], 'thead': [], 'tbody': []
+    };
+    
+    // Rimuovi script e altri tag pericolosi
+    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    html = html.replace(/on\w+\s*=\s*[^>]*/gi, ''); // Rimuovi attributi onclick, onload, etc.
+    html = html.replace(/javascript:/gi, ''); // Rimuovi javascript: negli href
+    
+    // Funzione per processare i tag
+    function processTag(match, isClosing, tagName, attributes) {
+        tagName = tagName.toLowerCase();
+        
+        // Se il tag non è permesso, rimuovilo
+        if (!allowedTags[tagName]) {
+            return '';
+        }
+        
+        // Se è un tag di chiusura, restituiscilo così com'è
+        if (isClosing) {
+            return `</${tagName}>`;
+        }
+        
+        // Processa gli attributi per i tag di apertura
+        const allowedAttrs = allowedTags[tagName];
+        let processedAttrs = '';
+        
+        if (attributes && allowedAttrs.length > 0) {
+            // Estrae gli attributi
+            const attrRegex = /(\w+)\s*=\s*["']([^"']*)["']/g;
+            let attrMatch;
+            
+            while ((attrMatch = attrRegex.exec(attributes)) !== null) {
+                const attrName = attrMatch[1].toLowerCase();
+                const attrValue = attrMatch[2];
+                
+                // Se l'attributo è permesso per questo tag
+                if (allowedAttrs.includes(attrName)) {
+                    // Sanitizza il valore dell'attributo
+                    let sanitizedValue = attrValue
+                        .replace(/javascript:/gi, '')
+                        .replace(/on\w+/gi, '')
+                        .replace(/[<>]/g, '');
+                    
+                    processedAttrs += ` ${attrName}="${sanitizedValue}"`;
+                }
+            }
+        }
+        
+        // Tag auto-chiudenti
+        if (['br', 'img'].includes(tagName)) {
+            return `<${tagName}${processedAttrs} />`;
+        }
+        
+        return `<${tagName}${processedAttrs}>`;
+    }
+    
+    // Regex per trovare tutti i tag HTML
+    const tagRegex = /<(\/?)([\w-]+)([^>]*)>/g;
+    
+    // Sostituisci tutti i tag con versioni sanitizzate
+    html = html.replace(tagRegex, (match, isClosing, tagName, attributes) => {
+        return processTag(match, isClosing, tagName, attributes);
+    });
+    
+    return html;
+}
+
+// Funzione per convertire testo semplice in HTML con formattazione automatica
+function autoFormatText(text) {
+    if (!text || typeof text !== 'string') return '';
+    
+    // Converti a capo in <br>
+    text = text.replace(/\n/g, '<br>');
+    
+    // Converti markdown semplice
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // **grassetto**
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>'); // *corsivo*
+    text = text.replace(/__(.*?)__/g, '<u>$1</u>'); // __sottolineato__
+    text = text.replace(/`(.*?)`/g, '<code>$1</code>'); // `codice`
+    
+    // Converti URL in link (versione semplice)
+    text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    return text;
+}
+
+// Funzione combinata per processare il contenuto
+function processContent(content, enableAutoFormat = true) {
+    if (!content || typeof content !== 'string') return '';
+    
+    // Se sembra contenere HTML, sanitizzalo
+    if (content.includes('<') && content.includes('>')) {
+        return sanitizeHtml(content);
+    }
+    
+    // Altrimenti, se l'auto-formattazione è abilitata, processalo
+    if (enableAutoFormat) {
+        return autoFormatText(content);
+    }
+    
+    // Fallback: escape HTML per sicurezza
+    return escapeHtml(content);
+}
+

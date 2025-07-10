@@ -352,6 +352,7 @@ class UsernameManager {
     // Logica interna di salvataggio
     async saveUsernameInternal(username, selectedClan = 'Nessuno', skipUI = false) {
         const saveBtn = document.getElementById('saveUsernameBtn');
+        const loadingEl = document.getElementById('usernameLoading');
         const formEl = document.querySelector('.username-form');
         
         try {
