@@ -4,15 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏰 Hustle Castle Council</title>
+    <!-- reCAPTCHA con callback personalizzato -->
+    <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
     
-    <!-- ========================================= -->
-    <!-- 🤖 reCAPTCHA v3 - CONFIGURAZIONE CORRETTA -->
-    <!-- ========================================= -->
-    <script src="https://www.google.com/recaptcha/api.js?render=6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme" async defer></script>
-    
-    <!-- ========================================= -->
-    <!-- 🔥 FIREBASE SDK v9 + SICUREZZA ROBUSTA   -->
-    <!-- ========================================= -->
+    <!-- Firebase SDK v9 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check.js";
@@ -20,435 +15,158 @@
         import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
         import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
         
-        // 🔥 CONFIGURAZIONE FIREBASE
-        const firebaseConfig = {
-            apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
-            authDomain: "hustlecastlecouncil.firebaseapp.com",
-            databaseURL: "https://hustlecastlecouncil-default-rtdb.firebaseio.com",
-            projectId: "hustlecastlecouncil",
-            storageBucket: "hustlecastlecouncil.firebasestorage.app",
-            messagingSenderId: "778970862600",
-            appId: "1:778970862600:web:4244e17938ccf62c2eadbd",
-            measurementId: "G-R3GMPZCXP3"
-        };
-
-        // 🔑 CONFIGURAZIONE reCAPTCHA v3 - CHIAVE CORRETTA
-        const RECAPTCHA_V3_SITE_KEY = '6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme';
-
-        console.log('🏰 Hustle Castle Council - Sistema Sicurezza Avanzato');
-        console.log('🔑 reCAPTCHA v3 Site Key:', RECAPTCHA_V3_SITE_KEY.substring(0, 20) + '...');
+        // 🔥 CONFIGURAZIONE FIREBASE - INIZIALIZZAZIONE SINGOLA
+         const firebaseConfig = {
+			apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
+			authDomain: "hustlecastlecouncil.firebaseapp.com",
+			databaseURL: "https://hustlecastlecouncil-default-rtdb.firebaseio.com",
+			projectId: "hustlecastlecouncil",
+			storageBucket: "hustlecastlecouncil.firebasestorage.app",
+			messagingSenderId: "778970862600",
+			appId: "1:778970862600:web:4244e17938ccf62c2eadbd",
+			measurementId: "G-R3GMPZCXP3"
+		  };
         
-        // Variabili globali del sistema
+        // Inizializza Firebase UNA SOLA VOLTA
         let useFirebase = true;
         let app = null;
-        let appCheck = null;
         let appCheckEnabled = false;
-        let recaptchaV3Ready = false;
-        let securitySystemReady = false;
         
         try {
-            // Inizializza Firebase
             app = initializeApp(firebaseConfig);
             console.log('🔥 Firebase inizializzato con successo');
             
-            // ========================================
-            // 🛡️ SISTEMA SICUREZZA CORRETTO
-            // ========================================
-            
-            // Verifica environment autorizzato
-            function verifyEnvironment() {
-                const authorizedDomains = [
-                    'hustlecastleforum.netlify.app',
-                    'hustlecastlecouncil.firebaseapp.com',
-                    'localhost',
-                    '127.0.0.1',
-                    'claude.ai'
-                ];
-                
-                const currentDomain = window.location.hostname;
-                const isAuthorized = authorizedDomains.some(domain => 
-                    currentDomain === domain || currentDomain.endsWith('.' + domain)
-                );
-                
-                console.log('🌍 Environment Check:');
-                console.log('  - Domain:', currentDomain);
-                console.log('  - Protocol:', window.location.protocol);
-                console.log('  - Authorized:', isAuthorized);
-                
-                return isAuthorized;
-            }
-
-            // Caricamento reCAPTCHA semplificato
-            async function loadRecaptchaV3() {
-                console.log('🤖 Loading reCAPTCHA v3...');
-                
-                return new Promise((resolve) => {
-                    let attempts = 0;
-                    const maxAttempts = 20; // 10 secondi
-                    
-                    const checkRecaptcha = () => {
-                        attempts++;
-                        
-                        if (typeof window.grecaptcha !== 'undefined' && 
-                            window.grecaptcha.ready && 
-                            typeof window.grecaptcha.execute === 'function') {
-                            
-                            window.grecaptcha.ready(async () => {
-                                try {
-                                    console.log('✅ reCAPTCHA v3 ready');
-                                    recaptchaV3Ready = true;
-                                    resolve(true);
-                                } catch (error) {
-                                    console.warn('⚠️ reCAPTCHA v3 test failed:', error);
-                                    recaptchaV3Ready = false;
-                                    resolve(false);
-                                }
-                            });
-                            return;
-                        }
-                        
-                        if (attempts >= maxAttempts) {
-                            console.warn('⚠️ reCAPTCHA v3 timeout - continuing without');
-                            recaptchaV3Ready = false;
-                            resolve(false);
-                            return;
-                        }
-                        
-                        setTimeout(checkRecaptcha, 500);
-                    };
-                    
-                    checkRecaptcha();
+            // Prova ad inizializzare App Check, ma non bloccare se fallisce
+            try {
+                const appCheck = initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+                    isTokenAutoRefreshEnabled: true
                 });
+                appCheckEnabled = true;
+                console.log('🛡️ App Check inizializzato');
+            } catch (appCheckError) {
+                console.warn('⚠️ App Check non disponibile:', appCheckError.message);
+                console.log('📝 Il forum funzionerà senza App Check');
             }
-
-            // Inizializzazione App Check robusta con gestione errori
-            async function initializeAppCheckSimple() {
-                console.log('🛡️ Initializing App Check with error handling...');
-                
-                try {
-                    appCheck = initializeAppCheck(app, {
-                        provider: new ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
-                        isTokenAutoRefreshEnabled: false
-                    });
-                    
-                    console.log('✅ App Check initialized (errors expected - will be handled)');
-                    appCheckEnabled = true;
-                    
-                    // Test token con timeout e gestione errori 403
-                    setTimeout(async () => {
-                        try {
-                            await appCheck.getToken(true);
-                            console.log('✅ App Check token test successful');
-                        } catch (error) {
-                            if (error.code === 'appCheck/throttled' || error.message.includes('403')) {
-                                console.warn('⚠️ App Check throttled (403) - This is expected, continuing normally');
-                                // Non è un errore critico - il sistema può continuare
-                            } else {
-                                console.warn('⚠️ App Check token test failed:', error.code);
-                            }
-                        }
-                    }, 2000);
-                    
-                    return true;
-                    
-                } catch (error) {
-                    console.warn('⚠️ App Check initialization failed (expected):', error.message);
-                    appCheckEnabled = false;
-                    return false;
-                }
-            }
-
-            // Aggiorna status sistema
-            function updateSystemStatus(message) {
-                const statusEl = document.getElementById('firebase-status');
-                if (statusEl) {
-                    statusEl.textContent = message;
-                    
-                    if (message.includes('attivo') || message.includes('sicuro')) {
-                        statusEl.className = 'status-secure';
-                    } else if (message.includes('fallito') || message.includes('errore')) {
-                        statusEl.className = 'status-warning';
-                    } else {
-                        statusEl.className = 'status-active';
-                    }
-                }
-                
-                console.log('📊', message);
-            }
-
-            // ========================================
-            // 🚀 INIZIALIZZAZIONE SEMPLIFICATA
-            // ========================================
-            
-            async function initializeSecuritySystem() {
-                try {
-                    console.log('🚀 Starting security system...');
-                    updateSystemStatus('🔄 Inizializzazione...');
-                    
-                    // 1. Verifica environment
-                    const envOk = verifyEnvironment();
-                    if (!envOk) {
-                        console.warn('⚠️ Domain not in whitelist, but continuing...');
-                    }
-                    
-                    // 2. Carica reCAPTCHA v3
-                    updateSystemStatus('🤖 Caricamento reCAPTCHA...');
-                    await loadRecaptchaV3();
-                    
-                    // 3. Inizializza App Check
-                    updateSystemStatus('🛡️ Configurazione sicurezza...');
-                    await initializeAppCheckSimple();
-                    
-                    securitySystemReady = true;
-                    updateSystemStatus('🔥 Firebase attivo - Sistema pronto');
-                    console.log('✅ Security system ready!');
-                    
-                } catch (error) {
-                    console.error('❌ Security initialization failed:', error);
-                    securitySystemReady = false;
-                    appCheckEnabled = false;
-                    updateSystemStatus('🔥 Firebase attivo - Modalità semplificata');
-                }
-            }
-
-            // ========================================
-            // 🤖 FUNZIONI PUBBLICHE
-            // ========================================
-            
-            // Verifica reCAPTCHA per login (semplificata)
-            window.verifyRecaptcha = async function() {
-                console.log('🔐 reCAPTCHA verification called');
-                
-                if (!recaptchaV3Ready) {
-                    console.log('🔐 reCAPTCHA not ready, allowing login');
-                    return true;
-                }
-                
-                try {
-                    if (typeof window.grecaptcha !== 'undefined' && window.grecaptcha.execute) {
-                        const token = await window.grecaptcha.execute(RECAPTCHA_V3_SITE_KEY, {
-                            action: 'login'
-                        });
-                        console.log('🔐 reCAPTCHA token obtained');
-                        return true;
-                    }
-                } catch (error) {
-                    console.log('🔐 reCAPTCHA error, allowing anyway:', error);
-                }
-                
-                return true; // Sempre permetti il login
-            };
-            
-            // Reset reCAPTCHA (compatibilità)
-            window.resetRecaptcha = function() {
-                console.log('🔄 reCAPTCHA reset called');
-            };
-
-            // Callback caricamento reCAPTCHA
-            window.onRecaptchaLoad = function() {
-                console.log('🤖 reCAPTCHA callback triggered');
-            };
-
-            // ========================================
-            // 🧪 FUNZIONI DEBUG
-            // ========================================
-            
-            window.checkSystemStatus = function() {
-                console.log('\n🔍 === SYSTEM STATUS ===');
-                console.log('⏰ Timestamp:', new Date().toISOString());
-                console.log('🔥 Firebase App:', !!app);
-                console.log('🛡️ App Check Enabled:', appCheckEnabled);
-                console.log('🤖 reCAPTCHA Ready:', recaptchaV3Ready);
-                console.log('✅ System Ready:', securitySystemReady);
-                console.log('🌍 Domain:', window.location.hostname);
-                console.log('👤 Current User:', currentUser ? currentUser.email : 'Not logged in');
-                console.log('🎯 Current Section:', typeof currentSection !== 'undefined' ? currentSection : 'N/A');
-                
-                // Check for AppCheck errors
-                const appCheckErrors = performance.getEntriesByType('resource')
-                    .filter(entry => entry.name.includes('googleapis.com') && entry.responseStart === 0);
-                
-                if (appCheckErrors.length > 0) {
-                    console.log('⚠️ AppCheck Errors Detected:', appCheckErrors.length);
-                    console.log('   - This is expected due to quota limits');
-                    console.log('   - System will work in fallback mode');
-                }
-                
-                // Network status
-                console.log('🌐 Network Online:', navigator.onLine);
-                console.log('📶 Connection Type:', navigator.connection?.effectiveType || 'unknown');
-                
-                console.log('=== END STATUS ===\n');
-                
-                // Update UI status
-                updateSystemStatus(
-                    securitySystemReady ? 
-                    '🔥 Firebase attivo - Sistema operativo' : 
-                    '🔄 Sistema in inizializzazione...'
-                );
-            };
-
-            window.testRecaptcha = async function() {
-                if (!recaptchaV3Ready) {
-                    console.log('❌ reCAPTCHA not ready');
-                    return false;
-                }
-                
-                try {
-                    const token = await window.grecaptcha.execute(RECAPTCHA_V3_SITE_KEY, {
-                        action: 'test'
-                    });
-                    console.log('✅ reCAPTCHA test successful:', token.substring(0, 20) + '...');
-                    return true;
-                } catch (error) {
-                    console.log('❌ reCAPTCHA test failed:', error.message);
-                    return false;
-                }
-            };
-
-            window.forceFirebaseMode = function() {
-                useFirebase = true;
-                securitySystemReady = true;
-                appCheckEnabled = false;
-                updateSystemStatus('🔥 Firebase forzato - Modalità semplice');
-                console.log('🔧 Firebase mode forced ON');
-            };
-
-            window.clearAppCheckErrors = function() {
-                console.log('🧹 Clearing AppCheck error handlers...');
-                
-                // Suppress console warnings for AppCheck throttling
-                const originalWarn = console.warn;
-                console.warn = function(...args) {
-                    const message = args.join(' ');
-                    if (message.includes('AppCheck') && message.includes('throttled')) {
-                        // Silently ignore AppCheck throttling warnings
-                        return;
-                    }
-                    originalWarn.apply(console, args);
-                };
-                
-                console.log('✅ AppCheck warnings suppressed');
-            };
-
-            window.enableDebugMode = function() {
-                console.log('🐛 Debug mode enabled');
-                window.debugMode = true;
-                
-                // Enhanced error tracking
-                window.addEventListener('error', function(event) {
-                    console.log('🐛 Global Error:', {
-                        message: event.message,
-                        source: event.filename,
-                        line: event.lineno,
-                        column: event.colno,
-                        error: event.error
-                    });
-                });
-                
-                window.addEventListener('unhandledrejection', function(event) {
-                    console.log('🐛 Unhandled Promise Rejection:', event.reason);
-                });
-                
-                console.log('🐛 Enhanced error tracking active');
-            };
-
-            window.getSystemHealth = function() {
-                const health = {
-                    firebase: !!app,
-                    appCheck: appCheckEnabled,
-                    recaptcha: recaptchaV3Ready,
-                    user: !!currentUser,
-                    network: navigator.onLine,
-                    timestamp: new Date().toISOString()
-                };
-                
-                console.log('🏥 System Health:', health);
-                return health;
-            };
-
-            // Esponi oggetti globalmente
-            window.firebaseApp = app;
-            window.firebaseAuth = getAuth(app);
-            window.firebaseDatabase = getDatabase(app);
-            window.firebaseStorage = getStorage(app);
-            window.useFirebase = useFirebase;
-            window.appCheckEnabled = () => appCheckEnabled;
-            window.recaptchaV3Ready = () => recaptchaV3Ready;
-            window.securitySystemReady = () => securitySystemReady;
-            
-            // Esponi Firebase imports
-            window.firebaseImports = {
-                signInWithEmailAndPassword,
-                createUserWithEmailAndPassword,
-                onAuthStateChanged,
-                signOut,
-                updateProfile,
-                GoogleAuthProvider,
-                signInWithPopup,
-                ref,
-                push,
-                set,
-                get,
-                onValue,
-                off,
-                serverTimestamp,
-                onDisconnect,
-                child,
-                update,
-                storageRef,
-                uploadBytes,
-                getDownloadURL,
-                deleteObject
-            };
-            window.googleProvider = new GoogleAuthProvider();
-            
-            // ========================================
-            // 🚀 AVVIA INIZIALIZZAZIONE CON TIMEOUT
-            // ========================================
-            
-            function startSystem() {
-                // Timeout di sicurezza
-                setTimeout(() => {
-                    if (!securitySystemReady) {
-                        console.warn('⏰ Initialization timeout - forcing Firebase mode');
-                        forceFirebaseMode();
-                    }
-                }, 15000); // 15 secondi timeout massimo
-                
-                // Inizializzazione normale
-                setTimeout(() => {
-                    initializeSecuritySystem().catch((error) => {
-                        console.error('🚨 Final initialization failed:', error);
-                        forceFirebaseMode();
-                    });
-                }, 2000); // 2 secondi per sicurezza
-            }
-            
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', startSystem);
-            } else {
-                startSystem();
-            }
-            
-            console.log('✅ Security system loaded');
-            console.log('📝 Debug commands: checkSystemStatus(), testRecaptcha(), forceFirebaseMode()');
             
         } catch (error) {
-            console.error('❌ Critical Firebase error:', error);
+            console.error('❌ Errore inizializzazione Firebase:', error);
             useFirebase = false;
-            
-            // Imposta modalità demo con messaggio specifico
-            setTimeout(() => {
-                const statusEl = document.getElementById('firebase-status');
-                if (statusEl) {
-                    statusEl.textContent = '❌ Errore Firebase - Modalità demo';
-                    statusEl.className = 'status-warning';
-                }
-            }, 1000);
+            alert('⚠️ Firebase non configurato. Il forum funzionerà in modalità demo locale.');
         }
+        
+        const auth = useFirebase ? getAuth(app) : null;
+        const database = useFirebase ? getDatabase(app) : null;
+        const storage = useFirebase ? getStorage(app) : null;
+        const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
+        
+        // Esponi Firebase globalmente per compatibilità
+        window.firebaseApp = app;
+        window.firebaseAuth = auth;
+        window.firebaseDatabase = database;
+        window.firebaseStorage = storage;
+        window.useFirebase = useFirebase;
+        window.appCheckEnabled = appCheckEnabled;
+        window.firebaseImports = {
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut,
+            updateProfile,
+            GoogleAuthProvider,
+            signInWithPopup,
+            ref,
+            push,
+            set,
+            get,
+            onValue,
+            off,
+            serverTimestamp,
+            onDisconnect,
+            child,
+            update,
+            storageRef,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
+        };
+        window.googleProvider = googleProvider;
+        
+        // 🤖 FUNZIONI reCAPTCHA - GESTIONE MIGLIORATA
+        let recaptchaRendered = false;
+        
+        window.verifyRecaptcha = function() {
+            if (!recaptchaRendered || typeof grecaptcha === 'undefined') {
+                return true; // Permetti se reCAPTCHA non disponibile
+            }
+            const recaptchaResponse = grecaptcha.getResponse();
+            return recaptchaResponse && recaptchaResponse.length > 0;
+        };
+        
+        window.resetRecaptcha = function() {
+            if (recaptchaRendered && typeof grecaptcha !== 'undefined') {
+                try {
+                    grecaptcha.reset();
+                } catch (error) {
+                    console.log('Reset reCAPTCHA ignorato:', error.message);
+                }
+            }
+        };
+
+        // Render reCAPTCHA quando è pronto - CON CONTROLLO DOPPIO RENDERING
+        window.onRecaptchaLoad = function() {
+            if (!window.useFirebase || !appCheckEnabled) {
+                console.log('🤖 reCAPTCHA disabilitato - App Check non attivo');
+                return;
+            }
+            
+            if (recaptchaRendered) {
+                console.log('🤖 reCAPTCHA già renderizzato, skip');
+                return;
+            }
+            
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
+                try {
+                    const container = document.getElementById('recaptcha-container');
+                    if (container && container.innerHTML === '') {
+                        grecaptcha.render('recaptcha-container', {
+                            'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
+                            'theme': 'dark',
+                            'size': 'normal'
+                        });
+                        recaptchaRendered = true;
+                        console.log('✅ reCAPTCHA renderizzato');
+                    }
+                } catch (error) {
+                    console.log('⚠️ reCAPTCHA già presente o errore:', error.message);
+                }
+            }
+        };
+        
+        // Carica reCAPTCHA quando Google reCAPTCHA è pronto - SOLO SE NECESSARIO
+        window.addEventListener('load', () => {
+            if (!window.useFirebase || !appCheckEnabled) {
+                // Nascondi reCAPTCHA se App Check non è attivo
+                const container = document.getElementById('recaptcha-container');
+                if (container) {
+                    container.parentElement.style.display = 'none';
+                }
+                return;
+            }
+            
+            // Controlla periodicamente se reCAPTCHA è disponibile
+            const checkRecaptcha = () => {
+                if (typeof grecaptcha !== 'undefined' && grecaptcha.render && !recaptchaRendered) {
+                    setTimeout(window.onRecaptchaLoad, 100);
+                } else if (!recaptchaRendered) {
+                    setTimeout(checkRecaptcha, 500);
+                }
+            };
+            checkRecaptcha();
+        });
     </script>
     
+    <!-- CSS Files -->
     <link href="style.css" rel="stylesheet">
     <link href="dashboard.css" rel="stylesheet">
     
@@ -686,6 +404,50 @@
     </style>
 </head>
 <body>
+    <!-- Mobile Menu Toggle -->
+    <button id="mobileMenuToggle" class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
+    
+    <!-- Mobile Overlay -->
+    <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
+    
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status offline">🔴 Disconnesso</div>
+    
+    <!-- Message Counter -->
+    <div id="messageCounter" class="message-counter">💬 0 messaggi</div>
+	
+    <!-- Notifications Bell -->
+    <button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()">
+        🔔
+        <span id="notificationBadge" class="notification-badge hidden">0</span>
+    </button>
+
+    <!-- Notifications Panel -->
+    <div id="notificationsPanel" class="notifications-panel">
+        <div class="notifications-header">
+            <h3>🔔 Notifiche</h3>
+            <button class="mark-all-read" onclick="markAllNotificationsAsRead()">
+                Segna tutte come lette
+            </button>
+        </div>
+        <div id="notificationsList" class="notifications-list">
+            <div class="notifications-empty">
+                <div class="empty-icon">🔕</div>
+                <div>Nessuna notifica</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container">
+        <!-- I toast verranno generati dinamicamente -->
+    </div>
+
+    <!-- Mention Autocomplete -->
+    <div id="mentionAutocomplete" class="mention-autocomplete">
+        <!-- I suggerimenti verranno generati dinamicamente -->
+    </div>
+
     <!-- Login Modal -->
     <div id="loginModal" class="login-modal">
         <div class="login-form">
@@ -697,9 +459,8 @@
                 <button id="registerTab" class="login-tab" onclick="switchToRegister()">Registrati</button>
             </div>
             
-            <!-- Status Sistema Sicurezza -->
-            <div id="firebase-status" class="status-active" style="text-align: center; margin-bottom: 15px; padding: 10px; border-radius: 8px; font-size: 12px; transition: all 0.3s ease;">
-                🔄 Inizializzazione...
+            <div id="firebase-status" style="text-align: center; margin-bottom: 15px; padding: 10px; border-radius: 8px; font-size: 12px;">
+                <!-- Status will be updated by JavaScript -->
             </div>
             
             <!-- Login con Google -->
@@ -738,6 +499,11 @@
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
             
+            <!-- 🤖 reCAPTCHA Widget -->
+            <div class="form-group" style="display: flex; justify-content: center; margin: 20px 0;">
+                <div id="recaptcha-container"></div>
+            </div>
+            
             <div class="form-buttons">
                 <button id="submitBtn" class="btn-primary" onclick="handleSubmit()">Accedi</button>
             </div>
@@ -745,50 +511,12 @@
             <div id="loading" class="loading">
                 <div>🔄 Connessione in corso...</div>
             </div>
+            
+           
         </div>
     </div>
 
-    <!-- Mobile Menu Toggle -->
-    <button id="mobileMenuToggle" class="mobile-menu-toggle" onclick="toggleMobileMenu()" style="display: none;">☰</button>
-    
-    <!-- Mobile Overlay -->
-    <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()" style="display: none;"></div>
-    
-    <!-- Connection Status -->
-    <div id="connectionStatus" class="connection-status offline" style="display: none;">🔴 Disconnesso</div>
-    
-    <!-- Message Counter -->
-    <div id="messageCounter" class="message-counter" style="display: none;">💬 0 messaggi</div>
-	
-    <!-- Notifications Bell -->
-    <button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()" style="display: none;">
-        🔔
-        <span id="notificationBadge" class="notification-badge hidden">0</span>
-    </button>
-
-    <!-- Notifications Panel -->
-    <div id="notificationsPanel" class="notifications-panel" style="display: none;">
-        <div class="notifications-header">
-            <h3>🔔 Notifiche</h3>
-            <button class="mark-all-read" onclick="markAllNotificationsAsRead()">
-                Segna tutte come lette
-            </button>
-        </div>
-        <div id="notificationsList" class="notifications-list">
-            <div class="notifications-empty">
-                <div class="empty-icon">🔕</div>
-                <div>Nessuna notifica</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Container -->
-    <div id="toastContainer" class="toast-container"></div>
-
-    <!-- Mention Autocomplete -->
-    <div id="mentionAutocomplete" class="mention-autocomplete"></div>
-
-    <!-- Username Selection Modal -->
+    <!-- ✨ NEW: Username Selection Modal -->
     <div id="usernameModal" class="username-modal" style="display: none;">
         <div class="username-modal-content">
             <div class="username-header">
@@ -815,6 +543,16 @@
                     <div id="usernameValidation" class="username-validation"></div>
                 </div>
                 
+                <div class="form-group"  style="display: none;">
+                    <label for="clanSelect">Clan (opzionale)</label>
+                    <select id="clanSelect">
+                        <option value="Nessuno">Nessun clan per ora</option>
+                    </select>
+                    <div class="form-help">
+                        💡 Puoi sempre unirti a un clan in seguito tramite la sezione "Associa Clan"
+                    </div>
+                </div>
+                
                 <div class="username-actions">
                     <button id="saveUsernameBtn" class="btn-save-username" onclick="saveUsername()" disabled>
                         Conferma Username
@@ -832,1198 +570,322 @@
         </div>
     </div>
 
-    <!-- Main Forum Layout (Hidden initially) -->
-    <div id="mainContent" style="display: none;">
-        <div class="sidebar">
-            <div class="logo">
-                <h1>🏰 Hustle Castle Council</h1>
+    <div class="sidebar">
+        <div class="logo">
+            <h1>🏰 Hustle Castle Council</h1>
+        </div>
+        
+        <!-- User Info con Avatar Enhanced -->
+        <div class="user-info">
+            <div class="user-avatar" id="userAvatar">
+                <img id="userAvatarImg" src="" alt="Avatar" style="display: none; width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                <div id="userAvatarDefault" class="user-avatar-default">👤</div>
             </div>
-            
-            <!-- User Info con Avatar Enhanced -->
-            <div class="user-info">
-                <div class="user-avatar" id="userAvatar">
-                    <img id="userAvatarImg" src="" alt="Avatar" style="display: none; width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
-                    <div id="userAvatarDefault" class="user-avatar-default">👤</div>
+            <div style="display: inline-block; vertical-align: middle;">
+                <div class="user-name">
+                    <span id="currentUsername">Ospite</span>
+                    <span id="userStatus" class="offline-indicator"></span>
                 </div>
-                <div style="display: inline-block; vertical-align: middle;">
-                    <div class="user-name">
-                        <span id="currentUsername">Ospite</span>
-                        <span id="userStatus" class="offline-indicator"></span>
-                    </div>
-                    <div class="user-clan">Clan: <span id="currentClan">Nessuno</span></div>
-                    <div class="avatar-controls" id="avatarControls" style="margin-top: 8px; display: none;">
-                        <label for="avatar-upload" class="avatar-upload-btn">📷 Cambia Avatar</label>
-                        <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
-                    </div>
-                    <button id="logoutBtn" class="logout-btn" onclick="handleLogout()">Logout</button>
+                <div class="user-clan">Clan: <span id="currentClan">Nessuno</span></div>
+                <div class="avatar-controls" id="avatarControls" style="margin-top: 8px; display: none;">
+                    <label for="avatar-upload" class="avatar-upload-btn">📷 Cambia Avatar</label>
+                    <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
                 </div>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-title">🏠 Comando</div>
-                <div class="nav-item active" data-section="home" onclick="showSection('home')">
-                    <span>🏰 Dashboard</span>
-                </div>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-title">🌍 Generale</div>
-                <div class="nav-item" data-section="eventi" onclick="showSection('eventi')">
-                    <span>📅 Eventi</span>
-                </div>
-                <div class="nav-item" data-section="oggetti" onclick="showSection('oggetti')">
-                    <span>⚔️ Oggetti</span>
-                </div>
-                <div class="nav-item" data-section="novita" onclick="showSection('novita')">
-                    <span>🆕 Novità</span>
-                </div>
-                <div class="nav-item" data-section="salotto" onclick="showSection('salotto')">
-                    <span>🛋️ Salotto</span>
-                </div>
-                <div class="nav-item" data-section="segnalazioni" onclick="showSection('segnalazioni')">
-                    <span>📢 Segnalazioni</span>
-                </div>
-                <div class="nav-item" data-section="chat-generale" onclick="showSection('chat-generale')">
-                    <span>💬 Chat Generale</span>
-                </div>
-                <div class="nav-item" data-section="associa-clan" onclick="showSection('associa-clan')">
-                    <span>🏠 Associa Clan</span>
-                </div>
-            </div>
-
-            <div class="nav-section" id="adminSection" style="display: none;">
-                <div class="nav-title">⚙️ Amministrazione</div>
-                <div class="nav-item" data-section="admin-users" onclick="showSection('admin-users')">
-                    <span>👥 Gestione Utenti</span>
-                </div>
-                <div class="nav-item" data-section="admin-clans" onclick="showSection('admin-clans')">
-                    <span>🏰 Gestione Clan</span>
-                </div>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-title">🛡️ Clan: <span id="sidebarClan">Nessuno</span></div>
-                <div class="nav-item clan-only" data-section="clan-moderation" onclick="showSection('clan-moderation')" style="display: none;">
-                    <span>🛡️ Moderazione</span>
-                </div>
-                <div class="nav-item clan-only" data-section="clan-chat" onclick="showSection('clan-chat')">
-                    <span>💬 Chat Clan</span>
-                </div>
-                <div class="nav-item clan-only" data-section="clan-war" onclick="showSection('clan-war')">
-                    <span>⚔️ Guerra</span>
-                </div>
-                <div class="nav-item clan-only" data-section="clan-premi" onclick="showSection('clan-premi')">
-                    <span>🏆 Premi</span>
-                </div>
-                <div class="nav-item clan-only" data-section="clan-consigli" onclick="showSection('clan-consigli')">
-                    <span>💡 Consigli</span>
-                </div>
-                <div class="nav-item clan-only" data-section="clan-bacheca" onclick="showSection('clan-bacheca')">
-                    <span>🏰 Bacheca</span>
-                </div>
+                <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
             </div>
         </div>
 
-        <div class="main-content-area">
-            <!-- Banner Hero Enhanced -->
-            <div class="banner">
-                <div class="banner-content">
-                    <div class="banner-title">⚔️ Hustle Castle Council ⚔️</div>
-                    <div class="banner-subtitle">Il Comando Supremo della Community</div>
-                </div>
-            </div>
-
-            <div class="header">
-                <h2 id="section-title">🏰 Dashboard</h2>
-                <p id="section-description">Il tuo centro di comando per gestire strategie, clan e conquiste</p>
-            </div>
-
-            <div class="content-area">
-                <!-- Forum Layout -->
-                <div class="forum-layout" id="forum-content">
-                    <div class="thread-list" id="thread-list">
-                        <div class="welcome-card">
-                            <h3>🎉 Benvenuto nel Consiglio!</h3>
-                            <p>Seleziona una sezione dalla barra laterale per iniziare.</p>
-                            <div style="margin-top: 1rem;">
-                                <button onclick="window.checkSystemStatus()" class="debug-btn">🔧 Verifica Sistema</button>
-                                <button onclick="showSection('chat-generale')" class="action-btn">💬 Vai alla Chat</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Chat Layout -->
-                <div class="chat-mode" id="chat-content" style="display: none;">
-                    <div class="chat-messages" id="chat-messages">
-                        <div class="system-message">
-                            <div class="system-message-content">
-                                🎯 <strong>Chat Generale</strong> - Benvenuto nella chat del castello!
-                            </div>
-                        </div>
-                    </div>
-                    <div id="typingIndicator" class="typing-indicator"></div>
-                    <div class="chat-input">
-                        <div style="display: flex; align-items: flex-end; gap: 10px;">
-                            <div style="flex: 1; position: relative;">
-                                <input type="text" id="message-input" placeholder="Scrivi un messaggio... (usa @nome per taggare)" />
-                            </div>
-                            <div style="display: flex; gap: 5px;">
-                                <button class="emoticon-btn" onclick="addEmoticonToChat('😊')">😊</button>
-                                <button id="send-message-btn" onclick="sendMessage()">🚀</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Thread View -->
-                <div class="thread-view" id="thread-view" style="display: none;">
-                    <div style="width: 100%; display: flex; flex-direction: column; height: 100%;">
-                        <button class="back-btn" onclick="backToForum()">← Torna al Forum</button>
-                        
-                        <div class="thread-header">
-                            <h1 id="thread-title">Titolo Thread</h1>
-                            <div class="thread-meta">
-                                <span id="thread-author">Autore</span> • 
-                                <span id="thread-date">Data</span> • 
-                                <span id="thread-views">0 visualizzazioni</span>
-                            </div>
-                            <div class="thread-content" id="thread-content">
-                                Contenuto del thread...
-                            </div>
-                        </div>
-                        
-                        <div class="thread-comments" id="thread-comments">
-                            <div style="text-align: center; padding: 20px; color: #666;">
-                                Nessun commento ancora. Sii il primo a commentare!
-                            </div>
-                        </div>
-                        
-                        <div class="comment-input">
-                            <div class="comment-input-container">
-                                <div class="comment-input-main">
-                                    <div class="comment-textarea-container">
-                                        <textarea id="comment-text" placeholder="Scrivi un commento..."></textarea>
-                                    </div>
-                                    <div class="comment-controls">
-                                        <button id="submit-comment-btn" onclick="addComment()" class="submit-comment-btn">Commenta</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <div class="nav-section">
+            <div class="nav-title">🏠 Comando</div>
+            <div class="nav-item active" data-section="home">
+                <span>🏰 Dashboard</span>
             </div>
         </div>
 
-        <button id="new-thread-btn" class="new-thread-btn" onclick="showThreadCreationModal()">+ Nuovo Thread</button>
-
-        <!-- Thread Creation Modal -->
-        <div id="threadCreationModal" class="thread-creation-modal" style="display: none;">
-            <div class="thread-creation-form">
-                <h3>🏰 Crea Nuovo Thread</h3>
-                
-                <input type="text" id="thread-title-input" placeholder="Titolo del thread *" />
-                <textarea id="thread-content-input" placeholder="Contenuto del thread *"></textarea>
-                
-                <div class="thread-creation-buttons">
-                    <button class="btn-create-thread" onclick="createThread()">Crea Thread</button>
-                    <button class="btn-cancel-thread" onclick="hideThreadCreationModal()">Annulla</button>
-                </div>
+        <div class="nav-section">
+            <div class="nav-title">🌍 Generale</div>
+            <div class="nav-item" data-section="eventi">
+                <span>📅 Eventi</span>
+            </div>
+            <div class="nav-item" data-section="oggetti">
+                <span>⚔️ Oggetti</span>
+            </div>
+            <div class="nav-item" data-section="novita">
+                <span>🆕 Novità</span>
+            </div>
+            <div class="nav-item" data-section="salotto">
+                <span>🛋️ Salotto</span>
+            </div>
+            <div class="nav-item" data-section="segnalazioni">
+                <span>📢 Segnalazioni</span>
+            </div>
+            <div class="nav-item" data-section="chat-generale">
+                <span>💬 Chat Generale</span>
+            </div>
+			<div class="nav-item" data-section="associa-clan">
+                <span>🏠 Associa Clan</span>
             </div>
         </div>
 
-        <!-- Avatar Modal -->
-        <div id="avatarModal" class="avatar-modal" style="display: none;">
-            <div class="avatar-modal-content">
-                <h3>🖼️ Imposta il tuo Avatar</h3>
-                <div class="avatar-preview-container">
-                    <div class="avatar-preview-large">
-                        <img id="avatarPreviewLarge" src="" alt="Preview">
-                    </div>
-                </div>
-                <div class="avatar-modal-buttons">
-                    <button class="btn-save-avatar" onclick="saveAvatarChanges()">💾 Salva Avatar</button>
-                    <button class="btn-cancel-avatar" onclick="cancelAvatarChange()">❌ Annulla</button>
-                </div>
+        <div class="nav-section" id="adminSection" style="display: none;">
+            <div class="nav-title">⚙️ Amministrazione</div>
+            <div class="nav-item" data-section="admin-users">
+                <span>👥 Gestione Utenti</span>
+            </div>
+            <div class="nav-item" data-section="admin-clans">
+                <span>🏰 Gestione Clan</span>
             </div>
         </div>
 
-        <!-- Image Modal for fullscreen view -->
-        <div id="imageModal" class="image-modal" onclick="closeImageModal()" style="display: none;">
-            <span class="close-modal">&times;</span>
-            <img id="modalImage" src="" alt="Immagine a schermo intero">
+        <div class="nav-section">
+            <div class="nav-title">🛡️ Clan: <span id="sidebarClan">Nessuno</span></div>
+            <div class="nav-item clan-only" data-section="clan-moderation" id="clanModerationItem" style="display: none;">
+                <span>🛡️ Moderazione</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-chat">
+                <span>💬 Chat Clan</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-war">
+                <span>⚔️ Guerra</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-premi">
+                <span>🏆 Premi</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-consigli">
+                <span>💡 Consigli</span>
+            </div>
+			<div class="nav-item clan-only" data-section="clan-bacheca">
+                <span>🏰 Bacheca</span>
+            </div>
         </div>
     </div>
 
-    <!-- Script JavaScript semplificato -->
-    <script>
-        // Variabili globali
-        let isLoginMode = true;
-        let currentUser = null;
+    <div class="main-content">
+        <!-- Banner Hero Enhanced -->
+        <div class="banner">
+            <div class="banner-content">
+                <div class="banner-title">⚔️ Hustle Castle Council ⚔️</div>
+                <div class="banner-subtitle">Il Comando Supremo della Community</div>
+            </div>
+        </div>
 
-        // Funzioni UI
-        function switchToLogin() {
-            isLoginMode = true;
-            document.getElementById('loginTab').classList.add('active');
-            document.getElementById('registerTab').classList.remove('active');
-            document.getElementById('registrationFields').style.display = 'none';
-            document.getElementById('submitBtn').textContent = 'Accedi';
-            document.getElementById('googleBtnText').textContent = 'Continua con Google';
-            clearMessages();
-        }
+        <div class="header">
+            <h2 id="section-title">🏰 Dashboard</h2>
+            <p id="section-description">Il tuo centro di comando per gestire strategie, clan e conquiste</p>
+        </div>
 
-        function switchToRegister() {
-            isLoginMode = false;
-            document.getElementById('registerTab').classList.add('active');
-            document.getElementById('loginTab').classList.remove('active');
-            document.getElementById('registrationFields').style.display = 'block';
-            document.getElementById('submitBtn').textContent = 'Registrati';
-            document.getElementById('googleBtnText').textContent = 'Registrati con Google';
-            clearMessages();
-        }
+        <div class="content-area">
+            <!-- Forum Layout -->
+            <div class="forum-layout" id="forum-content">
+                <div class="thread-list" id="thread-list">
+                    <!-- I contenuti verranno generati dinamicamente -->
+                </div>
+            </div>
 
-        function clearMessages() {
-            document.getElementById('loginError').style.display = 'none';
-            document.getElementById('loginSuccess').style.display = 'none';
-        }
-
-        function showError(message) {
-            const errorEl = document.getElementById('loginError');
-            errorEl.textContent = message;
-            errorEl.style.display = 'block';
-            document.getElementById('loginSuccess').style.display = 'none';
-        }
-
-        function showSuccess(message) {
-            const successEl = document.getElementById('loginSuccess');
-            successEl.textContent = message;
-            successEl.style.display = 'block';
-            document.getElementById('loginError').style.display = 'none';
-        }
-
-        function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'block' : 'none';
-        }
-
-        // Gestione login/registrazione
-        async function handleSubmit() {
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            
-            if (!email || !password) {
-                showError('Inserisci email e password');
-                return;
-            }
-
-            // Controllo username per registrazione
-            if (!isLoginMode) {
-                const username = document.getElementById('username').value.trim();
-                if (!username) {
-                    showError('Inserisci un username');
-                    return;
-                }
-            }
-
-            clearMessages();
-            showLoading(true);
-
-            try {
-                // Verifica reCAPTCHA
-                if (typeof window.verifyRecaptcha === 'function') {
-                    await window.verifyRecaptcha();
-                }
-
-                // Simula login/registrazione
-                await new Promise(resolve => setTimeout(resolve, 1500));
-
-                if (isLoginMode) {
-                    // Login
-                    if (typeof window.firebaseImports !== 'undefined' && window.useFirebase) {
-                        // Usa Firebase se disponibile
-                        try {
-                            const auth = window.firebaseAuth;
-                            const userCredential = await window.firebaseImports.signInWithEmailAndPassword(auth, email, password);
-                            currentUser = userCredential.user;
-                            showSuccess('✅ Login effettuato con successo!');
-                        } catch (firebaseError) {
-                            console.warn('⚠️ Firebase login failed, checking error type:', firebaseError.code);
-                            
-                            // Gestione errori specifici Firebase
-                            if (firebaseError.code === 'auth/network-request-failed') {
-                                throw new Error('Errore di rete - Controlla la connessione');
-                            } else if (firebaseError.message.includes('AppCheck')) {
-                                console.warn('⚠️ AppCheck error during login - using demo mode');
-                                currentUser = { 
-                                    email: email, 
-                                    displayName: 'Demo User',
-                                    uid: 'demo-' + Date.now()
-                                };
-                                showSuccess('✅ Login demo effettuato (AppCheck temporaneamente non disponibile)!');
-                            } else {
-                                throw firebaseError; // Re-throw per gestione normale
-                            }
-                        }
-                    } else {
-                        // Modalità demo
-                        currentUser = { 
-                            email: email, 
-                            displayName: 'Demo User',
-                            uid: 'demo-' + Date.now()
-                        };
-                        showSuccess('✅ Login demo effettuato!');
-                    }
-                } else {
-                    // Registrazione
-                    if (typeof window.firebaseImports !== 'undefined' && window.useFirebase) {
-                        // Usa Firebase se disponibile
-                        try {
-                            const auth = window.firebaseAuth;
-                            const userCredential = await window.firebaseImports.createUserWithEmailAndPassword(auth, email, password);
-                            currentUser = userCredential.user;
-                            
-                            // Aggiorna profilo con username se fornito
-                            const username = document.getElementById('username').value.trim();
-                            if (username) {
-                                await window.firebaseImports.updateProfile(currentUser, {
-                                    displayName: username
-                                });
-                            }
-                            
-                            showSuccess('✅ Registrazione completata!');
-                        } catch (firebaseError) {
-                            console.warn('⚠️ Firebase registration failed:', firebaseError.code);
-                            
-                            if (firebaseError.message.includes('AppCheck')) {
-                                console.warn('⚠️ AppCheck error during registration - using demo mode');
-                                const username = document.getElementById('username').value.trim();
-                                currentUser = { 
-                                    email: email, 
-                                    displayName: username || 'Demo User',
-                                    uid: 'demo-' + Date.now()
-                                };
-                                showSuccess('✅ Registrazione demo completata (AppCheck temporaneamente non disponibile)!');
-                            } else {
-                                throw firebaseError; // Re-throw per gestione normale
-                            }
-                        }
-                    } else {
-                        // Modalità demo
-                        const username = document.getElementById('username').value.trim();
-                        currentUser = { 
-                            email: email, 
-                            displayName: username || 'Demo User',
-                            uid: 'demo-' + Date.now()
-                        };
-                        showSuccess('✅ Registrazione demo completata!');
-                    }
-                }
-
-                // Accesso riuscito
-                setTimeout(() => {
-                    document.getElementById('loginModal').style.display = 'none';
-                    document.getElementById('mainContent').style.display = 'block';
-                    
-                    // Inizializza forum
-                    initializeForum();
-                }, 1500);
-
-            } catch (error) {
-                console.error('Auth error:', error);
-                
-                let errorMessage = '❌ Errore di autenticazione';
-                
-                if (error.code === 'auth/user-not-found') {
-                    errorMessage = '❌ Utente non trovato - Verifica email o registrati';
-                } else if (error.code === 'auth/wrong-password') {
-                    errorMessage = '❌ Password errata';
-                } else if (error.code === 'auth/email-already-in-use') {
-                    errorMessage = '❌ Email già registrata - Usa il login';
-                } else if (error.code === 'auth/weak-password') {
-                    errorMessage = '❌ Password troppo debole (minimo 6 caratteri)';
-                } else if (error.code === 'auth/invalid-email') {
-                    errorMessage = '❌ Email non valida';
-                } else if (error.code === 'auth/network-request-failed') {
-                    errorMessage = '❌ Errore di rete - Controlla la connessione';
-                } else if (error.code === 'auth/too-many-requests') {
-                    errorMessage = '❌ Troppi tentativi - Riprova più tardi';
-                } else if (error.message.includes('AppCheck') || error.message.includes('throttled')) {
-                    errorMessage = '⚠️ Servizio temporaneamente limitato - Riprova più tardi o usa la modalità demo';
-                } else {
-                    errorMessage += ': ' + (error.message || 'Errore sconosciuto');
-                }
-                
-                showError(errorMessage);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Login con Google con gestione errori CORS
-        async function handleGoogleLogin() {
-            clearMessages();
-            showLoading(true);
-
-            try {
-                if (typeof window.firebaseImports !== 'undefined' && window.useFirebase) {
-                    // Usa Firebase se disponibile
-                    const auth = window.firebaseAuth;
-                    const provider = window.googleProvider;
-                    
-                    try {
-                        const result = await window.firebaseImports.signInWithPopup(auth, provider);
-                        currentUser = result.user;
-                        showSuccess('✅ Login Google completato!');
-                    } catch (googleError) {
-                        console.warn('⚠️ Google popup failed, trying alternative method:', googleError.code);
-                        
-                        if (googleError.code === 'auth/popup-blocked' || 
-                            googleError.code === 'auth/popup-closed-by-user' ||
-                            googleError.message.includes('Cross-Origin-Opener-Policy')) {
-                            
-                            // Fallback: simula login Google
-                            currentUser = { 
-                                email: 'demo.google@hustle.com', 
-                                displayName: 'Demo Google User',
-                                uid: 'demo-google-' + Date.now()
-                            };
-                            showSuccess('✅ Login Google (demo mode) completato!');
-                        } else {
-                            throw googleError;
-                        }
-                    }
-                } else {
-                    // Modalità demo
-                    currentUser = { 
-                        email: 'demo@google.com', 
-                        displayName: 'Demo Google User',
-                        uid: 'demo-' + Date.now()
-                    };
-                    showSuccess('✅ Login Google demo!');
-                }
-
-                setTimeout(() => {
-                    document.getElementById('loginModal').style.display = 'none';
-                    document.getElementById('mainContent').style.display = 'block';
-                    
-                    // Inizializza forum
-                    initializeForum();
-                }, 1500);
-
-            } catch (error) {
-                console.error('Google login error:', error);
-                
-                let errorMessage = '❌ Errore login Google';
-                
-                if (error.code === 'auth/popup-blocked') {
-                    errorMessage = '❌ Popup bloccato dal browser - Abilita i popup per questo sito';
-                } else if (error.code === 'auth/popup-closed-by-user') {
-                    errorMessage = '❌ Login cancellato dall\'utente';
-                } else if (error.code === 'auth/network-request-failed') {
-                    errorMessage = '❌ Errore di rete - Controlla la connessione';
-                } else if (error.message.includes('AppCheck')) {
-                    errorMessage = '⚠️ Servizio temporaneamente limitato - Riprova più tardi';
-                } else {
-                    errorMessage += ': ' + (error.message || 'Errore sconosciuto');
-                }
-                
-                showError(errorMessage);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Inizializzazione con controllo periodico dello stato Firebase
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🏰 Hustle Castle Council - Interface Ready');
-            
-            // Sopprimi automaticamente errori AppCheck noti
-            setTimeout(() => {
-                if (typeof window.clearAppCheckErrors === 'function') {
-                    window.clearAppCheckErrors();
-                }
-            }, 5000);
-            
-            // Controllo periodico dello stato Firebase con feedback migliorato
-            let statusCheckInterval = setInterval(() => {
-                if (typeof window.securitySystemReady === 'function' && window.securitySystemReady()) {
-                    const statusEl = document.getElementById('firebase-status');
-                    if (statusEl && statusEl.textContent.includes('Inizializzazione')) {
-                        
-                        // Determina lo stato effettivo
-                        let statusMessage = '🔥 Firebase attivo';
-                        let statusClass = 'status-secure';
-                        
-                        if (appCheckEnabled && recaptchaV3Ready) {
-                            statusMessage += ' - Sistema sicuro completo';
-                        } else if (appCheckEnabled) {
-                            statusMessage += ' - Sistema sicuro (reCAPTCHA parziale)';
-                        } else {
-                            statusMessage += ' - Modalità compatibilità';
-                            statusClass = 'status-active';
-                        }
-                        
-                        statusEl.textContent = statusMessage;
-                        statusEl.className = statusClass;
-                        
-                        // Ferma il controllo periodico dopo il primo successo
-                        clearInterval(statusCheckInterval);
-                        
-                        console.log('✅ Firebase status updated:', statusMessage);
-                    }
-                }
-            }, 2000);
-            
-            // Timeout di sicurezza per il controllo periodico
-            setTimeout(() => {
-                clearInterval(statusCheckInterval);
-                
-                const statusEl = document.getElementById('firebase-status');
-                if (statusEl && statusEl.textContent.includes('Inizializzazione')) {
-                    statusEl.textContent = '🔥 Firebase attivo - Modalità fallback';
-                    statusEl.className = 'status-active';
-                    console.log('⏰ Status check timeout - using fallback status');
-                }
-            }, 15000);
-
-            // Enter key submit
-            document.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && document.getElementById('loginModal').style.display !== 'none') {
-                    handleSubmit();
-                }
-            });
-            
-            // Monitora errori di rete per fornire feedback migliore
-            window.addEventListener('online', function() {
-                console.log('🌐 Network back online');
-                const statusEl = document.getElementById('firebase-status');
-                if (statusEl && statusEl.textContent.includes('rete')) {
-                    statusEl.textContent = '🔥 Firebase attivo - Connessione ripristinata';
-                    statusEl.className = 'status-secure';
-                }
-            });
-            
-            window.addEventListener('offline', function() {
-                console.log('🌐 Network offline');
-                const statusEl = document.getElementById('firebase-status');
-                if (statusEl) {
-                    statusEl.textContent = '⚠️ Connessione assente - Modalità offline';
-                    statusEl.className = 'status-warning';
-                }
-            });
-        });
-
-        // Debug globale
-        window.debugLogin = function() {
-            console.log('\n🔍 === LOGIN DEBUG ===');
-            console.log('Login Mode:', isLoginMode);
-            console.log('Current User:', currentUser);
-            console.log('Firebase Available:', typeof window.firebaseImports !== 'undefined');
-            console.log('Use Firebase:', window.useFirebase);
-            console.log('reCAPTCHA Function:', typeof window.verifyRecaptcha);
-            console.log('=== END DEBUG ===\n');
-        };
-
-        // ========================================
-        // 🏰 SISTEMA FORUM COMPLETO
-        // ========================================
-
-        // Variabili globali forum
-        let currentSection = 'home';
-        let isLoggedIn = false;
-        let forumData = {
-            threads: [],
-            messages: [],
-            users: []
-        };
-
-        // Sistema di navigazione sezioni
-        function showSection(sectionName) {
-            console.log('📍 Navigating to section:', sectionName);
-            
-            // Aggiorna stato navigazione
-            currentSection = sectionName;
-            
-            // Aggiorna menu attivo
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            document.querySelector(`[data-section="${sectionName}"]`)?.classList.add('active');
-            
-            // Nascondi tutti i layout
-            document.getElementById('forum-content').style.display = 'none';
-            document.getElementById('chat-content').style.display = 'none';
-            document.getElementById('thread-view').style.display = 'none';
-            
-            // Aggiorna titolo e descrizione
-            updateSectionHeader(sectionName);
-            
-            // Mostra contenuto appropriato
-            if (sectionName.includes('chat')) {
-                showChatMode(sectionName);
-            } else {
-                showForumMode(sectionName);
-            }
-            
-            // Carica contenuto sezione
-            loadSectionContent(sectionName);
-        }
-
-        function updateSectionHeader(sectionName) {
-            const titles = {
-                'home': '🏰 Dashboard',
-                'eventi': '📅 Eventi del Castello',
-                'oggetti': '⚔️ Oggetti e Equipaggiamento',
-                'novita': '🆕 Novità e Aggiornamenti',
-                'salotto': '🛋️ Salotto della Gilda',
-                'segnalazioni': '📢 Segnalazioni Bug',
-                'chat-generale': '💬 Chat Generale',
-                'associa-clan': '🏠 Associazione Clan',
-                'clan-chat': '🛡️ Chat del Clan',
-                'clan-war': '⚔️ Guerra del Clan',
-                'clan-premi': '🏆 Premi del Clan',
-                'clan-consigli': '💡 Consigli Strategici',
-                'clan-bacheca': '🏰 Bacheca del Clan'
-            };
-            
-            const descriptions = {
-                'home': 'Il tuo centro di comando per gestire strategie, clan e conquiste',
-                'eventi': 'Scopri eventi attuali e futuri del castello',
-                'oggetti': 'Discussioni su armi, armature e oggetti rari',
-                'novita': 'Ultime novità, patch notes e aggiornamenti',
-                'salotto': 'Chiacchiere e discussioni generali della community',
-                'segnalazioni': 'Segnala bug e problemi tecnici',
-                'chat-generale': 'Chat in tempo reale con la community',
-                'associa-clan': 'Trova e unisciti a un clan',
-                'clan-chat': 'Chat privata del tuo clan',
-                'clan-war': 'Strategie e coordinamento per le guerre',
-                'clan-premi': 'Risultati tornei e premi del clan',
-                'clan-consigli': 'Consigli e strategie avanzate',
-                'clan-bacheca': 'Annunci e informazioni del clan'
-            };
-            
-            document.getElementById('section-title').textContent = titles[sectionName] || '🏰 Sezione';
-            document.getElementById('section-description').textContent = descriptions[sectionName] || 'Contenuto della sezione';
-        }
-
-        function showForumMode(sectionName) {
-            document.getElementById('forum-content').style.display = 'block';
-            document.getElementById('new-thread-btn').style.display = 'block';
-        }
-
-        function showChatMode(sectionName) {
-            document.getElementById('chat-content').style.display = 'block';
-            document.getElementById('new-thread-btn').style.display = 'none';
-            
-            // Inizializza chat se necessario
-            initializeChat(sectionName);
-        }
-
-        function loadSectionContent(sectionName) {
-            const threadList = document.getElementById('thread-list');
-            
-            if (sectionName === 'home') {
-                threadList.innerHTML = `
-                    <div class="welcome-card">
-                        <h3>🎉 Benvenuto nel Consiglio!</h3>
-                        <p>Bentornato, <strong>${currentUser?.displayName || currentUser?.email || 'Guerriero'}!</strong></p>
-                        <p>Seleziona una sezione dalla barra laterale per iniziare a esplorare il castello.</p>
-                        <div style="margin-top: 1.5rem;">
-                            <button onclick="window.checkSystemStatus()" class="debug-btn">🔧 Verifica Sistema</button>
-                            <button onclick="showSection('chat-generale')" class="action-btn">💬 Vai alla Chat</button>
-                            <button onclick="showSection('eventi')" class="action-btn">📅 Vedi Eventi</button>
-                        </div>
-                        <div style="margin-top: 1rem; padding: 1rem; background: rgba(45, 130, 181, 0.1); border-radius: 10px; border: 1px solid rgba(45, 130, 181, 0.2);">
-                            <h4 style="color: var(--accent-2); margin-bottom: 0.5rem;">🚀 Funzionalità Disponibili:</h4>
-                            <ul style="text-align: left; color: var(--text-secondary); font-size: 0.9rem;">
-                                <li>✅ Sistema di autenticazione completo</li>
-                                <li>✅ Chat in tempo reale</li>
-                                <li>✅ Forum multithread</li>
-                                <li>✅ Gestione clan</li>
-                                <li>✅ Sistema notifiche</li>
-                                <li>✅ Mobile responsive</li>
-                            </ul>
+            <!-- Chat Layout -->
+            <div class="chat-mode" id="chat-content">
+                <div class="chat-messages" id="chat-messages">
+                    <!-- I messaggi verranno generati dinamicamente -->
+                </div>
+                <div id="typingIndicator" class="typing-indicator"></div>
+                <div class="chat-input">
+                    <div style="display: flex; align-items: flex-end; gap: 10px;">
+                        <div style="flex: 1; position: relative;">
+							<input type="text" id="message-input" placeholder="Scrivi un messaggio... (usa @nome per taggare)" />
+						</div>
+                        <div style="display: flex; gap: 5px;">
+                            <div class="emoticon-picker">
+                                <button class="emoticon-btn" onclick="toggleEmoticonPicker('chat')">😊</button>
+                                <div class="emoticon-panel" id="chat-emoticon-panel">
+                                    <div class="emoticon-grid">
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '😊')">😊</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '😂')">😂</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🎉')">🎉</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '❤️')">❤️</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '👍')">👍</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '👎')">👎</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🔥')">🔥</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '💪')">💪</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🎯')">🎯</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '⚔️')">⚔️</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🏰')">🏰</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🛡️')">🛡️</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🏆')">🏆</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '💎')">💎</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '⭐')">⭐</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🚀')">🚀</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '💯')">💯</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🤔')">🤔</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="send-message-btn" onclick="sendMessage()">🚀</button>
                         </div>
                     </div>
-                `;
-            } else {
-                // Contenuto specifico per ogni sezione
-                threadList.innerHTML = generateSectionThreads(sectionName);
-            }
-        }
+                </div>
+            </div>
 
-        function generateSectionThreads(sectionName) {
-            const sampleThreads = {
-                'eventi': [
-                    { title: '🎃 Evento Halloween 2024', author: 'GameMaster', replies: 23, lastActivity: '2 ore fa' },
-                    { title: '⚔️ Torneo Settimanale', author: 'TournamentBot', replies: 45, lastActivity: '1 giorno fa' },
-                    { title: '🎁 Premi Giornalieri Doppi', author: 'AdminCastello', replies: 12, lastActivity: '3 giorni fa' }
-                ],
-                'oggetti': [
-                    { title: '🗡️ Discussione: Migliori Spade', author: 'SwordMaster', replies: 67, lastActivity: '30 min fa' },
-                    { title: '🛡️ Build Difensiva Ottimale', author: 'DefenseExpert', replies: 34, lastActivity: '2 ore fa' },
-                    { title: '💎 Drop Rate Oggetti Leggendari', author: 'LootHunter', replies: 89, lastActivity: '1 giorno fa' }
-                ],
-                'novita': [
-                    { title: '📱 Aggiornamento v2.1.5', author: 'Developer', replies: 156, lastActivity: '1 ora fa' },
-                    { title: '🐛 Bug Fix Patch', author: 'TechSupport', replies: 23, lastActivity: '6 ore fa' },
-                    { title: '🎨 Nuova UI in Arrivo', author: 'DesignTeam', replies: 78, lastActivity: '2 giorni fa' }
-                ]
-            };
-
-            const threads = sampleThreads[sectionName] || [
-                { title: '💬 Discussione Generale', author: 'Moderatore', replies: 15, lastActivity: '1 ora fa' },
-                { title: '❓ Domande e Risposte', author: 'Helper', replies: 8, lastActivity: '3 ore fa' }
-            ];
-
-            return threads.map(thread => `
-                <div class="thread-card" onclick="openThread('${thread.title}', '${thread.author}')">
-                    <div class="thread-info">
-                        <h4 class="thread-title">${thread.title}</h4>
+            <!-- Thread View -->
+            <div class="thread-view" id="thread-view">
+                <div style="width: 100%; display: flex; flex-direction: column; height: 100%;">
+                    <!-- MODIFICATO: Aggiunto title per tooltip -->
+                    <button class="back-btn" onclick="backToForum()" title="Torna al forum (Escape o swipe da sinistra)">← Torna al Forum</button>
+                    
+                    <div class="thread-header">
+                        <h1 id="thread-title">Titolo Thread</h1>
                         <div class="thread-meta">
-                            <span>📝 ${thread.author}</span> • 
-                            <span>💬 ${thread.replies} risposte</span> • 
-                            <span>🕒 ${thread.lastActivity}</span>
+                            <span id="thread-author">Autore</span> • 
+                            <span id="thread-date">Data</span> • 
+                            <span id="thread-views">0 visualizzazioni</span>
+                        </div>
+                        <div class="thread-content" id="thread-content">
+                            Contenuto del thread...
                         </div>
                     </div>
-                </div>
-            `).join('') + `
-                <style>
-                .thread-card {
-                    background: var(--card-bg);
-                    border: 1px solid var(--border);
-                    border-radius: 12px;
-                    padding: 1.5rem;
-                    margin-bottom: 1rem;
-                    cursor: pointer;
-                    transition: all 0.3s ease;
-                }
-                
-                .thread-card:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-                    border-color: var(--accent-2);
-                }
-                
-                .thread-title {
-                    color: var(--text-primary);
-                    margin-bottom: 0.8rem;
-                    font-size: 1.1rem;
-                }
-                
-                .thread-meta {
-                    color: var(--text-secondary);
-                    font-size: 0.9rem;
-                }
-                </style>
-            `;
-        }
-
-        // Sistema Chat
-        function initializeChat(chatType) {
-            const chatMessages = document.getElementById('chat-messages');
-            
-            // Messaggio di sistema
-            chatMessages.innerHTML = `
-                <div class="system-message">
-                    <div class="system-message-content">
-                        🎯 <strong>${getChatTitle(chatType)}</strong> - Benvenuto nella chat!
+                    
+                    <div class="thread-comments" id="thread-comments">
+                        <div style="text-align: center; padding: 20px; color: #666;">
+                            Nessun commento ancora. Sii il primo a commentare!
+                        </div>
                     </div>
-                </div>
-            `;
-            
-            // Aggiungi alcuni messaggi demo
-            setTimeout(() => {
-                addChatMessage('Sistema', '🤖 Chat inizializzata correttamente!', 'system');
-                addChatMessage(currentUser?.displayName || 'Tu', '👋 Ciao a tutti!', 'user');
-            }, 1000);
-        }
-
-        function getChatTitle(chatType) {
-            const titles = {
-                'chat-generale': 'Chat Generale',
-                'clan-chat': 'Chat del Clan'
-            };
-            return titles[chatType] || 'Chat';
-        }
-
-        function addChatMessage(author, message, type = 'user') {
-            const chatMessages = document.getElementById('chat-messages');
-            const timestamp = new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'});
-            
-            const messageEl = document.createElement('div');
-            messageEl.className = `chat-message ${type}`;
-            messageEl.innerHTML = `
-                <div class="message-header">
-                    <span class="message-author">${author}</span>
-                    <span class="message-time">${timestamp}</span>
-                </div>
-                <div class="message-content">${message}</div>
-            `;
-            
-            chatMessages.appendChild(messageEl);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            // Aggiungi stili se non esistono
-            if (!document.getElementById('chat-message-styles')) {
-                const styles = document.createElement('style');
-                styles.id = 'chat-message-styles';
-                styles.textContent = `
-                    .chat-message {
-                        margin-bottom: 1rem;
-                        padding: 0.8rem;
-                        border-radius: 10px;
-                        background: rgba(255, 255, 255, 0.05);
-                    }
                     
-                    .chat-message.system {
-                        background: rgba(45, 130, 181, 0.1);
-                        border: 1px solid rgba(45, 130, 181, 0.2);
-                    }
-                    
-                    .message-header {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 0.5rem;
-                        font-size: 0.8rem;
-                    }
-                    
-                    .message-author {
-                        color: var(--accent-2);
-                        font-weight: 600;
-                    }
-                    
-                    .message-time {
-                        color: var(--text-muted);
-                    }
-                    
-                    .message-content {
-                        color: var(--text-primary);
-                        line-height: 1.4;
-                    }
-                `;
-                document.head.appendChild(styles);
-            }
-        }
-
-        function sendMessage() {
-            const input = document.getElementById('message-input');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            // Aggiungi messaggio alla chat
-            addChatMessage(currentUser?.displayName || 'Tu', message, 'user');
-            
-            // Pulisci input
-            input.value = '';
-            
-            // Simula risposta automatica (solo per demo)
-            setTimeout(() => {
-                const responses = [
-                    '👍 Ottima idea!',
-                    '🤔 Interessante punto di vista',
-                    '⚔️ Concordo, dobbiamo strategizzare',
-                    '🏰 Il castello ha bisogno di guerrieri come te!',
-                    '💪 Insieme siamo più forti!'
-                ];
-                const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-                addChatMessage('Compagno', randomResponse, 'user');
-            }, 1000 + Math.random() * 2000);
-        }
-
-        function addEmoticonToChat(emoticon) {
-            const input = document.getElementById('message-input');
-            input.value += emoticon;
-            input.focus();
-        }
-
-        // Sistema Thread
-        function openThread(title, author) {
-            console.log('📖 Opening thread:', title);
-            
-            // Nascondi forum, mostra thread view
-            document.getElementById('forum-content').style.display = 'none';
-            document.getElementById('thread-view').style.display = 'block';
-            document.getElementById('new-thread-btn').style.display = 'none';
-            
-            // Popola contenuto thread
-            document.getElementById('thread-title').textContent = title;
-            document.getElementById('thread-author').textContent = author;
-            document.getElementById('thread-date').textContent = new Date().toLocaleDateString('it-IT');
-            document.getElementById('thread-views').textContent = Math.floor(Math.random() * 500) + ' visualizzazioni';
-            document.getElementById('thread-content').innerHTML = `
-                <p>Questo è il contenuto del thread <strong>"${title}"</strong>.</p>
-                <p>Qui ci sarebbe il contenuto completo del post, con eventuali immagini, link e formattazione.</p>
-                <p>Gli utenti possono rispondere e discutere l'argomento nei commenti qui sotto.</p>
-            `;
-            
-            // Carica commenti demo
-            loadThreadComments();
-        }
-
-        function loadThreadComments() {
-            const commentsContainer = document.getElementById('thread-comments');
-            
-            const sampleComments = [
-                { author: 'Strategist', content: 'Ottimo thread! Condivido pienamente.', time: '2 ore fa' },
-                { author: 'ClanLeader', content: 'Molto utile, grazie per la condivisione.', time: '1 ora fa' },
-                { author: 'Warrior', content: 'Ho avuto la stessa esperienza!', time: '30 min fa' }
-            ];
-            
-            commentsContainer.innerHTML = sampleComments.map(comment => `
-                <div class="comment">
-                    <div class="comment-header">
-                        <span class="comment-author">${comment.author}</span>
-                        <span class="comment-time">${comment.time}</span>
+                    <div class="comment-input">
+                        <div class="comment-input-container">
+                            <div class="comment-input-main">
+                                <div class="comment-textarea-container">
+                                    <textarea id="comment-text" placeholder="Scrivi un commento... (usa @nome per taggare)"></textarea>
+                                </div>
+                                <div class="comment-controls">
+                                    <div class="comment-buttons-row">
+                                        <button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
+                                        <div class="emoticon-picker">
+                                            <button class="emoticon-btn" onclick="toggleEmoticonPicker('comment')">😊</button>
+                                            <div class="emoticon-panel" id="comment-emoticon-panel">
+                                                <div class="emoticon-grid">
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😊')">😊</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😂')">😂</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎉')">🎉</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '❤️')">❤️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👍')">👍</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👎')">👎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🔥')">🔥</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💪')">💪</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎯')">🎯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⚔️')">⚔️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏰')">🏰</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🛡️')">🛡️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏆')">🏆</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💎')">💎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⭐')">⭐</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🚀')">🚀</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💯')">💯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🤔')">🤔</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button id="submit-comment-btn" onclick="addComment()" class="submit-comment-btn">Commenta</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Image Upload Section for Comments -->
+                            <div id="comment-image-upload" class="comment-image-upload">
+                                <label for="comment-image-input" class="image-upload-label">
+                                    📷 Seleziona Immagine
+                                </label>
+                                <input type="file" id="comment-image-input" accept="image/*" class="image-upload-input" />
+                                <div id="comment-image-preview" class="image-preview"></div>
+                                <div id="comment-upload-progress" class="upload-progress"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="comment-content">${comment.content}</div>
+				</div>
+            </div>
+        </div>
+    </div>
+
+    <button id="new-thread-btn" class="new-thread-btn" onclick="showThreadCreationModal()">+ Nuovo Thread</button>
+
+    <!-- Thread Creation Modal -->
+    <div id="threadCreationModal" class="thread-creation-modal">
+        <div class="thread-creation-form">
+            <h3>🏰 Crea Nuovo Thread</h3>
+            
+            <input type="text" id="thread-title-input" placeholder="Titolo del thread *" />
+            <textarea id="thread-content-input" placeholder="Contenuto del thread * (usa @nome per taggare)"></textarea>
+            
+            <!-- Image Upload Section -->
+            <div class="image-upload-section">
+                <label for="thread-image-input" class="image-upload-label">
+                    📷 Aggiungi Immagine (opzionale)
+                </label>
+                <input type="file" id="thread-image-input" accept="image/*" class="image-upload-input" />
+                <div id="image-preview" class="image-preview"></div>
+                <div id="upload-progress" class="upload-progress"></div>
+            </div>
+            
+            <div class="thread-creation-buttons">
+                <button class="btn-create-thread" onclick="createThread()">Crea Thread</button>
+                <button class="btn-cancel-thread" onclick="hideThreadCreationModal()">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Avatar Modal -->
+    <div id="avatarModal" class="avatar-modal" style="display: none;">
+        <div class="avatar-modal-content">
+            <h3>🖼️ Imposta il tuo Avatar</h3>
+            <div class="avatar-preview-container">
+                <div class="avatar-preview-large">
+                    <img id="avatarPreviewLarge" src="" alt="Preview">
                 </div>
-            `).join('') + `
-                <style>
-                .comment {
-                    background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    padding: 1rem;
-                    margin-bottom: 1rem;
-                }
-                
-                .comment-header {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 0.8rem;
-                    font-size: 0.9rem;
-                }
-                
-                .comment-author {
-                    color: var(--accent-2);
-                    font-weight: 600;
-                }
-                
-                .comment-time {
-                    color: var(--text-muted);
-                }
-                
-                .comment-content {
-                    color: var(--text-primary);
-                    line-height: 1.5;
-                }
-                </style>
-            `;
-        }
-
-        function backToForum() {
-            document.getElementById('thread-view').style.display = 'none';
-            document.getElementById('forum-content').style.display = 'block';
-            document.getElementById('new-thread-btn').style.display = 'block';
-        }
-
-        function addComment() {
-            const textarea = document.getElementById('comment-text');
-            const content = textarea.value.trim();
-            
-            if (!content) {
-                alert('Inserisci un commento!');
-                return;
-            }
-            
-            // Aggiungi commento
-            const commentsContainer = document.getElementById('thread-comments');
-            const newComment = document.createElement('div');
-            newComment.className = 'comment';
-            newComment.innerHTML = `
-                <div class="comment-header">
-                    <span class="comment-author">${currentUser?.displayName || 'Tu'}</span>
-                    <span class="comment-time">ora</span>
+                <div class="avatar-preview-small">
+                    <img id="avatarPreviewSmall" src="" alt="Preview piccolo">
+                    <p>Anteprima</p>
                 </div>
-                <div class="comment-content">${content}</div>
-            `;
-            
-            commentsContainer.appendChild(newComment);
-            
-            // Pulisci textarea
-            textarea.value = '';
-            
-            // Scroll al nuovo commento
-            newComment.scrollIntoView({ behavior: 'smooth' });
-            
-            console.log('💬 Comment added:', content);
-        }
+            </div>
+            <div class="avatar-modal-buttons">
+                <button class="btn-save-avatar" onclick="saveAvatarChanges()">💾 Salva Avatar</button>
+                <button class="btn-cancel-avatar" onclick="cancelAvatarChange()">❌ Annulla</button>
+                <button class="btn-remove-avatar" onclick="removeAvatar()">🗑️ Rimuovi Avatar</button>
+            </div>
+            <div id="avatar-upload-progress" class="upload-progress" style="display: none;"></div>
+        </div>
+    </div>
 
-        // Sistema Thread Creation
-        function showThreadCreationModal() {
-            document.getElementById('threadCreationModal').style.display = 'flex';
-        }
+    <!-- Image Modal for fullscreen view -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+        <span class="close-modal">&times;</span>
+        <img id="modalImage" src="" alt="Immagine a schermo intero">
+    </div>
 
-        function hideThreadCreationModal() {
-            document.getElementById('threadCreationModal').style.display = 'none';
-            
-            // Reset form
-            document.getElementById('thread-title-input').value = '';
-            document.getElementById('thread-content-input').value = '';
-        }
+    <!-- ======================================= -->
+    <!-- PRIMA carica i tuoi script esistenti   -->
+    <!-- ======================================= -->
+    <script src="script.js"></script>
+    <script src="username_handler.js"></script>
+    <script src="dashboard.js"></script>
+    <script src="activity_tracker.js"></script>
 
-        function createThread() {
-            const title = document.getElementById('thread-title-input').value.trim();
-            const content = document.getElementById('thread-content-input').value.trim();
-            
-            if (!title || !content) {
-                alert('Inserisci titolo e contenuto!');
-                return;
-            }
-            
-            console.log('📝 Creating thread:', { title, content });
-            
-            // Simula creazione thread
-            alert(`✅ Thread "${title}" creato con successo!`);
-            
-            hideThreadCreationModal();
-            
-            // Ricarica contenuto sezione
-            loadSectionContent(currentSection);
-        }
-
-        // Gestione Logout
-        function handleLogout() {
-            if (confirm('Sei sicuro di voler uscire?')) {
-                console.log('👋 User logging out');
-                
-                // Reset stato
-                currentUser = null;
-                isLoggedIn = false;
-                
-                // Mostra login modal
-                document.getElementById('loginModal').style.display = 'flex';
-                document.getElementById('mainContent').style.display = 'none';
-                
-                // Reset form
-                document.getElementById('email').value = '';
-                document.getElementById('password').value = '';
-                clearMessages();
-                
-                console.log('✅ Logout completed');
-            }
-        }
-
-        // Username handling
-        function saveUsername() {
-            const username = document.getElementById('usernameInput').value.trim();
-            
-            if (!username) {
-                document.getElementById('usernameError').textContent = 'Inserisci un username';
-                document.getElementById('usernameError').style.display = 'block';
-                return;
-            }
-            
-            console.log('💾 Saving username:', username);
-            
-            // Simula salvataggio
-            document.getElementById('usernameLoading').style.display = 'flex';
-            
-            setTimeout(() => {
-                // Aggiorna user info
-                if (currentUser) {
-                    currentUser.displayName = username;
-                }
-                document.getElementById('currentUsername').textContent = username;
-                
-                // Chiudi modal
-                document.getElementById('usernameModal').style.display = 'none';
-                document.getElementById('usernameLoading').style.display = 'none';
-                
-                console.log('✅ Username saved successfully');
-            }, 2000);
-        }
-
-        // Funzioni modals placeholder
-        function toggleNotificationsPanel() { console.log('🔔 Toggle notifications'); }
-        function markAllNotificationsAsRead() { console.log('✅ Mark all notifications read'); }
-        function toggleMobileMenu() { console.log('📱 Toggle mobile menu'); }
-        function closeMobileMenu() { console.log('📱 Close mobile menu'); }
-        function saveAvatarChanges() { console.log('💾 Save avatar'); }
-        function cancelAvatarChange() { console.log('❌ Cancel avatar'); }
-        function closeImageModal() { console.log('🖼️ Close image modal'); }
-
-        // Event listeners
-        document.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                if (document.getElementById('chat-content').style.display === 'block') {
-                    sendMessage();
-                } else if (document.getElementById('loginModal').style.display !== 'none') {
-                    handleSubmit();
-                }
-            }
-        });
-
-        // Inizializzazione forum dopo login
-        function initializeForum() {
-            console.log('🏰 Initializing forum interface...');
-            
-            isLoggedIn = true;
-            
-            // Aggiorna UI
-            if (currentUser) {
-                document.getElementById('currentUsername').textContent = 
-                    currentUser.displayName || currentUser.email || 'Guerriero';
-            }
-            
-            // Mostra sezione home
-            showSection('home');
-            
-            // Mostra elementi mobile se necessario
-            const mobileElements = ['mobileMenuToggle', 'connectionStatus', 'messageCounter', 'notificationsBell'];
-            mobileElements.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.display = 'block';
-            });
-            
-            console.log('✅ Forum interface ready!');
-        }
+    <!-- ======================================= -->
+    <!-- POI carica il sistema di navigazione    -->
+    <!-- ======================================= -->
+    <script>
+        // Configurazione sistema di navigazione (DOPO che tutto è caricato)
+        window.navigationConfig = {
+            enableMobileFeatures: true,    // Abilita breadcrumb e gesti mobile
+            enableDebugMode: false,        // Abilita logging per debug (cambia in true se serve)
+            enableVibration: true,         // Vibrazione su mobile Android
+            enableGestures: true,          // Swipe da sinistra per tornare indietro
+            toastDuration: 3000,          // Durata toast in millisecondi
+            initDelay: 2000               // Ritardo maggiore per assicurarsi che tutto sia pronto
+        };
     </script>
-
-    <!-- 
-    ========================================
-    🏰 HUSTLE CASTLE COUNCIL - SISTEMA ROBUSTO
-    ========================================
     
-    ✅ MIGLIORAMENTI CONTRO ERRORI COMUNI:
-    - AppCheck 403 errors → Gestione automatica con fallback
-    - Google login CORS → Popup alternative + demo fallback  
-    - Connection errors → Network monitoring + offline mode
-    - Firebase throttling → Intelligent error suppression
-    - Cross-origin popup → Multiple login strategies
-    
-    🧪 COMANDI DEBUG (Console):
-    - checkSystemStatus() - Verifica sistema completa
-    - testRecaptcha() - Test reCAPTCHA manuale
-    - forceFirebaseMode() - Forza modalità Firebase
-    - debugLogin() - Debug autenticazione
-    - clearAppCheckErrors() - Sopprimi errori AppCheck
-    - enableDebugMode() - Logging avanzato
-    - getSystemHealth() - Stato salute sistema
-    
-    🔧 GESTIONE ERRORI AVANZATA:
-    - AppCheck throttling → Automaticamente ignorato
-    - Popup blocked → Fallback demo login
-    - Network errors → Retry automatico + offline mode
-    - Firebase quota → Modalità compatibilità seamless
-    - CORS errors → Alternative auth methods
-    
-    🎯 CARATTERISTICHE ROBUSTE:
-    - ✅ Fallback automatico per tutti gli errori
-    - ✅ Network monitoring e status updates
-    - ✅ Error suppression intelligente
-    - ✅ Multiple authentication strategies
-    - ✅ Graceful degradation senza interruzioni
-    - ✅ User-friendly error messages
-    
-    🚀 PRONTO PER PRODUZIONE:
-    Il sistema gestisce automaticamente tutti gli errori comuni
-    e fornisce sempre un'esperienza utente fluida anche in caso
-    di problemi di configurazione o quota Firebase.
-    
-    ========================================
-    -->
+    <!-- Stili e script del sistema di navigazione - ALLA FINE -->
+    <link href="navigation-styles.css" rel="stylesheet">
+    <script src="browser-navigation.js"></script>
+    <script src="mobile-navigation.js"></script>
+    <script src="navigation-init.js"></script>
 </body>
 </html>
