@@ -378,50 +378,23 @@
         };
         
         // Gestione Google Auth con fallback da popup a redirect
-        window.handleGoogleAuth = async function(useRedirect = false) {
+        window.handleGoogleAuth = async function() {
             if (!window.useFirebase || !auth || !googleProvider) {
                 alert('❌ Firebase non configurato per l\'autenticazione Google');
                 return;
             }
             
             try {
-                let result;
-                
-                if (useRedirect) {
-                    console.log('🔄 Usando redirect per Google Auth...');
-                    // Usa redirect se popup fallisce
-                    await signInWithRedirect(auth, googleProvider);
-                    return; // Il redirect gestirà il resto
-                } else {
-                    console.log('🔄 Usando popup per Google Auth...');
-                    // Prova prima con popup
-                    result = await signInWithPopup(auth, googleProvider);
-                }
-                
-                if (result && result.user) {
-                    console.log('✅ Autenticazione Google riuscita:', result.user.displayName);
-                    return result.user;
-                }
+                console.log('🔄 Autenticazione Google con redirect...');
+                // Usa sempre redirect - più affidabile
+                await signInWithRedirect(auth, googleProvider);
+                // Il redirect gestirà tutto automaticamente
                 
             } catch (error) {
                 console.error('❌ Errore Google Auth:', error);
-                
-                // Se il popup fallisce a causa di CORS, prova con redirect
-                if (error.code === 'auth/popup-blocked' || 
-                    error.code === 'auth/popup-closed-by-user' || 
-                    error.message.includes('Cross-Origin-Opener-Policy')) {
-                    
-                    console.log('⚠️ Popup bloccato, provo con redirect...');
-                    
-                    if (confirm('Il popup è stato bloccato dal browser. Vuoi provare con un redirect?')) {
-                        return await window.handleGoogleAuth(true); // Retry con redirect
-                    }
-                } else {
-                    alert('❌ Errore nell\'autenticazione Google: ' + error.message);
-                }
+                alert('❌ Errore nell\'autenticazione Google: ' + error.message);
             }
         };
-        
         // Gestisci il risultato del redirect all'avvio
         window.addEventListener('load', async () => {
             if (auth && typeof getRedirectResult === 'function') {
