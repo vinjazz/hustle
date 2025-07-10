@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏰 Hustle Castle Council</title>
     <!-- reCAPTCHA v3 -->
-    <script src="https://www.google.com/recaptcha/api.js?render=6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw"></script>
+    <script src="https://www.google.com/recaptcha/api.js?render=6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme"></script>
     
     <!-- Firebase SDK v9 -->
     <script type="module">
@@ -93,18 +93,30 @@
         window.googleProvider = googleProvider;
         
         // 🤖 FUNZIONI reCAPTCHA v3 - GESTIONE MIGLIORATA
-        const RECAPTCHA_SITE_KEY = '6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme'; // ⚠️ SOSTITUIRE CON SITE KEY v3
+        const RECAPTCHA_SITE_KEY = '6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme'; // ✅ AGGIORNATO CON IL TUO SITE KEY
         let recaptchaReady = false;
+        let recaptchaError = null;
         
         // Verifica reCAPTCHA v3 con punteggio
         window.verifyRecaptcha = async function(action = 'submit') {
+            // Aggiorna lo stato nel UI
+            updateRecaptchaStatus('checking', 'Verificando sicurezza...');
+            
             if (!window.useFirebase || !appCheckEnabled) {
                 console.log('🤖 reCAPTCHA v3 disabilitato - App Check non attivo');
+                updateRecaptchaStatus('disabled', 'Verifica disabilitata');
+                return { success: true, score: 1.0, token: null };
+            }
+            
+            if (recaptchaError) {
+                console.log('🤖 reCAPTCHA v3 in errore, permettendo accesso');
+                updateRecaptchaStatus('error', 'Verifica non disponibile');
                 return { success: true, score: 1.0, token: null };
             }
             
             if (!recaptchaReady || typeof grecaptcha === 'undefined') {
                 console.log('🤖 reCAPTCHA v3 non pronto, permettendo accesso');
+                updateRecaptchaStatus('loading', 'Caricando verifica...');
                 return { success: true, score: 1.0, token: null };
             }
             
@@ -116,6 +128,8 @@
                 // Qui simuliamo una verifica lato client (NON sicura in produzione)
                 console.log('🤖 reCAPTCHA v3 token ottenuto:', token.substring(0, 20) + '...');
                 
+                updateRecaptchaStatus('success', 'Verifica completata ✓');
+                
                 return { 
                     success: true, 
                     score: 0.9, // In produzione questo viene dal server
@@ -123,6 +137,7 @@
                 };
             } catch (error) {
                 console.error('❌ Errore reCAPTCHA v3:', error);
+                updateRecaptchaStatus('error', 'Errore verifica');
                 return { success: false, score: 0.0, token: null };
             }
         };
@@ -133,35 +148,161 @@
             console.log('🤖 reCAPTCHA v3: reset non necessario');
         };
 
-        // Inizializza reCAPTCHA v3 quando pronto
+        // Funzione per aggiornare lo stato del reCAPTCHA nel UI
+        window.updateRecaptchaStatus = function(status, message) {
+            const statusElement = document.getElementById('recaptchaStatus');
+            const statusText = document.getElementById('recaptchaStatusText');
+            
+            if (statusElement && statusText) {
+                statusElement.className = 'recaptcha-status ' + status;
+                statusText.textContent = message;
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`Status: ${status} - ${message}`);
+            }
+        };
+
+        // Funzione per aggiungere log di debug
+        window.addRecaptchaDebugLog = function(message) {
+            const debugElement = document.getElementById('recaptchaDebug');
+            if (debugElement) {
+                // Mostra l'area debug
+                debugElement.style.display = 'block';
+                
+                // Aggiungi il nuovo log
+                const logLine = document.createElement('div');
+                logLine.className = 'debug-line';
+                logLine.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+                debugElement.appendChild(logLine);
+                
+                // Mantieni solo gli ultimi 5 log
+                const logs = debugElement.querySelectorAll('.debug-line');
+                if (logs.length > 6) { // 6 perché il primo è il titolo
+                    logs[1].remove(); // Rimuovi il secondo (primo log)
+                }
+                
+                // Scroll automatico
+                debugElement.scrollTop = debugElement.scrollHeight;
+            }
+        };
+
+        // Inizializza reCAPTCHA v3 quando pronto - CON DEBUG MIGLIORATO
         window.initRecaptchaV3 = function() {
+            console.log('🚀 Inizializzazione reCAPTCHA v3...');
+            addRecaptchaDebugLog('Avvio inizializzazione...');
+            
             if (!window.useFirebase || !appCheckEnabled) {
                 console.log('🤖 reCAPTCHA v3 disabilitato - App Check non attivo');
+                addRecaptchaDebugLog('App Check disabilitato');
+                updateRecaptchaStatus('disabled', 'Verifica disabilitata');
                 return;
             }
             
-            if (typeof grecaptcha !== 'undefined' && grecaptcha.ready) {
-                grecaptcha.ready(function() {
-                    recaptchaReady = true;
-                    console.log('✅ reCAPTCHA v3 pronto');
+            // Verifica che grecaptcha sia disponibile
+            if (typeof grecaptcha === 'undefined') {
+                console.error('❌ grecaptcha non definito');
+                addRecaptchaDebugLog('ERRORE: grecaptcha non definito');
+                updateRecaptchaStatus('error', 'Libreria non caricata');
+                return;
+            }
+            
+            // Verifica che grecaptcha.ready sia disponibile
+            if (typeof grecaptcha.ready !== 'function') {
+                console.error('❌ grecaptcha.ready non disponibile');
+                addRecaptchaDebugLog('ERRORE: grecaptcha.ready non disponibile');
+                updateRecaptchaStatus('error', 'API non pronta');
+                return;
+            }
+            
+            console.log('✅ grecaptcha disponibile, eseguendo ready...');
+            addRecaptchaDebugLog('grecaptcha disponibile');
+            
+            grecaptcha.ready(function() {
+                console.log('🎯 grecaptcha.ready eseguito');
+                addRecaptchaDebugLog('grecaptcha.ready eseguito');
+                
+                // Verifica che grecaptcha.execute sia disponibile
+                if (typeof grecaptcha.execute !== 'function') {
+                    console.error('❌ grecaptcha.execute non disponibile');
+                    addRecaptchaDebugLog('ERRORE: grecaptcha.execute non disponibile');
+                    updateRecaptchaStatus('error', 'Funzione execute mancante');
+                    return;
+                }
+                
+                try {
+                    console.log('🔍 Eseguendo test con site key:', RECAPTCHA_SITE_KEY);
+                    addRecaptchaDebugLog('Eseguendo test con site key...');
                     
-                    // Esegui un test iniziale
+                    // Esegui un test iniziale per verificare che il site key sia valido
                     grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'homepage' })
                         .then(function(token) {
-                            console.log('🤖 reCAPTCHA v3 test completato');
+                            recaptchaReady = true;
+                            recaptchaError = null;
+                            console.log('✅ reCAPTCHA v3 inizializzato con successo!');
+                            console.log('🎫 Token di test ottenuto:', token.substring(0, 30) + '...');
+                            addRecaptchaDebugLog('✅ Inizializzazione completata!');
+                            addRecaptchaDebugLog('Token ottenuto: ' + token.substring(0, 20) + '...');
+                            updateRecaptchaStatus('active', 'Protezione attiva ✓');
                         })
                         .catch(function(error) {
-                            console.warn('⚠️ reCAPTCHA v3 test fallito:', error);
+                            console.error('❌ Errore durante l\'esecuzione di reCAPTCHA:', error);
+                            recaptchaError = error;
+                            
+                            // Analizza l'errore per dare suggerimenti
+                            const errorMsg = error.message || error.toString();
+                            console.error('📝 Dettagli errore:', errorMsg);
+                            addRecaptchaDebugLog('❌ ERRORE: ' + errorMsg);
+                            
+                            if (errorMsg.includes('Invalid site key')) {
+                                console.error('💡 SOLUZIONE: Il site key non è valido o non è configurato per questo dominio');
+                                addRecaptchaDebugLog('💡 Site key non valido per questo dominio');
+                                updateRecaptchaStatus('error', 'Site key non valido');
+                            } else if (errorMsg.includes('not allowed')) {
+                                console.error('💡 SOLUZIONE: Dominio non autorizzato. Aggiungi il dominio corrente alla lista dei domini autorizzati');
+                                addRecaptchaDebugLog('💡 Dominio non autorizzato');
+                                updateRecaptchaStatus('error', 'Dominio non autorizzato');
+                            } else {
+                                console.error('💡 SOLUZIONE: Verifica la configurazione reCAPTCHA');
+                                addRecaptchaDebugLog('💡 Errore di configurazione');
+                                updateRecaptchaStatus('error', 'Errore configurazione');
+                            }
                         });
-                });
-            } else {
-                console.log('⚠️ reCAPTCHA v3 non disponibile');
-            }
+                } catch (error) {
+                    console.error('❌ Errore critico nell\'inizializzazione:', error);
+                    recaptchaError = error;
+                    addRecaptchaDebugLog('❌ Errore critico: ' + error.message);
+                    updateRecaptchaStatus('error', 'Errore critico');
+                }
+            });
         };
         
-        // Inizializza quando la pagina è caricata
+        // Inizializza quando la pagina è caricata - CON RETRY AUTOMATICO
         window.addEventListener('load', () => {
-            setTimeout(window.initRecaptchaV3, 1000);
+            let initAttempts = 0;
+            const maxAttempts = 10;
+            
+            const tryInitRecaptcha = () => {
+                initAttempts++;
+                console.log(`🤖 Tentativo inizializzazione reCAPTCHA v3 #${initAttempts}`);
+                addRecaptchaDebugLog(`Tentativo #${initAttempts}/${maxAttempts}`);
+                
+                if (typeof grecaptcha !== 'undefined') {
+                    console.log('✅ grecaptcha disponibile, inizializzo...');
+                    addRecaptchaDebugLog('grecaptcha caricato, inizializzo...');
+                    window.initRecaptchaV3();
+                } else if (initAttempts < maxAttempts) {
+                    console.log(`⏳ grecaptcha non ancora disponibile, riprovo tra 1s...`);
+                    addRecaptchaDebugLog(`Aspetto grecaptcha... (${initAttempts}/${maxAttempts})`);
+                    setTimeout(tryInitRecaptcha, 1000);
+                } else {
+                    console.warn('❌ reCAPTCHA v3 non disponibile dopo 10 tentativi');
+                    addRecaptchaDebugLog('❌ Timeout: grecaptcha non caricato');
+                    updateRecaptchaStatus('error', 'Caricamento fallito');
+                }
+            };
+            
+            // Inizia dopo 1 secondo per dare tempo al caricamento
+            setTimeout(tryInitRecaptcha, 1000);
         });
     </script>
     
@@ -426,6 +567,39 @@
             background: rgba(231, 76, 60, 0.1);
             border-color: rgba(231, 76, 60, 0.2);
         }
+
+        .recaptcha-status.disabled {
+            color: var(--text-muted);
+            background: rgba(128, 128, 128, 0.1);
+            border-color: rgba(128, 128, 128, 0.2);
+        }
+
+        .recaptcha-status.disabled {
+            color: var(--text-muted);
+            background: rgba(128, 128, 128, 0.1);
+            border-color: rgba(128, 128, 128, 0.2);
+        }
+
+        .recaptcha-debug {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(128, 128, 128, 0.1);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-family: monospace;
+            color: var(--text-muted);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .recaptcha-debug .debug-line {
+            margin-bottom: 2px;
+        }
+
+        .recaptcha-debug .debug-line:last-child {
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -524,10 +698,13 @@
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
             
-            <!-- reCAPTCHA v3 Status (sostituisce il widget v2) -->
+            <!-- reCAPTCHA v3 Status con Debug (sostituisce il widget v2) -->
             <div id="recaptchaStatus" class="recaptcha-status">
                 <span>🤖</span>
-                <span id="recaptchaStatusText">Verificando che non sei un robot...</span>
+                <span id="recaptchaStatusText">Inizializzando verifica sicurezza...</span>
+            </div>
+            <div id="recaptchaDebug" class="recaptcha-debug" style="display: none;">
+                <div class="debug-line">Debug reCAPTCHA v3:</div>
             </div>
             
             <div class="form-buttons">
