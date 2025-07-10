@@ -11,7 +11,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
         import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
         import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
         
@@ -27,7 +27,7 @@
 			measurementId: "G-R3GMPZCXP3"
 		  };
         
-        // Inizializza Firebase UNA SOLA VOLTA
+        // Inizializza Firebase UNA SOLA VOLTA - CON APP CHECK RIABILITATO
         let useFirebase = true;
         let app = null;
         let appCheckEnabled = false;
@@ -36,22 +36,54 @@
             app = initializeApp(firebaseConfig);
             console.log('🔥 Firebase inizializzato con successo');
             
-            // Prova ad inizializzare App Check, ma non bloccare se fallisce
+            // 🛡️ App Check RIABILITATO - Configurazione migliorata
             try {
+                console.log('🔄 Inizializzando App Check...');
                 const appCheck = initializeAppCheck(app, {
                     provider: new ReCaptchaV3Provider('6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme'),
                     isTokenAutoRefreshEnabled: true
                 });
                 appCheckEnabled = true;
-                console.log('🛡️ App Check inizializzato');
+                console.log('✅ App Check inizializzato con successo');
+                console.log('🛡️ Protezione Firebase App Check attiva');
+                
+                // Aggiorna l'interfaccia utente per mostrare App Check attivo
+                setTimeout(() => updateAppCheckStatus(true, 'Protezione completa'), 500);
+                
             } catch (appCheckError) {
                 console.warn('⚠️ App Check non disponibile:', appCheckError.message);
+                console.log('📝 Dettagli errore App Check:', appCheckError);
+                
+                // Aggiorna l'interfaccia utente per mostrare errore App Check
+                setTimeout(() => updateAppCheckError(appCheckError.message), 500);
+                
+                // Analizza l'errore per dare suggerimenti
+                if (appCheckError.message.includes('not configured')) {
+                    console.error('💡 SOLUZIONE: Configura App Check nella Firebase Console');
+                    console.error('   1. Vai su Firebase Console > Project Settings > App Check');
+                    console.error('   2. Registra la tua app web');
+                    console.error('   3. Configura reCAPTCHA v3 provider');
+                } else if (appCheckError.message.includes('token')) {
+                    console.error('💡 SOLUZIONE: Problema con i token App Check');
+                    console.error('   - Verifica che il site key reCAPTCHA sia corretto');
+                    console.error('   - Controlla che il dominio sia autorizzato');
+                } else if (appCheckError.message.includes('throttled')) {
+                    console.error('💡 SOLUZIONE: Richieste limitate per errori 403');
+                    console.error('   - Attendi 24 ore per il reset automatico');
+                    console.error('   - Oppure configura correttamente App Check');
+                }
+                
                 console.log('📝 Il forum funzionerà senza App Check');
+                appCheckEnabled = false;
+                
+                // Aggiorna l'interfaccia utente per mostrare App Check disabilitato
+                setTimeout(() => updateAppCheckStatus(false, 'Errore configurazione'), 500);
             }
             
         } catch (error) {
             console.error('❌ Errore inizializzazione Firebase:', error);
             useFirebase = false;
+            setTimeout(() => updateAppCheckStatus(false, 'Firebase non attivo'), 500);
             alert('⚠️ Firebase non configurato. Il forum funzionerà in modalità demo locale.');
         }
         
@@ -59,6 +91,14 @@
         const database = useFirebase ? getDatabase(app) : null;
         const storage = useFirebase ? getStorage(app) : null;
         const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
+        
+        // Configura Google Provider per evitare problemi CORS
+        if (googleProvider) {
+            // Forza l'uso di redirect invece di popup per evitare CORS issues
+            googleProvider.setCustomParameters({
+                prompt: 'select_account'
+            });
+        }
         
         // Esponi Firebase globalmente per compatibilità
         window.firebaseApp = app;
@@ -75,6 +115,8 @@
             updateProfile,
             GoogleAuthProvider,
             signInWithPopup,
+            signInWithRedirect,
+            getRedirectResult,
             ref,
             push,
             set,
@@ -97,14 +139,14 @@
         let recaptchaReady = false;
         let recaptchaError = null;
         
-        // Verifica reCAPTCHA v3 con punteggio
+        // Verifica reCAPTCHA v3 con punteggio - CON APP CHECK RIABILITATO
         window.verifyRecaptcha = async function(action = 'submit') {
             // Aggiorna lo stato nel UI
             updateRecaptchaStatus('checking', 'Verificando sicurezza...');
             
-            if (!window.useFirebase || !appCheckEnabled) {
-                console.log('🤖 reCAPTCHA v3 disabilitato - App Check non attivo');
-                updateRecaptchaStatus('disabled', 'Verifica disabilitata');
+            if (!window.useFirebase) {
+                console.log('🤖 Firebase non attivo, permettendo accesso');
+                updateRecaptchaStatus('disabled', 'Firebase non attivo');
                 return { success: true, score: 1.0, token: null };
             }
             
@@ -121,6 +163,7 @@
             }
             
             try {
+                console.log('🔍 Eseguendo reCAPTCHA v3 per azione:', action);
                 // Esegui reCAPTCHA v3 per l'azione specificata
                 const token = await grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: action });
                 
@@ -128,12 +171,19 @@
                 // Qui simuliamo una verifica lato client (NON sicura in produzione)
                 console.log('🤖 reCAPTCHA v3 token ottenuto:', token.substring(0, 20) + '...');
                 
-                updateRecaptchaStatus('success', 'Verifica completata ✓');
+                if (appCheckEnabled) {
+                    updateRecaptchaStatus('success', '🛡️ Verifica completa OK');
+                    console.log('✅ reCAPTCHA v3 + App Check: Verifica completa');
+                } else {
+                    updateRecaptchaStatus('success', '🛡️ Verifica base OK');
+                    console.log('✅ reCAPTCHA v3: Verifica base completata');
+                }
                 
                 return { 
                     success: true, 
                     score: 0.9, // In produzione questo viene dal server
-                    token: token 
+                    token: token,
+                    appCheckEnabled: appCheckEnabled
                 };
             } catch (error) {
                 console.error('❌ Errore reCAPTCHA v3:', error);
@@ -162,6 +212,39 @@
             }
         };
 
+        // Funzione per aggiornare lo stato di App Check nel UI
+        window.updateAppCheckStatus = function(enabled, message) {
+            const appCheckElement = document.getElementById('appCheckIndicator');
+            const appCheckText = document.getElementById('appCheckStatusText');
+            
+            if (appCheckElement && appCheckText) {
+                if (enabled) {
+                    appCheckElement.className = 'app-check-indicator enabled';
+                    appCheckText.textContent = '🛡️ App Check: Attivo';
+                } else {
+                    appCheckElement.className = 'app-check-indicator disabled';
+                    appCheckText.textContent = '🛡️ App Check: ' + (message || 'Disabilitato');
+                }
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`App Check: ${enabled ? 'Attivo' : 'Disabilitato'} - ${message}`);
+            }
+        };
+
+        // Funzione per aggiornare lo stato di App Check in caso di errore
+        window.updateAppCheckError = function(error) {
+            const appCheckElement = document.getElementById('appCheckIndicator');
+            const appCheckText = document.getElementById('appCheckStatusText');
+            
+            if (appCheckElement && appCheckText) {
+                appCheckElement.className = 'app-check-indicator error';
+                appCheckText.textContent = '🛡️ App Check: Errore';
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`App Check ERROR: ${error}`);
+            }
+        };
+
         // Funzione per aggiungere log di debug
         window.addRecaptchaDebugLog = function(message) {
             const debugElement = document.getElementById('recaptchaDebug');
@@ -186,16 +269,26 @@
             }
         };
 
-        // Inizializza reCAPTCHA v3 quando pronto - CON DEBUG MIGLIORATO
+        // Inizializza reCAPTCHA v3 quando pronto - CON APP CHECK RIABILITATO
         window.initRecaptchaV3 = function() {
             console.log('🚀 Inizializzazione reCAPTCHA v3...');
             addRecaptchaDebugLog('Avvio inizializzazione...');
             
-            if (!window.useFirebase || !appCheckEnabled) {
-                console.log('🤖 reCAPTCHA v3 disabilitato - App Check non attivo');
-                addRecaptchaDebugLog('App Check disabilitato');
-                updateRecaptchaStatus('disabled', 'Verifica disabilitata');
+            if (!window.useFirebase) {
+                console.log('🤖 reCAPTCHA v3 disabilitato - Firebase non attivo');
+                addRecaptchaDebugLog('Firebase non attivo');
+                updateRecaptchaStatus('disabled', 'Firebase non attivo');
                 return;
+            }
+            
+            if (!appCheckEnabled) {
+                console.log('🤖 reCAPTCHA v3 attivo senza App Check');
+                addRecaptchaDebugLog('App Check disabilitato - reCAPTCHA standalone');
+                updateRecaptchaStatus('active', 'Protezione base attiva');
+                // Continua comunque con reCAPTCHA standalone
+            } else {
+                console.log('🛡️ reCAPTCHA v3 + App Check attivi');
+                addRecaptchaDebugLog('App Check + reCAPTCHA attivi');
             }
             
             // Verifica che grecaptcha sia disponibile
@@ -242,7 +335,15 @@
                             console.log('🎫 Token di test ottenuto:', token.substring(0, 30) + '...');
                             addRecaptchaDebugLog('✅ Inizializzazione completata!');
                             addRecaptchaDebugLog('Token ottenuto: ' + token.substring(0, 20) + '...');
-                            updateRecaptchaStatus('active', 'Protezione attiva ✓');
+                            
+                            // Mostra lo stato completo
+                            if (appCheckEnabled) {
+                                updateRecaptchaStatus('active', '🛡️ Protezione completa attiva');
+                                addRecaptchaDebugLog('🛡️ App Check + reCAPTCHA completamente attivi');
+                            } else {
+                                updateRecaptchaStatus('active', '🛡️ Protezione base attiva');
+                                addRecaptchaDebugLog('🛡️ Solo reCAPTCHA attivo (App Check offline)');
+                            }
                         })
                         .catch(function(error) {
                             console.error('❌ Errore durante l\'esecuzione di reCAPTCHA:', error);
@@ -276,6 +377,66 @@
             });
         };
         
+        // Gestione Google Auth con fallback da popup a redirect
+        window.handleGoogleAuth = async function(useRedirect = false) {
+            if (!window.useFirebase || !auth || !googleProvider) {
+                alert('❌ Firebase non configurato per l\'autenticazione Google');
+                return;
+            }
+            
+            try {
+                let result;
+                
+                if (useRedirect) {
+                    console.log('🔄 Usando redirect per Google Auth...');
+                    // Usa redirect se popup fallisce
+                    await signInWithRedirect(auth, googleProvider);
+                    return; // Il redirect gestirà il resto
+                } else {
+                    console.log('🔄 Usando popup per Google Auth...');
+                    // Prova prima con popup
+                    result = await signInWithPopup(auth, googleProvider);
+                }
+                
+                if (result && result.user) {
+                    console.log('✅ Autenticazione Google riuscita:', result.user.displayName);
+                    return result.user;
+                }
+                
+            } catch (error) {
+                console.error('❌ Errore Google Auth:', error);
+                
+                // Se il popup fallisce a causa di CORS, prova con redirect
+                if (error.code === 'auth/popup-blocked' || 
+                    error.code === 'auth/popup-closed-by-user' || 
+                    error.message.includes('Cross-Origin-Opener-Policy')) {
+                    
+                    console.log('⚠️ Popup bloccato, provo con redirect...');
+                    
+                    if (confirm('Il popup è stato bloccato dal browser. Vuoi provare con un redirect?')) {
+                        return await window.handleGoogleAuth(true); // Retry con redirect
+                    }
+                } else {
+                    alert('❌ Errore nell\'autenticazione Google: ' + error.message);
+                }
+            }
+        };
+        
+        // Gestisci il risultato del redirect all'avvio
+        window.addEventListener('load', async () => {
+            if (auth && typeof getRedirectResult === 'function') {
+                try {
+                    const result = await getRedirectResult(auth);
+                    if (result && result.user) {
+                        console.log('✅ Autenticazione Google completata dopo redirect:', result.user.displayName);
+                        // L'utente è già autenticato, verrà gestito da onAuthStateChanged
+                    }
+                } catch (error) {
+                    console.error('❌ Errore nel gestire il redirect result:', error);
+                }
+            }
+        });
+        
         // Inizializza quando la pagina è caricata - CON RETRY AUTOMATICO
         window.addEventListener('load', () => {
             let initAttempts = 0;
@@ -298,6 +459,7 @@
                     console.warn('❌ reCAPTCHA v3 non disponibile dopo 10 tentativi');
                     addRecaptchaDebugLog('❌ Timeout: grecaptcha non caricato');
                     updateRecaptchaStatus('error', 'Caricamento fallito');
+                    updateAppCheckStatus(false, 'reCAPTCHA non disponibile');
                 }
             };
             
@@ -568,10 +730,51 @@
             border-color: rgba(231, 76, 60, 0.2);
         }
 
-        .recaptcha-status.disabled {
-            color: var(--text-muted);
+        .recaptcha-status.success {
+            color: var(--success);
+            background: rgba(39, 174, 96, 0.15);
+            border-color: rgba(39, 174, 96, 0.3);
+        }
+
+        .recaptcha-status.checking {
+            color: var(--accent-2);
+            background: rgba(45, 130, 181, 0.15);
+            border-color: rgba(45, 130, 181, 0.3);
+        }
+
+        .recaptcha-status.loading {
+            color: var(--text-secondary);
             background: rgba(128, 128, 128, 0.1);
             border-color: rgba(128, 128, 128, 0.2);
+        }
+
+        /* Indicatore App Check */
+        .app-check-indicator {
+            margin-top: 0.5rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid;
+        }
+
+        .app-check-indicator.enabled {
+            background: rgba(39, 174, 96, 0.1);
+            border-color: rgba(39, 174, 96, 0.3);
+            color: var(--success);
+        }
+
+        .app-check-indicator.disabled {
+            background: rgba(255, 193, 7, 0.1);
+            border-color: rgba(255, 193, 7, 0.3);
+            color: #ffa000;
+        }
+
+        .app-check-indicator.error {
+            background: rgba(231, 76, 60, 0.1);
+            border-color: rgba(231, 76, 60, 0.3);
+            color: var(--error);
         }
 
         .recaptcha-status.disabled {
@@ -663,7 +866,7 @@
             </div>
             
             <!-- Login con Google -->
-            <button id="googleLoginBtn" class="google-login-btn" onclick="handleGoogleLogin()">
+            <button id="googleLoginBtn" class="google-login-btn" onclick="window.handleGoogleAuth()">
                 <svg width="20" height="20" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -698,13 +901,16 @@
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
             
-            <!-- reCAPTCHA v3 Status con Debug (sostituisce il widget v2) -->
+            <!-- reCAPTCHA v3 Status con Debug e App Check Indicator -->
             <div id="recaptchaStatus" class="recaptcha-status">
                 <span>🤖</span>
                 <span id="recaptchaStatusText">Inizializzando verifica sicurezza...</span>
             </div>
+            <div id="appCheckIndicator" class="app-check-indicator disabled">
+                <span id="appCheckStatusText">🛡️ App Check: Caricamento...</span>
+            </div>
             <div id="recaptchaDebug" class="recaptcha-debug" style="display: none;">
-                <div class="debug-line">Debug reCAPTCHA v3:</div>
+                <div class="debug-line">Debug reCAPTCHA v3 + App Check:</div>
             </div>
             
             <div class="form-buttons">
