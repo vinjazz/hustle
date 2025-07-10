@@ -4940,3 +4940,379 @@ window.debugNotifications = function () {
     console.log('- Badge visibile:', badge ? !badge.classList.contains('hidden') : false);
     console.log('- Badge testo:', badge ? badge.textContent : 'N/A');
 };
+function sanitizeHtml(html) {
+    if (!html || typeof html !== 'string') return '';
+    
+    // Lista dei tag HTML permessi (sicuri)
+    const allowedTags = {
+        'b': [],
+        'strong': [],
+        'i': [],
+        'em': [],
+        'u': [],
+        'br': [],
+        'p': [],
+        'div': [],
+        'span': ['class'],
+        'h1': [], 'h2': [], 'h3': [], 'h4': [], 'h5': [], 'h6': [],
+        'ul': [], 'ol': [], 'li': [],
+        'blockquote': [],
+        'code': [],
+        'pre': [],
+        'a': ['href', 'title', 'target'],
+        'img': ['src', 'alt', 'title', 'width', 'height'],
+        'table': [], 'tr': [], 'td': [], 'th': [], 'thead': [], 'tbody': []
+    };
+    
+    // Rimuovi script e altri tag pericolosi
+    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    html = html.replace(/on\w+\s*=\s*[^>]*/gi, ''); // Rimuovi attributi onclick, onload, etc.
+    html = html.replace(/javascript:/gi, ''); // Rimuovi javascript: negli href
+    
+    // Funzione per processare i tag
+    function processTag(match, isClosing, tagName, attributes) {
+        tagName = tagName.toLowerCase();
+        
+        // Se il tag non è permesso, rimuovilo
+        if (!allowedTags[tagName]) {
+            return '';
+        }
+        
+        // Se è un tag di chiusura, restituiscilo così com'è
+        if (isClosing) {
+            return `</${tagName}>`;
+        }
+        
+        // Processa gli attributi per i tag di apertura
+        const allowedAttrs = allowedTags[tagName];
+        let processedAttrs = '';
+        
+        if (attributes && allowedAttrs.length > 0) {
+            // Estrae gli attributi
+            const attrRegex = /(\w+)\s*=\s*["']([^"']*)["']/g;
+            let attrMatch;
+            
+            while ((attrMatch = attrRegex.exec(attributes)) !== null) {
+                const attrName = attrMatch[1].toLowerCase();
+                const attrValue = attrMatch[2];
+                
+                // Se l'attributo è permesso per questo tag
+                if (allowedAttrs.includes(attrName)) {
+                    // Sanitizza il valore dell'attributo
+                    let sanitizedValue = attrValue
+                        .replace(/javascript:/gi, '')
+                        .replace(/on\w+/gi, '')
+                        .replace(/[<>]/g, '');
+                    
+                    processedAttrs += ` ${attrName}="${sanitizedValue}"`;
+                }
+            }
+        }
+        
+        // Tag auto-chiudenti
+        if (['br', 'img'].includes(tagName)) {
+            return `<${tagName}${processedAttrs} />`;
+        }
+        
+        return `<${tagName}${processedAttrs}>`;
+    }
+    
+    // Regex per trovare tutti i tag HTML
+    const tagRegex = /<(\/?)([\w-]+)([^>]*)>/g;
+    
+    // Sostituisci tutti i tag con versioni sanitizzate
+    html = html.replace(tagRegex, (match, isClosing, tagName, attributes) => {
+        return processTag(match, isClosing, tagName, attributes);
+    });
+    
+    return html;
+}
+
+// Funzione per convertire testo semplice in HTML con formattazione automatica
+function autoFormatText(text) {
+    if (!text || typeof text !== 'string') return '';
+    
+    // Converti a capo in <br>
+    text = text.replace(/\n/g, '<br>');
+    
+    // Converti markdown semplice
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // **grassetto**
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>'); // *corsivo*
+    text = text.replace(/__(.*?)__/g, '<u>$1</u>'); // __sottolineato__
+    text = text.replace(/`(.*?)`/g, '<code>$1</code>'); // `codice`
+    
+    // Converti URL in link (versione semplice)
+    text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    return text;
+}
+
+// Funzione combinata per processare il contenuto
+function processContent(content, enableAutoFormat = true) {
+    if (!content || typeof content !== 'string') return '';
+    
+    // Se sembra contenere HTML, sanitizzalo
+    if (content.includes('<') && content.includes('>')) {
+        return sanitizeHtml(content);
+    }
+    
+    // Altrimenti, se l'auto-formattazione è abilitata, processalo
+    if (enableAutoFormat) {
+        return autoFormatText(content);
+    }
+    
+    // Fallback: escape HTML per sicurezza
+    return escapeHtml(content);
+}
+
+// ===============================================
+// AGGIORNA LE FUNZIONI ESISTENTI
+// ===============================================
+
+// SOSTITUZIONE COMPLETA della funzione displayThreadComments
+async function displayThreadComments(comments) {
+    const commentsContainer = document.getElementById('thread-comments');
+
+    if (comments.length === 0) {
+        commentsContainer.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #666;">
+                Nessun commento ancora. Sii il primo a commentare!
+            </div>
+        `;
+        return;
+    }
+
+    // Pre-carica tutti gli utenti necessari con gestione errori
+    const uniqueUserIds = [...new Set(comments.map(comment => comment.authorId).filter(Boolean))];
+    try {
+        await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
+    } catch (error) {
+        console.warn('Errore pre-caricamento avatar commenti:', error);
+    }
+
+    commentsContainer.innerHTML = comments.map(comment => {
+        // Trova dati utente per avatar e clan
+        const user = allUsers.find(u => u.uid === comment.authorId) || {
+            uid: comment.authorId || 'unknown',
+            username: comment.author,
+            clan: 'Nessuno',
+            avatarUrl: null
+        };
+
+        let commentContentHtml = '';
+
+        // Aggiungi testo del commento se presente - CON FORMATTAZIONE HTML
+        if (comment.content && comment.content.trim()) {
+            const processedContent = processContent(comment.content, true);
+            const contentWithMentions = highlightMentions(processedContent, currentUser?.uid);
+            commentContentHtml += `<div class="comment-text">${contentWithMentions}</div>`;
+        }
+
+        // Aggiungi immagine se presente
+        if (comment.imageUrl) {
+            commentContentHtml += `
+                <div class="comment-image">
+                    <img src="${comment.imageUrl}" 
+                         alt="${comment.imageName || 'Immagine del commento'}" 
+                         class="comment-main-image"
+                         onclick="openImageModal('${comment.imageUrl}', '${comment.imageName || 'Immagine del commento'}')"
+                         title="Clicca per ingrandire">
+                </div>
+            `;
+        }
+
+        return `
+            <div class="comment-with-avatar">
+                ${createAvatarHTML(user, 'small')}
+                <div class="comment-content">
+                    <div class="comment-header">
+                        <span class="comment-author-name">${comment.author}</span>
+                        ${createClanBadgeHTML(user.clan)}
+                        <span class="comment-time">${formatTime(comment.timestamp)}</span>
+                    </div>
+                    <div class="comment-body">${commentContentHtml}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Scroll to bottom
+    commentsContainer.scrollTop = commentsContainer.scrollHeight;
+}
+
+// SOSTITUZIONE COMPLETA della funzione displayMessages
+async function displayMessages(messages) {
+    const chatMessages = document.getElementById('chat-messages');
+
+    if (messages.length === 0) {
+        chatMessages.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #666;">
+                Nessun messaggio in questa chat. Inizia la conversazione!
+            </div>
+        `;
+        return;
+    }
+
+    let htmlContent = '';
+    let lastAuthor = '';
+    let lastTimestamp = 0;
+
+    // Pre-carica tutti gli utenti necessari con gestione errori
+    const uniqueUserIds = [...new Set(messages.map(msg => msg.authorId).filter(Boolean))];
+    try {
+        await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
+    } catch (error) {
+        console.warn('Errore pre-caricamento avatar:', error);
+    }
+
+    for (let index = 0; index < messages.length; index++) {
+        const msg = messages[index];
+        
+        // Trova dati utente per avatar e clan
+        const user = allUsers.find(u => u.uid === msg.authorId) || {
+            uid: msg.authorId || 'unknown',
+            username: msg.author,
+            clan: 'Nessuno',
+            avatarUrl: null
+        };
+
+        const isOwnMessage = currentUser && msg.authorId === currentUser.uid;
+        const isNewAuthor = msg.author !== lastAuthor;
+        const timeDiff = msg.timestamp - lastTimestamp;
+        const showTimestamp = timeDiff > 300000; // 5 minuti
+
+        // Separatore temporale se molto tempo è passato
+        if (showTimestamp && index > 0) {
+            htmlContent += `
+                <div class="message-time-separator">
+                    <span>${formatDate(msg.timestamp)}</span>
+                </div>
+            `;
+        }
+
+        // Processa il messaggio con formattazione HTML
+        const processedMessage = processContent(msg.message, true);
+        const messageWithMentions = highlightMentions(processedMessage, currentUser?.uid);
+
+        // Container del messaggio
+        htmlContent += `
+            <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
+                ${!isOwnMessage && isNewAuthor ? `
+                    <div class="message-avatar-small">
+                        ${createAvatarHTML(user, 'small')}
+                    </div>
+                ` : `<div class="message-avatar-spacer"></div>`}
+                
+                <div class="message-bubble ${isOwnMessage ? 'own-bubble' : 'other-bubble'}">
+                    ${!isOwnMessage && isNewAuthor ? `
+                        <div class="message-author-header">
+                            <span class="message-author-name">${msg.author}</span>
+                            ${createClanBadgeHTML(user.clan)}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="message-text">${messageWithMentions}</div>
+                    
+                    <div class="message-meta">
+                        <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
+                        ${isOwnMessage ? '<span class="message-status">✓</span>' : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        lastAuthor = msg.author;
+        lastTimestamp = msg.timestamp;
+    }
+
+    chatMessages.innerHTML = htmlContent;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// AGGIORNA la funzione openThread per gestire il contenuto HTML
+async function openThread(threadId, section) {
+    if (!currentUser) {
+        alert('Devi effettuare l\'accesso per visualizzare i thread');
+        return;
+    }
+
+    try {
+        // Trova il thread
+        const thread = await getThread(threadId, section);
+        if (!thread) {
+            alert('Thread non trovato');
+            return;
+        }
+
+        // Aggiorna visualizzazioni
+        await incrementThreadViews(threadId, section);
+
+        // Salva riferimenti
+        currentThread = thread;
+        currentThreadId = threadId;
+        currentThreadSection = section;
+
+        // Mostra vista thread
+        document.getElementById('forum-content').style.display = 'none';
+        document.getElementById('chat-content').style.display = 'none';
+        document.getElementById('thread-view').style.display = 'flex';
+        document.getElementById('new-thread-btn').style.display = 'none';
+
+        // Popola dati thread
+        document.getElementById('thread-title').textContent = thread.title;
+        document.getElementById('thread-author').textContent = thread.author;
+        document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
+        document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
+
+        // Contenuto del thread con immagine se presente - CON FORMATTAZIONE HTML
+        const threadContentEl = document.getElementById('thread-content');
+        let contentHtml = processContent(thread.content || 'Nessun contenuto disponibile', true);
+
+        if (thread.imageUrl) {
+            contentHtml += `
+                <div class="thread-image">
+                    <img src="${thread.imageUrl}" 
+                         alt="${thread.imageName || 'Immagine del thread'}" 
+                         onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
+                         title="Clicca per ingrandire">
+                </div>
+            `;
+        }
+
+        threadContentEl.innerHTML = contentHtml;
+
+        // Carica commenti
+        loadThreadComments(threadId, section);
+
+        // Reset flag per permettere nuovo setup nei commenti
+        commentImageUploadInitialized = false;
+
+        // Chiudi menu mobile se aperto
+        closeMobileMenu();
+
+    } catch (error) {
+        console.error('Errore apertura thread:', error);
+        alert('Errore nell\'apertura del thread');
+    }
+}
+
+// AGGIORNA la funzione highlightMentions per gestire HTML
+function highlightMentions(html, currentUserId = null) {
+    if (!html || typeof html !== 'string') return '';
+    
+    // Regex per trovare @username, ma non all'interno di tag HTML
+    const mentionRegex = /@([a-zA-Z0-9_]+)(?![^<]*>)/g;
+
+    return html.replace(mentionRegex, (match, username) => {
+        const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (user) {
+            const isSelf = user.uid === currentUserId;
+            const className = isSelf ? 'mention self' : 'mention';
+            return `<span class="${className}" data-user-id="${user.uid}">@${username}</span>`;
+        }
+        return match;
+    });
+}
+
+console.log('✅ Patch formattazione HTML applicata con successo!');
