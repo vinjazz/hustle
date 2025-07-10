@@ -1113,12 +1113,15 @@ function initializeApp() {
         statusEl.style.color = '#008800';
 
         if (window.appCheckEnabled) {
-            statusEl.textContent = '🔥 Sistema inizializzato correttamente';
+            statusEl.textContent = '🔥 Firebase + App Check attivi - Sistema completo';
         } else {
             statusEl.textContent = '🔥 Firebase attivo - App Check disabilitato (funzionalità ridotte)';
         }
 
-        
+        hintEl.innerHTML = `🔐 <strong>Primo accesso?</strong><br>
+                    1. Registrati normalmente (sarai USER)<br>
+                    2. Configura regole Firebase o usa admin@hustlecastle.com / admin123 (SUPER)<br>
+                    3. Usa il pannello admin per promuovere il tuo account`;
 
         // Monitora stato autenticazione
         onAuthStateChanged(window.firebaseAuth, (user) => {
