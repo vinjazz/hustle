@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏰 Hustle Castle Council</title>
     <!-- reCAPTCHA v3 -->
-    <script src="https://www.google.com/recaptcha/api.js?render=6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme"></script>
+    <script src="https://www.google.com/recaptcha/api.js?render=6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF"></script>
     
     <!-- Firebase SDK v9 -->
     <script type="module">
@@ -40,7 +40,7 @@
             try {
                 console.log('🔄 Inizializzando App Check...');
                 const appCheck = initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider('6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme'),
+                    provider: new ReCaptchaV3Provider('6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF'),
                     isTokenAutoRefreshEnabled: true
                 });
                 appCheckEnabled = true;
@@ -135,7 +135,7 @@
         window.googleProvider = googleProvider;
         
         // 🤖 FUNZIONI reCAPTCHA v3 - GESTIONE MIGLIORATA
-        const RECAPTCHA_SITE_KEY = '6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme'; // ✅ AGGIORNATO CON IL TUO SITE KEY
+        const RECAPTCHA_SITE_KEY = '6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF'; // ✅ AGGIORNATO CON IL TUO SITE KEY
         let recaptchaReady = false;
         let recaptchaError = null;
         
