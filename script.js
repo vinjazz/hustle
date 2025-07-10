@@ -448,10 +448,13 @@ function handleClickOutside(event) {
     }
 }
 
-function highlightMentions(text, currentUserId = null) {
-    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+function highlightMentions(html, currentUserId = null) {
+    if (!html || typeof html !== 'string') return '';
+    
+    // Regex per trovare @username, ma non all'interno di tag HTML
+    const mentionRegex = /@([a-zA-Z0-9_]+)(?![^<]*>)/g;
 
-    return text.replace(mentionRegex, (match, username) => {
+    return html.replace(mentionRegex, (match, username) => {
         const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (user) {
             const isSelf = user.uid === currentUserId;
@@ -461,6 +464,8 @@ function highlightMentions(text, currentUserId = null) {
         return match;
     });
 }
+
+console.log('✅ Patch formattazione HTML applicata con successo!');
 
 // ==============================================
 // AUTOCOMPLETE MENZIONI
@@ -3533,19 +3538,19 @@ async function openThread(threadId, section) {
         document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
         document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
 
-        // Contenuto del thread con immagine se presente
+        // Contenuto del thread con immagine se presente - CON FORMATTAZIONE HTML
         const threadContentEl = document.getElementById('thread-content');
-        let contentHtml = escapeHtml(thread.content || 'Nessun contenuto disponibile');
+        let contentHtml = processContent(thread.content || 'Nessun contenuto disponibile', true);
 
         if (thread.imageUrl) {
             contentHtml += `
-                        <div class="thread-image">
-                            <img src="${thread.imageUrl}" 
-                                 alt="${thread.imageName || 'Immagine del thread'}" 
-                                 onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
-                                 title="Clicca per ingrandire">
-                        </div>
-                    `;
+                <div class="thread-image">
+                    <img src="${thread.imageUrl}" 
+                         alt="${thread.imageName || 'Immagine del thread'}" 
+                         onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
+                         title="Clicca per ingrandire">
+                </div>
+            `;
         }
 
         threadContentEl.innerHTML = contentHtml;
@@ -3701,12 +3706,14 @@ async function displayThreadComments(comments) {
 
         let commentContentHtml = '';
 
-        // Aggiungi testo del commento se presente
+        // Aggiungi testo del commento se presente - CON FORMATTAZIONE HTML
         if (comment.content && comment.content.trim()) {
-            commentContentHtml += `<div class="comment-text">${highlightMentions(escapeHtml(comment.content), currentUser?.uid)}</div>`;
+            const processedContent = processContent(comment.content, true);
+            const contentWithMentions = highlightMentions(processedContent, currentUser?.uid);
+            commentContentHtml += `<div class="comment-text">${contentWithMentions}</div>`;
         }
 
-        // Aggiungi immagine se presente - SOLO QUESTE DEVONO APRIRE IL MODAL
+        // Aggiungi immagine se presente
         if (comment.imageUrl) {
             commentContentHtml += `
                 <div class="comment-image">
@@ -4019,13 +4026,12 @@ async function displayMessages(messages) {
         await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
     } catch (error) {
         console.warn('Errore pre-caricamento avatar:', error);
-        // Continua comunque con quello che abbiamo
     }
 
     for (let index = 0; index < messages.length; index++) {
         const msg = messages[index];
         
-        // Trova dati utente per avatar e clan (ora dovrebbero essere tutti caricati)
+        // Trova dati utente per avatar e clan
         const user = allUsers.find(u => u.uid === msg.authorId) || {
             uid: msg.authorId || 'unknown',
             username: msg.author,
@@ -4047,6 +4053,10 @@ async function displayMessages(messages) {
             `;
         }
 
+        // Processa il messaggio con formattazione HTML
+        const processedMessage = processContent(msg.message, true);
+        const messageWithMentions = highlightMentions(processedMessage, currentUser?.uid);
+
         // Container del messaggio
         htmlContent += `
             <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
@@ -4064,7 +4074,7 @@ async function displayMessages(messages) {
                         </div>
                     ` : ''}
                     
-                    <div class="message-text">${highlightMentions(escapeHtml(msg.message), currentUser?.uid)}</div>
+                    <div class="message-text">${messageWithMentions}</div>
                     
                     <div class="message-meta">
                         <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
@@ -4081,6 +4091,7 @@ async function displayMessages(messages) {
     chatMessages.innerHTML = htmlContent;
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
 function formatTimeShort(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -5066,253 +5077,3 @@ function processContent(content, enableAutoFormat = true) {
     return escapeHtml(content);
 }
 
-// ===============================================
-// AGGIORNA LE FUNZIONI ESISTENTI
-// ===============================================
-
-// SOSTITUZIONE COMPLETA della funzione displayThreadComments
-async function displayThreadComments(comments) {
-    const commentsContainer = document.getElementById('thread-comments');
-
-    if (comments.length === 0) {
-        commentsContainer.innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #666;">
-                Nessun commento ancora. Sii il primo a commentare!
-            </div>
-        `;
-        return;
-    }
-
-    // Pre-carica tutti gli utenti necessari con gestione errori
-    const uniqueUserIds = [...new Set(comments.map(comment => comment.authorId).filter(Boolean))];
-    try {
-        await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
-    } catch (error) {
-        console.warn('Errore pre-caricamento avatar commenti:', error);
-    }
-
-    commentsContainer.innerHTML = comments.map(comment => {
-        // Trova dati utente per avatar e clan
-        const user = allUsers.find(u => u.uid === comment.authorId) || {
-            uid: comment.authorId || 'unknown',
-            username: comment.author,
-            clan: 'Nessuno',
-            avatarUrl: null
-        };
-
-        let commentContentHtml = '';
-
-        // Aggiungi testo del commento se presente - CON FORMATTAZIONE HTML
-        if (comment.content && comment.content.trim()) {
-            const processedContent = processContent(comment.content, true);
-            const contentWithMentions = highlightMentions(processedContent, currentUser?.uid);
-            commentContentHtml += `<div class="comment-text">${contentWithMentions}</div>`;
-        }
-
-        // Aggiungi immagine se presente
-        if (comment.imageUrl) {
-            commentContentHtml += `
-                <div class="comment-image">
-                    <img src="${comment.imageUrl}" 
-                         alt="${comment.imageName || 'Immagine del commento'}" 
-                         class="comment-main-image"
-                         onclick="openImageModal('${comment.imageUrl}', '${comment.imageName || 'Immagine del commento'}')"
-                         title="Clicca per ingrandire">
-                </div>
-            `;
-        }
-
-        return `
-            <div class="comment-with-avatar">
-                ${createAvatarHTML(user, 'small')}
-                <div class="comment-content">
-                    <div class="comment-header">
-                        <span class="comment-author-name">${comment.author}</span>
-                        ${createClanBadgeHTML(user.clan)}
-                        <span class="comment-time">${formatTime(comment.timestamp)}</span>
-                    </div>
-                    <div class="comment-body">${commentContentHtml}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    // Scroll to bottom
-    commentsContainer.scrollTop = commentsContainer.scrollHeight;
-}
-
-// SOSTITUZIONE COMPLETA della funzione displayMessages
-async function displayMessages(messages) {
-    const chatMessages = document.getElementById('chat-messages');
-
-    if (messages.length === 0) {
-        chatMessages.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: #666;">
-                Nessun messaggio in questa chat. Inizia la conversazione!
-            </div>
-        `;
-        return;
-    }
-
-    let htmlContent = '';
-    let lastAuthor = '';
-    let lastTimestamp = 0;
-
-    // Pre-carica tutti gli utenti necessari con gestione errori
-    const uniqueUserIds = [...new Set(messages.map(msg => msg.authorId).filter(Boolean))];
-    try {
-        await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
-    } catch (error) {
-        console.warn('Errore pre-caricamento avatar:', error);
-    }
-
-    for (let index = 0; index < messages.length; index++) {
-        const msg = messages[index];
-        
-        // Trova dati utente per avatar e clan
-        const user = allUsers.find(u => u.uid === msg.authorId) || {
-            uid: msg.authorId || 'unknown',
-            username: msg.author,
-            clan: 'Nessuno',
-            avatarUrl: null
-        };
-
-        const isOwnMessage = currentUser && msg.authorId === currentUser.uid;
-        const isNewAuthor = msg.author !== lastAuthor;
-        const timeDiff = msg.timestamp - lastTimestamp;
-        const showTimestamp = timeDiff > 300000; // 5 minuti
-
-        // Separatore temporale se molto tempo è passato
-        if (showTimestamp && index > 0) {
-            htmlContent += `
-                <div class="message-time-separator">
-                    <span>${formatDate(msg.timestamp)}</span>
-                </div>
-            `;
-        }
-
-        // Processa il messaggio con formattazione HTML
-        const processedMessage = processContent(msg.message, true);
-        const messageWithMentions = highlightMentions(processedMessage, currentUser?.uid);
-
-        // Container del messaggio
-        htmlContent += `
-            <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
-                ${!isOwnMessage && isNewAuthor ? `
-                    <div class="message-avatar-small">
-                        ${createAvatarHTML(user, 'small')}
-                    </div>
-                ` : `<div class="message-avatar-spacer"></div>`}
-                
-                <div class="message-bubble ${isOwnMessage ? 'own-bubble' : 'other-bubble'}">
-                    ${!isOwnMessage && isNewAuthor ? `
-                        <div class="message-author-header">
-                            <span class="message-author-name">${msg.author}</span>
-                            ${createClanBadgeHTML(user.clan)}
-                        </div>
-                    ` : ''}
-                    
-                    <div class="message-text">${messageWithMentions}</div>
-                    
-                    <div class="message-meta">
-                        <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
-                        ${isOwnMessage ? '<span class="message-status">✓</span>' : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-
-        lastAuthor = msg.author;
-        lastTimestamp = msg.timestamp;
-    }
-
-    chatMessages.innerHTML = htmlContent;
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-// AGGIORNA la funzione openThread per gestire il contenuto HTML
-async function openThread(threadId, section) {
-    if (!currentUser) {
-        alert('Devi effettuare l\'accesso per visualizzare i thread');
-        return;
-    }
-
-    try {
-        // Trova il thread
-        const thread = await getThread(threadId, section);
-        if (!thread) {
-            alert('Thread non trovato');
-            return;
-        }
-
-        // Aggiorna visualizzazioni
-        await incrementThreadViews(threadId, section);
-
-        // Salva riferimenti
-        currentThread = thread;
-        currentThreadId = threadId;
-        currentThreadSection = section;
-
-        // Mostra vista thread
-        document.getElementById('forum-content').style.display = 'none';
-        document.getElementById('chat-content').style.display = 'none';
-        document.getElementById('thread-view').style.display = 'flex';
-        document.getElementById('new-thread-btn').style.display = 'none';
-
-        // Popola dati thread
-        document.getElementById('thread-title').textContent = thread.title;
-        document.getElementById('thread-author').textContent = thread.author;
-        document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
-        document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
-
-        // Contenuto del thread con immagine se presente - CON FORMATTAZIONE HTML
-        const threadContentEl = document.getElementById('thread-content');
-        let contentHtml = processContent(thread.content || 'Nessun contenuto disponibile', true);
-
-        if (thread.imageUrl) {
-            contentHtml += `
-                <div class="thread-image">
-                    <img src="${thread.imageUrl}" 
-                         alt="${thread.imageName || 'Immagine del thread'}" 
-                         onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
-                         title="Clicca per ingrandire">
-                </div>
-            `;
-        }
-
-        threadContentEl.innerHTML = contentHtml;
-
-        // Carica commenti
-        loadThreadComments(threadId, section);
-
-        // Reset flag per permettere nuovo setup nei commenti
-        commentImageUploadInitialized = false;
-
-        // Chiudi menu mobile se aperto
-        closeMobileMenu();
-
-    } catch (error) {
-        console.error('Errore apertura thread:', error);
-        alert('Errore nell\'apertura del thread');
-    }
-}
-
-// AGGIORNA la funzione highlightMentions per gestire HTML
-function highlightMentions(html, currentUserId = null) {
-    if (!html || typeof html !== 'string') return '';
-    
-    // Regex per trovare @username, ma non all'interno di tag HTML
-    const mentionRegex = /@([a-zA-Z0-9_]+)(?![^<]*>)/g;
-
-    return html.replace(mentionRegex, (match, username) => {
-        const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (user) {
-            const isSelf = user.uid === currentUserId;
-            const className = isSelf ? 'mention self' : 'mention';
-            return `<span class="${className}" data-user-id="${user.uid}">@${username}</span>`;
-        }
-        return match;
-    });
-}
-
-console.log('✅ Patch formattazione HTML applicata con successo!');
