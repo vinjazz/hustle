@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏰 Hustle Castle Council</title>
-    <!-- reCAPTCHA con callback personalizzato -->
-    <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
+    <!-- reCAPTCHA v3 -->
+    <script src="https://www.google.com/recaptcha/api.js?render=6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw"></script>
     
     <!-- Firebase SDK v9 -->
     <script type="module">
@@ -39,7 +39,7 @@
             // Prova ad inizializzare App Check, ma non bloccare se fallisce
             try {
                 const appCheck = initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider('6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw'),
+                    provider: new ReCaptchaV3Provider('6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme'),
                     isTokenAutoRefreshEnabled: true
                 });
                 appCheckEnabled = true;
@@ -92,77 +92,76 @@
         };
         window.googleProvider = googleProvider;
         
-        // 🤖 FUNZIONI reCAPTCHA - GESTIONE MIGLIORATA
-        let recaptchaRendered = false;
+        // 🤖 FUNZIONI reCAPTCHA v3 - GESTIONE MIGLIORATA
+        const RECAPTCHA_SITE_KEY = '6LfaD34rAAAAAGrhdKjEz-zgAFJP6_yY_6Q7Pyme'; // ⚠️ SOSTITUIRE CON SITE KEY v3
+        let recaptchaReady = false;
         
-        window.verifyRecaptcha = function() {
-            if (!recaptchaRendered || typeof grecaptcha === 'undefined') {
-                return true; // Permetti se reCAPTCHA non disponibile
+        // Verifica reCAPTCHA v3 con punteggio
+        window.verifyRecaptcha = async function(action = 'submit') {
+            if (!window.useFirebase || !appCheckEnabled) {
+                console.log('🤖 reCAPTCHA v3 disabilitato - App Check non attivo');
+                return { success: true, score: 1.0, token: null };
             }
-            const recaptchaResponse = grecaptcha.getResponse();
-            return recaptchaResponse && recaptchaResponse.length > 0;
+            
+            if (!recaptchaReady || typeof grecaptcha === 'undefined') {
+                console.log('🤖 reCAPTCHA v3 non pronto, permettendo accesso');
+                return { success: true, score: 1.0, token: null };
+            }
+            
+            try {
+                // Esegui reCAPTCHA v3 per l'azione specificata
+                const token = await grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: action });
+                
+                // In un'app reale, dovresti inviare il token al server per verifica
+                // Qui simuliamo una verifica lato client (NON sicura in produzione)
+                console.log('🤖 reCAPTCHA v3 token ottenuto:', token.substring(0, 20) + '...');
+                
+                return { 
+                    success: true, 
+                    score: 0.9, // In produzione questo viene dal server
+                    token: token 
+                };
+            } catch (error) {
+                console.error('❌ Errore reCAPTCHA v3:', error);
+                return { success: false, score: 0.0, token: null };
+            }
         };
         
+        // Non serve più reset per v3
         window.resetRecaptcha = function() {
-            if (recaptchaRendered && typeof grecaptcha !== 'undefined') {
-                try {
-                    grecaptcha.reset();
-                } catch (error) {
-                    console.log('Reset reCAPTCHA ignorato:', error.message);
-                }
-            }
+            // reCAPTCHA v3 non ha bisogno di reset
+            console.log('🤖 reCAPTCHA v3: reset non necessario');
         };
 
-        // Render reCAPTCHA quando è pronto - CON CONTROLLO DOPPIO RENDERING
-        window.onRecaptchaLoad = function() {
+        // Inizializza reCAPTCHA v3 quando pronto
+        window.initRecaptchaV3 = function() {
             if (!window.useFirebase || !appCheckEnabled) {
-                console.log('🤖 reCAPTCHA disabilitato - App Check non attivo');
+                console.log('🤖 reCAPTCHA v3 disabilitato - App Check non attivo');
                 return;
             }
             
-            if (recaptchaRendered) {
-                console.log('🤖 reCAPTCHA già renderizzato, skip');
-                return;
-            }
-            
-            if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
-                try {
-                    const container = document.getElementById('recaptcha-container');
-                    if (container && container.innerHTML === '') {
-                        grecaptcha.render('recaptcha-container', {
-                            'sitekey': '6LcMsncrAAAAAFOZQIAsv3oJBVs3-MfeTjDU9rSw',
-                            'theme': 'dark',
-                            'size': 'normal'
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.ready) {
+                grecaptcha.ready(function() {
+                    recaptchaReady = true;
+                    console.log('✅ reCAPTCHA v3 pronto');
+                    
+                    // Esegui un test iniziale
+                    grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'homepage' })
+                        .then(function(token) {
+                            console.log('🤖 reCAPTCHA v3 test completato');
+                        })
+                        .catch(function(error) {
+                            console.warn('⚠️ reCAPTCHA v3 test fallito:', error);
                         });
-                        recaptchaRendered = true;
-                        console.log('✅ reCAPTCHA renderizzato');
-                    }
-                } catch (error) {
-                    console.log('⚠️ reCAPTCHA già presente o errore:', error.message);
-                }
+                });
+            } else {
+                console.log('⚠️ reCAPTCHA v3 non disponibile');
             }
         };
         
-        // Carica reCAPTCHA quando Google reCAPTCHA è pronto - SOLO SE NECESSARIO
+        // Inizializza quando la pagina è caricata
         window.addEventListener('load', () => {
-            if (!window.useFirebase || !appCheckEnabled) {
-                // Nascondi reCAPTCHA se App Check non è attivo
-                const container = document.getElementById('recaptcha-container');
-                if (container) {
-                    container.parentElement.style.display = 'none';
-                }
-                return;
-            }
-            
-            // Controlla periodicamente se reCAPTCHA è disponibile
-            const checkRecaptcha = () => {
-                if (typeof grecaptcha !== 'undefined' && grecaptcha.render && !recaptchaRendered) {
-                    setTimeout(window.onRecaptchaLoad, 100);
-                } else if (!recaptchaRendered) {
-                    setTimeout(checkRecaptcha, 500);
-                }
-            };
-            checkRecaptcha();
+            setTimeout(window.initRecaptchaV3, 1000);
         });
     </script>
     
@@ -401,6 +400,32 @@
                 padding: 1.2rem;
             }
         }
+
+        /* reCAPTCHA v3 Status Indicator */
+        .recaptcha-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: rgba(45, 130, 181, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(45, 130, 181, 0.2);
+        }
+
+        .recaptcha-status.active {
+            color: var(--success);
+            background: rgba(39, 174, 96, 0.1);
+            border-color: rgba(39, 174, 96, 0.2);
+        }
+
+        .recaptcha-status.error {
+            color: var(--error);
+            background: rgba(231, 76, 60, 0.1);
+            border-color: rgba(231, 76, 60, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -499,9 +524,10 @@
                 <input type="password" id="password" placeholder="Inserisci la password">
             </div>
             
-            <!-- 🤖 reCAPTCHA Widget -->
-            <div class="form-group" style="display: flex; justify-content: center; margin: 20px 0;">
-                <div id="recaptcha-container"></div>
+            <!-- reCAPTCHA v3 Status (sostituisce il widget v2) -->
+            <div id="recaptchaStatus" class="recaptcha-status">
+                <span>🤖</span>
+                <span id="recaptchaStatusText">Verificando che non sei un robot...</span>
             </div>
             
             <div class="form-buttons">
@@ -511,8 +537,6 @@
             <div id="loading" class="loading">
                 <div>🔄 Connessione in corso...</div>
             </div>
-            
-           
         </div>
     </div>
 
