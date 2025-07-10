@@ -730,8 +730,7 @@
             <!-- Thread View -->
             <div class="thread-view" id="thread-view">
                 <div style="width: 100%; display: flex; flex-direction: column; height: 100%;">
-                    <!-- MODIFICATO: Aggiunto title per tooltip -->
-                    <button class="back-btn" onclick="backToForum()" title="Torna al forum (Escape o swipe da sinistra)">← Torna al Forum</button>
+                    <button class="back-btn" onclick="backToForum()">← Torna al Forum</button>
                     
                     <div class="thread-header">
                         <h1 id="thread-title">Titolo Thread</h1>
@@ -861,33 +860,10 @@
         <img id="modalImage" src="" alt="Immagine a schermo intero">
     </div>
 
-    <!-- ======================================= -->
-    <!-- PRIMA carica i tuoi script esistenti   -->
-    <!-- ======================================= -->
+    <!-- Scripts -->
     <script src="script.js"></script>
     <script src="username_handler.js"></script>
     <script src="dashboard.js"></script>
     <script src="activity_tracker.js"></script>
-
-    <!-- ======================================= -->
-    <!-- POI carica il sistema di navigazione    -->
-    <!-- ======================================= -->
-    <script>
-        // Configurazione sistema di navigazione (DOPO che tutto è caricato)
-        window.navigationConfig = {
-            enableMobileFeatures: true,    // Abilita breadcrumb e gesti mobile
-            enableDebugMode: false,        // Abilita logging per debug (cambia in true se serve)
-            enableVibration: true,         // Vibrazione su mobile Android
-            enableGestures: true,          // Swipe da sinistra per tornare indietro
-            toastDuration: 3000,          // Durata toast in millisecondi
-            initDelay: 2000               // Ritardo maggiore per assicurarsi che tutto sia pronto
-        };
-    </script>
-    
-    <!-- Stili e script del sistema di navigazione - ALLA FINE -->
-    <link href="navigation-styles.css" rel="stylesheet">
-    <script src="browser-navigation.js"></script>
-    <script src="mobile-navigation.js"></script>
-    <script src="navigation-init.js"></script>
 </body>
 </html>
