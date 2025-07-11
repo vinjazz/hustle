@@ -39,6 +39,9 @@ let currentMentionInput = null;
 let currentMentionPosition = 0;
 let currentAvatarFile = null;
 let isAvatarUploading = false;
+let imageUploadInitialized = false;
+let commentImageUploadInitialized = false;
+let avatarUploadInitialized = false;
 // Ruoli utente - DEVE essere definito prima di tutto
 const USER_ROLES = {
     SUPERUSER: 'superuser',
@@ -57,8 +60,57 @@ window.switchToRegister = switchToRegister;
 window.handleSubmit = handleSubmit;
 window.handleGoogleLogin = handleGoogleLogin;
 window.sendMessage = sendMessage;
-window.showThreadCreationModal = showThreadCreationModal;
-window.hideThreadCreationModal = hideThreadCreationModal;
+//window.showThreadCreationModal = showThreadCreationModal;
+window.showThreadCreationModal = function() {
+    if (!currentUser) {
+        alert('Devi effettuare l\'accesso per creare thread');
+        return;
+    }
+
+    // Controlla accesso clan
+    if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
+        alert('Devi appartenere a un clan per creare thread qui!');
+        return;
+    }
+
+    document.getElementById('threadCreationModal').style.display = 'flex';
+    document.getElementById('thread-title-input').focus();
+
+    // Reset flag e setup
+    imageUploadInitialized = false;
+    setupImageUpload();
+};
+//window.hideThreadCreationModal = hideThreadCreationModal;
+window.hideThreadCreationModal = function() {
+    document.getElementById('threadCreationModal').style.display = 'none';
+    document.getElementById('thread-title-input').value = '';
+    document.getElementById('thread-content-input').value = '';
+    removeSelectedImage();
+    
+    // Reset flag
+    imageUploadInitialized = false;
+};
+
+// Aggiorna openThread per gestire i commenti
+const originalOpenThread = window.openThread;
+window.openThread = async function(threadId, section) {
+    // Chiama la funzione originale
+    await originalOpenThread(threadId, section);
+    
+    // Reset flag per i commenti
+    commentImageUploadInitialized = false;
+};
+
+// Aggiorna backToForum per pulire tutto
+const originalBackToForum = window.backToForum;
+window.backToForum = function() {
+    // Pulisci upload commenti
+    cleanupCommentImageUpload();
+    
+    // Chiama la funzione originale
+    originalBackToForum();
+};
+
 window.createThread = createThread;
 window.openThread = openThread;
 window.backToForum = backToForum;
@@ -3350,37 +3402,86 @@ function showThreadCreationModal() {
 
 // Setup image upload
 function setupImageUpload() {
+    console.log('🔧 Setup upload thread...');
+    
+    // Previeni setup multipli
+    if (imageUploadInitialized) {
+        console.log('⚠️ Upload thread già inizializzato, skipping...');
+        return;
+    }
+
     const imageInput = document.getElementById('thread-image-input');
-    const imageLabel = document.querySelector('.image-upload-label');
+    const imageLabel = document.querySelector('#threadCreationModal .image-upload-label');
 
-    // Remove existing listeners
-    imageInput.removeEventListener('change', handleImageSelect);
-    imageLabel.removeEventListener('click', () => imageInput.click());
+    if (!imageInput || !imageLabel) {
+        console.error('❌ Elementi upload thread non trovati');
+        return;
+    }
 
-    // Add new listeners
-    imageInput.addEventListener('change', handleImageSelect);
-    imageLabel.addEventListener('click', () => imageInput.click());
+    // Setup con debouncing
+    let isProcessing = false;
+
+    const handleChange = (event) => {
+        if (isProcessing) {
+            console.log('⏸️ Upload già in corso, ignoro evento');
+            return;
+        }
+        
+        isProcessing = true;
+        console.log('📁 File selezionato per thread');
+        
+        setTimeout(() => {
+            handleImageSelect(event);
+            isProcessing = false;
+        }, 100);
+    };
+
+    const handleClick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        console.log('🖱️ Click su label thread');
+        imageInput.click();
+    };
+
+    // Rimuovi listener esistenti (se presenti)
+    imageInput.removeEventListener('change', handleChange);
+    imageLabel.removeEventListener('click', handleClick);
+
+    // Aggiungi nuovi listener
+    imageInput.addEventListener('change', handleChange);
+    imageLabel.addEventListener('click', handleClick);
+
+    imageUploadInitialized = true;
+    console.log('✅ Upload thread inizializzato');
 }
 
-// Handle image selection
+// Handle image selection per thread - VERSIONE MIGLIORATA
 function handleImageSelect(event) {
+    console.log('🖼️ Gestione selezione immagine thread');
+    
     const file = event.target.files[0];
     const preview = document.getElementById('image-preview');
     const progressContainer = document.getElementById('upload-progress');
 
-    if (!file)
+    if (!file) {
+        console.log('❌ Nessun file selezionato');
         return;
+    }
+
+    console.log('📁 File:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
         alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+        event.target.value = ''; // Reset input
         return;
     }
 
     // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
         alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+        event.target.value = ''; // Reset input
         return;
     }
 
@@ -3388,18 +3489,25 @@ function handleImageSelect(event) {
     const reader = new FileReader();
     reader.onload = function (e) {
         preview.innerHTML = `
-                    <img src="${e.target.result}" alt="Anteprima immagine">
-                    <button type="button" class="remove-image" onclick="removeSelectedImage()">
-                        🗑️ Rimuovi Immagine
-                    </button>
-                `;
+            <img src="${e.target.result}" alt="Anteprima immagine">
+            <button type="button" class="remove-image" onclick="removeSelectedImage()">
+                🗑️ Rimuovi Immagine
+            </button>
+        `;
+        console.log('✅ Preview mostrata per thread');
     };
+    
+    reader.onerror = function() {
+        console.error('❌ Errore lettura file');
+        alert('Errore nella lettura del file');
+        event.target.value = '';
+    };
+    
     reader.readAsDataURL(file);
 
     // Hide progress initially
     progressContainer.style.display = 'none';
 }
-
 // Remove selected image
 function removeSelectedImage() {
     document.getElementById('thread-image-input').value = '';
@@ -4395,42 +4503,62 @@ function toggleCommentImageUpload() {
 
 // Setup comment image upload SICURO (previene doppi listener)
 function setupCommentImageUploadSafe() {
+    console.log('🔧 Setup upload commenti...');
+    
+    // Previeni setup multipli
+    if (commentImageUploadInitialized) {
+        console.log('⚠️ Upload commenti già inizializzato, skipping...');
+        return;
+    }
+
     const imageInput = document.getElementById('comment-image-input');
     const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
 
     if (!imageInput || !imageLabel) {
-        console.log('❌ Elementi upload commento non trovati');
+        console.error('❌ Elementi upload commenti non trovati');
         return;
     }
 
-    // Rimuovi TUTTI i listener esistenti prima di aggiungerne di nuovi
-    cleanupCommentImageListeners();
+    // Setup con debouncing
+    let isProcessing = false;
 
-    console.log('🔧 Setup listener upload commento (SAFE)');
+    const handleChange = (event) => {
+        if (isProcessing) {
+            console.log('⏸️ Upload commento già in corso, ignoro evento');
+            return;
+        }
+        
+        isProcessing = true;
+        console.log('📁 File selezionato per commento');
+        
+        setTimeout(() => {
+            handleCommentImageSelect(event);
+            isProcessing = false;
+        }, 100);
+    };
 
-    // Aggiungi listener per il click sulla label
-    const clickHandler = () => {
-        console.log('🖱️ Click su label upload');
+    const handleClick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        console.log('🖱️ Click su label commento');
         imageInput.click();
     };
 
-    // Aggiungi listener per la selezione file
-    const changeHandler = (event) => {
-        console.log('📁 File selezionato tramite input');
-        handleCommentImageSelect(event);
-    };
+    // Pulisci listener esistenti
+    cleanupCommentImageListeners();
 
     // Salva riferimenti per cleanup futuro
-    imageLabel._commentClickHandler = clickHandler;
-    imageInput._commentChangeHandler = changeHandler;
+    imageLabel._commentClickHandler = handleClick;
+    imageInput._commentChangeHandler = handleChange;
 
     // Aggiungi listener
-    imageLabel.addEventListener('click', clickHandler);
-    imageInput.addEventListener('change', changeHandler);
+    imageLabel.addEventListener('click', handleClick);
+    imageInput.addEventListener('change', handleChange);
 
     commentImageUploadInitialized = true;
-    console.log('✅ Listener upload commento configurati');
+    console.log('✅ Upload commenti inizializzato');
 }
+
 
 // Pulisci tutti i listener per evitare duplicati
 function cleanupCommentImageListeners() {
@@ -4440,15 +4568,16 @@ function cleanupCommentImageListeners() {
     if (imageInput && imageInput._commentChangeHandler) {
         imageInput.removeEventListener('change', imageInput._commentChangeHandler);
         delete imageInput._commentChangeHandler;
-        console.log('🧹 Rimosso listener change esistente');
+        console.log('🧹 Rimosso listener change commenti');
     }
 
     if (imageLabel && imageLabel._commentClickHandler) {
         imageLabel.removeEventListener('click', imageLabel._commentClickHandler);
         delete imageLabel._commentClickHandler;
-        console.log('🧹 Rimosso listener click esistente');
+        console.log('🧹 Rimosso listener click commenti');
     }
 }
+
 
 // Pulisci tutto quando si chiude il thread o si cambia sezione
 function cleanupCommentImageUpload() {
@@ -4463,31 +4592,56 @@ function cleanupCommentImageUpload() {
     }
 }
 
+function cleanupAllImageUploads() {
+    console.log('🧹 Cleanup globale upload immagini');
+    
+    // Reset flags
+    imageUploadInitialized = false;
+    commentImageUploadInitialized = false;
+    avatarUploadInitialized = false;
+    
+    // Cleanup specifici
+    cleanupCommentImageUpload();
+    
+    // Reset input values
+    const threadInput = document.getElementById('thread-image-input');
+    const commentInput = document.getElementById('comment-image-input');
+    const avatarInput = document.getElementById('avatar-upload');
+    
+    if (threadInput) threadInput.value = '';
+    if (commentInput) commentInput.value = '';
+    if (avatarInput) avatarInput.value = '';
+    
+    console.log('✅ Cleanup globale completato');
+}
+
 // Handle comment image selection
 function handleCommentImageSelect(event) {
-    console.log('🖼️ Selezione immagine commento avviata');
+    console.log('🖼️ Gestione selezione immagine commento');
 
     const file = event.target.files[0];
     const preview = document.getElementById('comment-image-preview');
     const progressContainer = document.getElementById('comment-upload-progress');
 
     if (!file) {
-        console.log('❌ Nessun file selezionato');
+        console.log('❌ Nessun file selezionato per commento');
         return;
     }
 
-    console.log('📁 File selezionato:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
+    console.log('📁 File commento:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
         alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+        event.target.value = ''; // Reset input
         return;
     }
 
     // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
         alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+        event.target.value = ''; // Reset input
         return;
     }
 
@@ -4500,7 +4654,15 @@ function handleCommentImageSelect(event) {
                 🗑️
             </button>
         `;
+        console.log('✅ Preview mostrata per commento');
     };
+    
+    reader.onerror = function() {
+        console.error('❌ Errore lettura file commento');
+        alert('Errore nella lettura del file');
+        event.target.value = '';
+    };
+    
     reader.readAsDataURL(file);
 
     // Hide progress initially
@@ -4541,15 +4703,48 @@ function updateCommentUploadProgress(progress) {
 }
 
 function setupAvatarUpload() {
+    console.log('🔧 Setup upload avatar...');
+    
+    // Previeni setup multipli
+    if (avatarUploadInitialized) {
+        console.log('⚠️ Upload avatar già inizializzato, skipping...');
+        return;
+    }
+
     const avatarUpload = document.getElementById('avatar-upload');
     const avatarControls = document.getElementById('avatarControls');
 
     if (avatarUpload && currentUser) {
         avatarControls.style.display = 'block';
-        avatarUpload.addEventListener('change', handleAvatarUpload);
+        
+        // Setup con debouncing
+        let isProcessing = false;
+        
+        const handleAvatarChange = (event) => {
+            if (isProcessing) {
+                console.log('⏸️ Upload avatar già in corso, ignoro evento');
+                return;
+            }
+            
+            isProcessing = true;
+            console.log('📁 File avatar selezionato');
+            
+            setTimeout(() => {
+                handleAvatarUpload(event);
+                isProcessing = false;
+            }, 100);
+        };
+
+        // Rimuovi listener esistente
+        avatarUpload.removeEventListener('change', handleAvatarChange);
+        
+        // Aggiungi nuovo listener
+        avatarUpload.addEventListener('change', handleAvatarChange);
+        
+        avatarUploadInitialized = true;
+        console.log('✅ Upload avatar inizializzato');
     }
 }
-
 // Handle avatar upload
 function handleAvatarUpload(event) {
     const file = event.target.files[0];
@@ -5077,3 +5272,34 @@ function processContent(content, enableAutoFormat = true) {
     return escapeHtml(content);
 }
 
+window.debugImageUploads = function() {
+    console.log('🔍 Debug Upload Immagini:');
+    console.log('- Thread inizializzato:', imageUploadInitialized);
+    console.log('- Commenti inizializzato:', commentImageUploadInitialized);
+    console.log('- Avatar inizializzato:', avatarUploadInitialized);
+    
+    const threadInput = document.getElementById('thread-image-input');
+    const commentInput = document.getElementById('comment-image-input');
+    const avatarInput = document.getElementById('avatar-upload');
+    
+    console.log('- Thread input exists:', !!threadInput);
+    console.log('- Comment input exists:', !!commentInput);
+    console.log('- Avatar input exists:', !!avatarInput);
+    
+    if (threadInput) console.log('- Thread input listeners:', getEventListeners(threadInput));
+    if (commentInput) console.log('- Comment input listeners:', getEventListeners(commentInput));
+    if (avatarInput) console.log('- Avatar input listeners:', getEventListeners(avatarInput));
+};
+
+// Funzione per resettare forzatamente tutto
+window.resetImageUploads = function() {
+    console.log('🔄 Reset forzato upload immagini...');
+    cleanupAllImageUploads();
+    
+    // Re-setup se necessario
+    if (document.getElementById('threadCreationModal').style.display === 'flex') {
+        setupImageUpload();
+    }
+    
+    console.log('✅ Reset completato');
+};
