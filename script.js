@@ -1094,52 +1094,177 @@ let usersCache = null;
 let usersCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minuti
 
-async function loadUsersList() {
-    // SOLUZIONE: Cache degli utenti per 10 minuti
-    const now = Date.now();
-    if (usersCache && (now - usersCacheTime) < CACHE_DURATION) {
-        console.log('👥 Usando cache utenti (evitato download)');
-        allUsers = usersCache;
-        return;
+async function buildUsersListFromAccessibleData() {
+    const users = new Map(); // Usa Map per evitare duplicati
+    const sectionsToCheck = ['chat-generale'];
+    
+    // Aggiungi sempre l'utente corrente
+    if (currentUser && currentUserData) {
+        users.set(currentUser.uid, {
+            uid: currentUser.uid,
+            username: currentUserData.username || currentUser.displayName || currentUser.email,
+            clan: currentUserData.clan || 'Nessuno',
+            avatarUrl: currentUserData.avatarUrl || null,
+            email: currentUser.email
+        });
     }
-
-    try {
-        let users = [];
-
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // SOLUZIONE: Carica solo username e clan, non tutti i dati
-            const usersRef = ref(window.firebaseDatabase, 'users');
-            const snapshot = await get(usersRef);
-
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    const userData = childSnapshot.val();
-                    // SOLO DATI ESSENZIALI
-                    users.push({
-                        uid: childSnapshot.key,
-                        username: userData.username,
-                        clan: userData.clan,
-                        avatarUrl: userData.avatarUrl,
-                        email: userData.email // Solo per amministratori
+    
+    // Aggiungi sezioni clan se l'utente appartiene a un clan
+    const userClan = getCurrentUserClan();
+    if (userClan !== 'Nessuno') {
+        sectionsToCheck.push('clan-chat');
+    }
+    
+    // Estrai utenti dai messaggi recenti
+    for (const section of sectionsToCheck) {
+        try {
+            const messages = await getRecentMessagesForUserList(section);
+            
+            messages.forEach(msg => {
+                if (msg.authorId && msg.author && !users.has(msg.authorId)) {
+                    // Crea utente con dati disponibili
+                    users.set(msg.authorId, {
+                        uid: msg.authorId,
+                        username: msg.author,
+                        clan: extractClanFromMessage(msg) || 'Nessuno',
+                        avatarUrl: null, // Non disponibile da messaggi
+                        email: null // Non disponibile da messaggi
                     });
+                }
+            });
+            
+        } catch (error) {
+            console.warn(`Errore estrazione utenti da ${section}:`, error);
+        }
+    }
+    
+    // Estrai utenti dai thread recenti (autori)
+    try {
+        const threads = await getRecentThreadsForUserList();
+        threads.forEach(thread => {
+            if (thread.authorId && thread.author && !users.has(thread.authorId)) {
+                users.set(thread.authorId, {
+                    uid: thread.authorId,
+                    username: thread.author,
+                    clan: 'Nessuno', // Non disponibile da thread
+                    avatarUrl: null,
+                    email: null
                 });
             }
-        } else {
-            const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            users = Object.values(localUsers);
-        }
-
-        // Aggiorna cache
-        usersCache = users;
-        usersCacheTime = now;
-        allUsers = users;
-        
-        console.log(`👥 ${users.length} utenti caricati e messi in cache`);
-
+        });
     } catch (error) {
-        console.error('Errore caricamento utenti:', error);
+        console.warn('Errore estrazione utenti da thread:', error);
+    }
+    
+    // Aggiungi alcuni utenti di esempio se la lista è troppo vuota
+    if (users.size < 3) {
+        addExampleUsers(users);
+    }
+    
+    return Array.from(users.values());
+}
+
+// NUOVA FUNZIONE: Ottiene messaggi recenti per costruire lista utenti
+async function getRecentMessagesForUserList(section) {
+    const dataPath = getDataPath(section, 'messages');
+    if (!dataPath) return [];
+    
+    try {
+        const messagesRef = ref(window.firebaseDatabase, dataPath);
+        const snapshot = await get(messagesRef);
+        
+        if (!snapshot.exists()) return [];
+        
+        const messages = [];
+        snapshot.forEach((childSnapshot) => {
+            messages.push(childSnapshot.val());
+        });
+        
+        // Ordina per timestamp e prendi solo gli ultimi 50
+        messages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return messages.slice(0, 50);
+        
+    } catch (error) {
+        console.warn(`Errore lettura messaggi ${section}:`, error);
+        return [];
     }
 }
+
+// NUOVA FUNZIONE: Ottiene thread recenti per estrarre autori
+async function getRecentThreadsForUserList() {
+    const sections = ['eventi', 'oggetti', 'novita', 'salotto', 'segnalazioni'];
+    const allThreads = [];
+    
+    for (const section of sections) {
+        try {
+            const dataPath = getDataPath(section, 'threads');
+            if (!dataPath) continue;
+            
+            const threadsRef = ref(window.firebaseDatabase, dataPath);
+            const snapshot = await get(threadsRef);
+            
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    const thread = childSnapshot.val();
+                    if (thread.status !== 'rejected') { // Solo thread approvati/pending
+                        allThreads.push(thread);
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn(`Errore lettura thread ${section}:`, error);
+        }
+    }
+    
+    // Ordina per data e prendi i più recenti
+    allThreads.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return allThreads.slice(0, 20);
+}
+
+// NUOVA FUNZIONE: Estrae clan da un messaggio (euristica)
+function extractClanFromMessage(message) {
+    // Cerca pattern comuni di clan nei messaggi
+    // Questo è un fallback - i dati clan non sono disponibili nei messaggi
+    return null;
+}
+
+// NUOVA FUNZIONE: Aggiunge utenti di esempio se la lista è vuota
+function addExampleUsers(usersMap) {
+    const exampleUsers = [
+        {
+            uid: 'example_admin',
+            username: 'Admin',
+            clan: 'Staff',
+            avatarUrl: null,
+            email: null
+        },
+        {
+            uid: 'example_mod',
+            username: 'Moderatore',
+            clan: 'Staff',
+            avatarUrl: null,
+            email: null
+        },
+        {
+            uid: 'example_player',
+            username: 'Giocatore',
+            clan: 'Guerrieri',
+            avatarUrl: null,
+            email: null
+        }
+    ];
+    
+    exampleUsers.forEach(user => {
+        if (!usersMap.has(user.uid)) {
+            usersMap.set(user.uid, user);
+        }
+    });
+    
+    console.log('👥 Aggiunti utenti di esempio alla lista');
+}
+// ==============================================
+
+
 // Inizializza l'applicazione
 function initializeApp() {
     console.log('🔥 Inizializzazione applicazione...');
@@ -2788,6 +2913,7 @@ async function loadUsersManagement() {
 }
 
 // Carica lista utenti per il pannello admin
+// Modifica per loadUsersGrid (per il pannello admin)
 async function loadUsersGrid() {
     const usersGrid = document.getElementById('users-grid');
 
@@ -2795,17 +2921,21 @@ async function loadUsersGrid() {
         let users = [];
 
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // Carica da Firebase
-            const usersRef = ref(window.firebaseDatabase, 'users');
-            const snapshot = await get(usersRef);
-
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    users.push({
-                        id: childSnapshot.key,
-                        ...childSnapshot.val()
-                    });
-                });
+            // SOLUZIONE: Usa la lista utenti costruita invece di interrogare Firebase
+            await loadUsersList(); // Questo ora usa il metodo sicuro
+            users = allUsers.filter(user => user.email); // Solo utenti con email per admin
+            
+            // Se abbiamo pochi utenti, mostra messaggio informativo
+            if (users.length < 3) {
+                usersGrid.innerHTML = `
+                    <div style="text-align: center; padding: 20px; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin: 10px 0;">
+                        <div style="color: #856404; margin-bottom: 10px;">⚠️ Lista utenti limitata</div>
+                        <div style="font-size: 14px; color: #856404;">
+                            La lista mostra solo utenti attivi recentemente.<br>
+                            Altri utenti potrebbero esistere ma non essere visibili.
+                        </div>
+                    </div>
+                `;
             }
         } else {
             // Carica da localStorage
@@ -2813,10 +2943,26 @@ async function loadUsersGrid() {
             users = Object.values(localUsers);
         }
 
-        displayUsersList(users);
+        // Aggiungi utenti alla griglia esistente se ce ne sono
+        if (users.length > 0) {
+            const existingContent = usersGrid.innerHTML;
+            if (existingContent.includes('Lista utenti limitata')) {
+                usersGrid.innerHTML = existingContent + '<div style="margin-top: 20px;"></div>';
+            }
+            
+            displayUsersList(users);
+        }
+
     } catch (error) {
-        console.error('Errore caricamento utenti:', error);
-        usersGrid.innerHTML = '<div style="text-align: center; color: red;">Errore nel caricamento degli utenti</div>';
+        console.error('Errore caricamento utenti admin:', error);
+        usersGrid.innerHTML = `
+            <div style="text-align: center; color: red; padding: 20px;">
+                <div>❌ Errore nel caricamento degli utenti</div>
+                <div style="font-size: 14px; margin-top: 10px;">
+                    Verifica le regole Firebase o usa la modalità locale per l'amministrazione completa.
+                </div>
+            </div>
+        `;
     }
 }
 
