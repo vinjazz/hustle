@@ -742,45 +742,7 @@ function loadNotifications() {
         console.log('✅ Firebase attivo, in ascolto su notifications/' + currentUser.uid);
       
         
-        if (queryFunctions) {
-            // USA QUERY OTTIMIZZATE
-            console.log('📊 Usando query ottimizzate per notifiche');
-            const { query, orderByChild, limitToLast } = queryFunctions;
-            
-            try {
-                const notifRef = query(
-                    ref(window.firebaseDatabase, `notifications/${currentUser.uid}`),
-                    orderByChild('timestamp'),
-                    limitToLast(20)
-                );
-
-                onValue(notifRef, (snapshot) => {
-                    const notifications = [];
-                    if (snapshot.exists()) {
-                        snapshot.forEach((childSnapshot) => {
-                            notifications.push({
-                                id: childSnapshot.key,
-                                ...childSnapshot.val()
-                            });
-                        });
-                    } else {
-                        console.log('📭 Nessuna notifica trovata su Firebase');
-                    }
-
-                    notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                    notificationsData = notifications;
-
-                    console.log('📥 Notifiche caricate con query ottimizzate:', notificationsData.length);
-                    updateNotificationsUI();
-                });
-                
-                return; // Esci se le query hanno funzionato
-                
-            } catch (queryError) {
-                console.error('❌ Errore query notifiche:', queryError);
-                // Continua con fallback
-            }
-        }
+        
         
         // ✅ FALLBACK: USA onValue SEMPLICE
         console.log('📊 Usando onValue semplice per notifiche (fallback)');
@@ -3300,48 +3262,7 @@ function loadThreads(sectionKey) {
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
         
         
-        if (queryFunctions) {
-            // USA QUERY OTTIMIZZATE
-            console.log('📊 Usando query ottimizzate per thread:', sectionKey);
-            const { query, orderByChild, limitToLast } = queryFunctions;
-            
-            try {
-                const threadsRef = query(
-                    ref(window.firebaseDatabase, dataPath),
-                    orderByChild('createdAt'),
-                    limitToLast(20)
-                );
-
-                // Cleanup previous listener
-                if (threadListeners[sectionKey]) {
-                    const oldRef = ref(window.firebaseDatabase, threadListeners[sectionKey].path);
-                    off(oldRef, threadListeners[sectionKey].callback);
-                }
-
-                const callback = (snapshot) => {
-                    const threads = [];
-                    snapshot.forEach((childSnapshot) => {
-                        threads.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-
-                    threads.sort((a, b) => b.createdAt - a.createdAt);
-                    displayThreads(threads);
-                };
-
-                threadListeners[sectionKey] = { path: dataPath, callback: callback };
-                onValue(threadsRef, callback);
-                
-                console.log('📥 Listening thread con query ottimizzate per:', dataPath);
-                return; // Esci se le query hanno funzionato
-                
-            } catch (queryError) {
-                console.error('❌ Errore query thread:', queryError);
-                // Continua con fallback
-            }
-        }
+       
         
         // ✅ FALLBACK: USA onValue SEMPLICE
         console.log('📊 Usando onValue semplice per thread (fallback):', sectionKey);
@@ -3810,39 +3731,7 @@ function loadThreadComments(threadId, section) {
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
         
         
-        if (queryFunctions) {
-            // USA QUERY OTTIMIZZATE
-            console.log('📊 Usando query ottimizzate per commenti:', threadId);
-            const { query, orderByKey, limitToLast } = queryFunctions;
-            
-            try {
-                const commentsRef = query(
-                    ref(window.firebaseDatabase, `${dataPath}/${threadId}`),
-                    orderByKey(),
-                    limitToLast(30)
-                );
-
-                onValue(commentsRef, (snapshot) => {
-                    const comments = [];
-                    snapshot.forEach((childSnapshot) => {
-                        comments.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-
-                    comments.sort((a, b) => a.timestamp - b.timestamp);
-                    displayThreadComments(comments);
-                });
-                
-                console.log('📥 Listening commenti con query ottimizzate per:', `${dataPath}/${threadId}`);
-                return; // Esci se le query hanno funzionato
-                
-            } catch (queryError) {
-                console.error('❌ Errore query commenti:', queryError);
-                // Continua con fallback
-            }
-        }
+        
         
         // ✅ FALLBACK: USA onValue SEMPLICE
         console.log('📊 Usando onValue semplice per commenti (fallback):', threadId);
@@ -3883,21 +3772,8 @@ function safeInitializeFirebaseQueries() {
     const checkInterval = setInterval(() => {
         attempts++;
         
+        const threadsRef = ref(window.firebaseDatabase, dataPath);
         
-        if (queryFunctions) {
-            console.log('✅ Query functions disponibili dopo', attempts, 'tentativi');
-            clearInterval(checkInterval);
-            
-            // Reinizializza notifiche se necessario
-            if (currentUser && notificationsData.length === 0) {
-                console.log('🔄 Reinizializzazione notifiche con query...');
-                loadNotifications();
-            }
-            
-        } else if (attempts >= maxAttempts) {
-            console.warn('⚠️ Query functions non disponibili dopo', maxAttempts, 'tentativi - usando fallback');
-            clearInterval(checkInterval);
-        }
     }, 1000); // Controlla ogni secondo
 }
 // Mostra commenti thread con avatar potenziati
@@ -4201,49 +4077,6 @@ function loadMessages(sectionKey) {
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
         
         
-        if (queryFunctions) {
-            // USA QUERY OTTIMIZZATE
-            console.log('📊 Usando query ottimizzate per messaggi:', sectionKey);
-            const { query, orderByKey, limitToLast } = queryFunctions;
-            
-            try {
-                const messagesRef = query(
-                    ref(window.firebaseDatabase, dataPath),
-                    orderByKey(),
-                    limitToLast(50)
-                );
-
-                // Cleanup previous listener
-                if (messageListeners[sectionKey]) {
-                    const oldRef = ref(window.firebaseDatabase, messageListeners[sectionKey].path);
-                    off(oldRef, messageListeners[sectionKey].callback);
-                }
-
-                const callback = (snapshot) => {
-                    const messages = [];
-                    snapshot.forEach((childSnapshot) => {
-                        messages.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-
-                    messages.sort((a, b) => a.timestamp - b.timestamp);
-                    displayMessages(messages);
-                    updateMessageCounter(messages.length);
-                };
-
-                messageListeners[sectionKey] = { path: dataPath, callback: callback };
-                onValue(messagesRef, callback);
-                
-                console.log('📥 Listening messaggi con query ottimizzate per:', dataPath);
-                return; // Esci se le query hanno funzionato
-                
-            } catch (queryError) {
-                console.error('❌ Errore query messaggi:', queryError);
-                // Continua con fallback
-            }
-        }
         
         // ✅ FALLBACK: USA onValue SEMPLICE
         console.log('📊 Usando onValue semplice per messaggi (fallback):', sectionKey);
