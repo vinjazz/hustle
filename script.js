@@ -1154,7 +1154,56 @@ function handleToastAction(toastId, actionIndex) {
 let usersCache = null;
 let usersCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minuti
+async function loadUsersList() {
+    console.log('👥 loadUsersList chiamata...');
+    
+    // Cache degli utenti per 10 minuti
+    const now = Date.now();
+    if (usersCache && (now - usersCacheTime) < CACHE_DURATION) {
+        console.log('👥 Usando cache utenti (evitato download)');
+        allUsers = usersCache;
+        return;
+    }
 
+    try {
+        let users = [];
+
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            console.log('👥 Costruendo lista utenti da fonti accessibili...');
+            users = await buildUsersListFromAccessibleData();
+        } else {
+            // Modalità locale - funziona normalmente
+            const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            users = Object.values(localUsers);
+        }
+
+        // Aggiorna cache
+        usersCache = users;
+        usersCacheTime = now;
+        allUsers = users;
+        
+        console.log(`👥 ${users.length} utenti caricati e messi in cache`);
+
+    } catch (error) {
+        console.error('Errore caricamento utenti:', error);
+        
+        // FALLBACK: Usa solo l'utente corrente se tutto fallisce
+        if (currentUser && currentUserData) {
+            allUsers = [{
+                uid: currentUser.uid,
+                username: currentUserData.username || currentUser.displayName || currentUser.email,
+                clan: currentUserData.clan || 'Nessuno',
+                avatarUrl: currentUserData.avatarUrl || null,
+                email: currentUser.email
+            }];
+            console.log('👥 Fallback: usando solo utente corrente');
+        } else {
+            // Fallback finale: array vuoto
+            allUsers = [];
+            console.log('👥 Fallback finale: array vuoto');
+        }
+    }
+}
 async function buildUsersListFromAccessibleData() {
     const users = new Map(); // Usa Map per evitare duplicati
     const sectionsToCheck = ['chat-generale'];
