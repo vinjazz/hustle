@@ -725,21 +725,99 @@ function saveLocalNotification(targetUserId, notification) {
         loadNotifications();
     }
 }
+function getFirebaseQueryFunctions() {
+    try {
+        if (!window.firebaseImports) {
+            console.warn('⚠️ firebaseImports non disponibile');
+            return null;
+        }
 
+        const {
+            query,
+            orderByKey,
+            orderByChild,
+            limitToLast,
+            limitToFirst
+        } = window.firebaseImports;
+
+        // Verifica che tutte le funzioni siano disponibili
+        if (!query || !orderByKey || !orderByChild || !limitToLast) {
+            console.warn('⚠️ Query functions incomplete:', {
+                query: !!query,
+                orderByKey: !!orderByKey,
+                orderByChild: !!orderByChild,
+                limitToLast: !!limitToLast
+            });
+            return null;
+        }
+
+        return { query, orderByKey, orderByChild, limitToLast, limitToFirst };
+    } catch (error) {
+        console.error('❌ Errore ottenimento query functions:', error);
+        return null;
+    }
+}
 // ==============================================
 // GESTIONE NOTIFICHE - CARICAMENTO E DISPLAY
 // ==============================================
 
 function loadNotifications() {
-    if (!currentUser) return;
+    console.log('🚀 CHIAMATA loadNotifications()');
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        // SOLUZIONE: Limita a solo ultime 20 notifiche
-        const notifRef = query(
-            ref(window.firebaseDatabase, `notifications/${currentUser.uid}`),
-            orderByChild('timestamp'),
-            limitToLast(20) // SOLO ULTIME 20!
-        );
+    if (!currentUser) {
+        console.log('⚠️ currentUser è nullo');
+        return;
+    }
+
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
+        console.log('✅ Firebase attivo, in ascolto su notifications/' + currentUser.uid);
+        
+        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
+        const queryFunctions = getFirebaseQueryFunctions();
+        
+        if (queryFunctions) {
+            // USA QUERY OTTIMIZZATE
+            console.log('📊 Usando query ottimizzate per notifiche');
+            const { query, orderByChild, limitToLast } = queryFunctions;
+            
+            try {
+                const notifRef = query(
+                    ref(window.firebaseDatabase, `notifications/${currentUser.uid}`),
+                    orderByChild('timestamp'),
+                    limitToLast(20)
+                );
+
+                onValue(notifRef, (snapshot) => {
+                    const notifications = [];
+                    if (snapshot.exists()) {
+                        snapshot.forEach((childSnapshot) => {
+                            notifications.push({
+                                id: childSnapshot.key,
+                                ...childSnapshot.val()
+                            });
+                        });
+                    } else {
+                        console.log('📭 Nessuna notifica trovata su Firebase');
+                    }
+
+                    notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    notificationsData = notifications;
+
+                    console.log('📥 Notifiche caricate con query ottimizzate:', notificationsData.length);
+                    updateNotificationsUI();
+                });
+                
+                return; // Esci se le query hanno funzionato
+                
+            } catch (queryError) {
+                console.error('❌ Errore query notifiche:', queryError);
+                // Continua con fallback
+            }
+        }
+        
+        // ✅ FALLBACK: USA onValue SEMPLICE
+        console.log('📊 Usando onValue semplice per notifiche (fallback)');
+        const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}`);
 
         onValue(notifRef, (snapshot) => {
             const notifications = [];
@@ -750,12 +828,25 @@ function loadNotifications() {
                         ...childSnapshot.val()
                     });
                 });
+            } else {
+                console.log('📭 Nessuna notifica trovata su Firebase');
             }
 
+            // Ordina e limita manualmente
             notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            notificationsData = notifications;
+            notificationsData = notifications.slice(0, 20); // Limit manuale
+
+            console.log('📥 Notifiche caricate con fallback:', notificationsData.length);
             updateNotificationsUI();
         });
+        
+    } else {
+        console.log('⚠️ Firebase non attivo, fallback su localStorage');
+        // Fallback localStorage
+        const storageKey = `hc_notifications_${currentUser.uid}`;
+        const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        notificationsData = notifications.slice(0, 20);
+        updateNotificationsUI();
     }
 }
 
@@ -1123,7 +1214,7 @@ async function loadUsersList() {
 // Inizializza l'applicazione
 function initializeApp() {
     console.log('🔥 Inizializzazione applicazione...');
-
+    setTimeout(safeInitializeFirebaseQueries, 2000);
     // Assegna funzioni Firebase se disponibili
     if (window.firebaseImports) {
         ({
@@ -3239,14 +3330,59 @@ function loadThreads(sectionKey) {
     const dataPath = getDataPath(sectionKey, 'threads');
     if (!dataPath) return;
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        // SOLUZIONE: Limita a solo gli ultimi 20 thread
-        const threadsRef = query(
-            ref(window.firebaseDatabase, dataPath),
-            orderByChild('createdAt'),
-            limitToLast(20) // SOLO ULTIMI 20 THREAD!
-        );
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
+        
+        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
+        const queryFunctions = getFirebaseQueryFunctions();
+        
+        if (queryFunctions) {
+            // USA QUERY OTTIMIZZATE
+            console.log('📊 Usando query ottimizzate per thread:', sectionKey);
+            const { query, orderByChild, limitToLast } = queryFunctions;
+            
+            try {
+                const threadsRef = query(
+                    ref(window.firebaseDatabase, dataPath),
+                    orderByChild('createdAt'),
+                    limitToLast(20)
+                );
 
+                // Cleanup previous listener
+                if (threadListeners[sectionKey]) {
+                    const oldRef = ref(window.firebaseDatabase, threadListeners[sectionKey].path);
+                    off(oldRef, threadListeners[sectionKey].callback);
+                }
+
+                const callback = (snapshot) => {
+                    const threads = [];
+                    snapshot.forEach((childSnapshot) => {
+                        threads.push({
+                            id: childSnapshot.key,
+                            ...childSnapshot.val()
+                        });
+                    });
+
+                    threads.sort((a, b) => b.createdAt - a.createdAt);
+                    displayThreads(threads);
+                };
+
+                threadListeners[sectionKey] = { path: dataPath, callback: callback };
+                onValue(threadsRef, callback);
+                
+                console.log('📥 Listening thread con query ottimizzate per:', dataPath);
+                return; // Esci se le query hanno funzionato
+                
+            } catch (queryError) {
+                console.error('❌ Errore query thread:', queryError);
+                // Continua con fallback
+            }
+        }
+        
+        // ✅ FALLBACK: USA onValue SEMPLICE
+        console.log('📊 Usando onValue semplice per thread (fallback):', sectionKey);
+        const threadsRef = ref(window.firebaseDatabase, dataPath);
+
+        // Cleanup previous listener
         if (threadListeners[sectionKey]) {
             const oldRef = ref(window.firebaseDatabase, threadListeners[sectionKey].path);
             off(oldRef, threadListeners[sectionKey].callback);
@@ -3261,12 +3397,23 @@ function loadThreads(sectionKey) {
                 });
             });
 
+            // Ordina e limita manualmente
             threads.sort((a, b) => b.createdAt - a.createdAt);
-            displayThreads(threads);
+            const limitedThreads = threads.slice(0, 20); // Primi 20
+            
+            displayThreads(limitedThreads);
         };
 
         threadListeners[sectionKey] = { path: dataPath, callback: callback };
         onValue(threadsRef, callback);
+        
+        console.log('📥 Listening thread con fallback per:', dataPath);
+    } else {
+        // Modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        threads.sort((a, b) => b.createdAt - a.createdAt);
+        displayThreads(threads);
     }
 }
 
@@ -3695,13 +3842,48 @@ function loadThreadComments(threadId, section) {
     const dataPath = getDataPath(section, 'comments');
     if (!dataPath) return;
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        // SOLUZIONE: Limita a ultimi 30 commenti
-        const commentsRef = query(
-            ref(window.firebaseDatabase, `${dataPath}/${threadId}`),
-            orderByKey(),
-            limitToLast(30) // SOLO ULTIMI 30 COMMENTI!
-        );
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
+        
+        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
+        const queryFunctions = getFirebaseQueryFunctions();
+        
+        if (queryFunctions) {
+            // USA QUERY OTTIMIZZATE
+            console.log('📊 Usando query ottimizzate per commenti:', threadId);
+            const { query, orderByKey, limitToLast } = queryFunctions;
+            
+            try {
+                const commentsRef = query(
+                    ref(window.firebaseDatabase, `${dataPath}/${threadId}`),
+                    orderByKey(),
+                    limitToLast(30)
+                );
+
+                onValue(commentsRef, (snapshot) => {
+                    const comments = [];
+                    snapshot.forEach((childSnapshot) => {
+                        comments.push({
+                            id: childSnapshot.key,
+                            ...childSnapshot.val()
+                        });
+                    });
+
+                    comments.sort((a, b) => a.timestamp - b.timestamp);
+                    displayThreadComments(comments);
+                });
+                
+                console.log('📥 Listening commenti con query ottimizzate per:', `${dataPath}/${threadId}`);
+                return; // Esci se le query hanno funzionato
+                
+            } catch (queryError) {
+                console.error('❌ Errore query commenti:', queryError);
+                // Continua con fallback
+            }
+        }
+        
+        // ✅ FALLBACK: USA onValue SEMPLICE
+        console.log('📊 Usando onValue semplice per commenti (fallback):', threadId);
+        const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
 
         onValue(commentsRef, (snapshot) => {
             const comments = [];
@@ -3712,13 +3894,49 @@ function loadThreadComments(threadId, section) {
                 });
             });
 
+            // Ordina e limita manualmente
             comments.sort((a, b) => a.timestamp - b.timestamp);
-            displayThreadComments(comments);
+            const limitedComments = comments.slice(-30); // Ultimi 30
+            
+            displayThreadComments(limitedComments);
         });
+        
+        console.log('📥 Listening commenti con fallback per:', `${dataPath}/${threadId}`);
+    } else {
+        // Modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
+        const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        comments.sort((a, b) => a.timestamp - b.timestamp);
+        displayThreadComments(comments);
     }
 }
-
-// Mostra commenti thread
+function safeInitializeFirebaseQueries() {
+    console.log('🔧 Inizializzazione sicura query Firebase...');
+    
+    // Verifica periodicamente se le query functions sono disponibili
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    const checkInterval = setInterval(() => {
+        attempts++;
+        const queryFunctions = getFirebaseQueryFunctions();
+        
+        if (queryFunctions) {
+            console.log('✅ Query functions disponibili dopo', attempts, 'tentativi');
+            clearInterval(checkInterval);
+            
+            // Reinizializza notifiche se necessario
+            if (currentUser && notificationsData.length === 0) {
+                console.log('🔄 Reinizializzazione notifiche con query...');
+                loadNotifications();
+            }
+            
+        } else if (attempts >= maxAttempts) {
+            console.warn('⚠️ Query functions non disponibili dopo', maxAttempts, 'tentativi - usando fallback');
+            clearInterval(checkInterval);
+        }
+    }, 1000); // Controlla ogni secondo
+}
 // Mostra commenti thread con avatar potenziati
 async function displayThreadComments(comments) {
     const commentsContainer = document.getElementById('thread-comments');
@@ -4018,12 +4236,57 @@ function loadMessages(sectionKey) {
     if (!dataPath) return;
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
-        // SOLUZIONE: Limita a solo gli ultimi 50 messaggi
-        const messagesRef = query(
-            ref(window.firebaseDatabase, dataPath),
-            orderByKey(),
-            limitToLast(50) // SOLO ULTIMI 50 MESSAGGI!
-        );
+        
+        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
+        const queryFunctions = getFirebaseQueryFunctions();
+        
+        if (queryFunctions) {
+            // USA QUERY OTTIMIZZATE
+            console.log('📊 Usando query ottimizzate per messaggi:', sectionKey);
+            const { query, orderByKey, limitToLast } = queryFunctions;
+            
+            try {
+                const messagesRef = query(
+                    ref(window.firebaseDatabase, dataPath),
+                    orderByKey(),
+                    limitToLast(50)
+                );
+
+                // Cleanup previous listener
+                if (messageListeners[sectionKey]) {
+                    const oldRef = ref(window.firebaseDatabase, messageListeners[sectionKey].path);
+                    off(oldRef, messageListeners[sectionKey].callback);
+                }
+
+                const callback = (snapshot) => {
+                    const messages = [];
+                    snapshot.forEach((childSnapshot) => {
+                        messages.push({
+                            id: childSnapshot.key,
+                            ...childSnapshot.val()
+                        });
+                    });
+
+                    messages.sort((a, b) => a.timestamp - b.timestamp);
+                    displayMessages(messages);
+                    updateMessageCounter(messages.length);
+                };
+
+                messageListeners[sectionKey] = { path: dataPath, callback: callback };
+                onValue(messagesRef, callback);
+                
+                console.log('📥 Listening messaggi con query ottimizzate per:', dataPath);
+                return; // Esci se le query hanno funzionato
+                
+            } catch (queryError) {
+                console.error('❌ Errore query messaggi:', queryError);
+                // Continua con fallback
+            }
+        }
+        
+        // ✅ FALLBACK: USA onValue SEMPLICE
+        console.log('📊 Usando onValue semplice per messaggi (fallback):', sectionKey);
+        const messagesRef = ref(window.firebaseDatabase, dataPath);
 
         // Cleanup previous listener
         if (messageListeners[sectionKey]) {
@@ -4040,20 +4303,27 @@ function loadMessages(sectionKey) {
                 });
             });
 
+            // Ordina e limita manualmente
             messages.sort((a, b) => a.timestamp - b.timestamp);
-            displayMessages(messages);
-            updateMessageCounter(messages.length);
+            const limitedMessages = messages.slice(-50); // Ultimi 50
+            
+            displayMessages(limitedMessages);
+            updateMessageCounter(limitedMessages.length);
         };
 
-        messageListeners[sectionKey] = {
-            path: dataPath,
-            callback: callback
-        };
+        messageListeners[sectionKey] = { path: dataPath, callback: callback };
         onValue(messagesRef, callback);
+        
+        console.log('📥 Listening messaggi con fallback per:', dataPath);
+    } else {
+        // Modalità locale
+        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+        const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        messages.sort((a, b) => a.timestamp - b.timestamp);
+        displayMessages(messages);
+        updateMessageCounter(messages.length);
     }
 }
-// Mostra messaggi
-// Mostra messaggi stile WhatsApp con avatar potenziati
 // Mostra messaggi stile WhatsApp con avatar potenziati
 async function displayMessages(messages) {
     const chatMessages = document.getElementById('chat-messages');
