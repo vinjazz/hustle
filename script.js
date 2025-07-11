@@ -725,38 +725,7 @@ function saveLocalNotification(targetUserId, notification) {
         loadNotifications();
     }
 }
-function getFirebaseQueryFunctions() {
-    try {
-        if (!window.firebaseImports) {
-            console.warn('⚠️ firebaseImports non disponibile');
-            return null;
-        }
 
-        const {
-            query,
-            orderByKey,
-            orderByChild,
-            limitToLast,
-            limitToFirst
-        } = window.firebaseImports;
-
-        // Verifica che tutte le funzioni siano disponibili
-        if (!query || !orderByKey || !orderByChild || !limitToLast) {
-            console.warn('⚠️ Query functions incomplete:', {
-                query: !!query,
-                orderByKey: !!orderByKey,
-                orderByChild: !!orderByChild,
-                limitToLast: !!limitToLast
-            });
-            return null;
-        }
-
-        return { query, orderByKey, orderByChild, limitToLast, limitToFirst };
-    } catch (error) {
-        console.error('❌ Errore ottenimento query functions:', error);
-        return null;
-    }
-}
 // ==============================================
 // GESTIONE NOTIFICHE - CARICAMENTO E DISPLAY
 // ==============================================
@@ -771,9 +740,7 @@ function loadNotifications() {
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
         console.log('✅ Firebase attivo, in ascolto su notifications/' + currentUser.uid);
-        
-        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
-        const queryFunctions = getFirebaseQueryFunctions();
+      
         
         if (queryFunctions) {
             // USA QUERY OTTIMIZZATE
@@ -3332,8 +3299,6 @@ function loadThreads(sectionKey) {
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
         
-        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
-        const queryFunctions = getFirebaseQueryFunctions();
         
         if (queryFunctions) {
             // USA QUERY OTTIMIZZATE
@@ -3844,8 +3809,6 @@ function loadThreadComments(threadId, section) {
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
         
-        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
-        const queryFunctions = getFirebaseQueryFunctions();
         
         if (queryFunctions) {
             // USA QUERY OTTIMIZZATE
@@ -3919,7 +3882,7 @@ function safeInitializeFirebaseQueries() {
     
     const checkInterval = setInterval(() => {
         attempts++;
-        const queryFunctions = getFirebaseQueryFunctions();
+        
         
         if (queryFunctions) {
             console.log('✅ Query functions disponibili dopo', attempts, 'tentativi');
@@ -4237,8 +4200,6 @@ function loadMessages(sectionKey) {
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
         
-        // ✅ OTTIENI QUERY FUNCTIONS IN MODO SICURO
-        const queryFunctions = getFirebaseQueryFunctions();
         
         if (queryFunctions) {
             // USA QUERY OTTIMIZZATE
