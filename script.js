@@ -16,6 +16,9 @@ window.addEventListener('load', async() => {
     initializeApp();
 });
 
+const { query, orderByKey, orderByChild, limitToLast, limitToFirst } = window.firebaseImports;
+
+
 // Variabili globali
 let currentUser = null;
 let currentSection = 'home';
@@ -29,7 +32,8 @@ let currentUserData = null; // Dati completi dell'utente corrente
 let currentThread = null;
 let currentThreadId = null;
 let currentThreadSection = null;
-
+// Flag per evitare listener multipli
+let commentImageUploadInitialized = false;
 let notificationsData = [];
 let unreadNotificationsCount = 0;
 let allUsers = []; // Cache degli utenti per autocomplete
@@ -38,9 +42,6 @@ let currentMentionInput = null;
 let currentMentionPosition = 0;
 let currentAvatarFile = null;
 let isAvatarUploading = false;
-let imageUploadInitialized = false;
-let commentImageUploadInitialized = false;
-let avatarUploadInitialized = false;
 // Ruoli utente - DEVE essere definito prima di tutto
 const USER_ROLES = {
     SUPERUSER: 'superuser',
@@ -59,57 +60,8 @@ window.switchToRegister = switchToRegister;
 window.handleSubmit = handleSubmit;
 window.handleGoogleLogin = handleGoogleLogin;
 window.sendMessage = sendMessage;
-//window.showThreadCreationModal = showThreadCreationModal;
-window.showThreadCreationModal = function() {
-    if (!currentUser) {
-        alert('Devi effettuare l\'accesso per creare thread');
-        return;
-    }
-
-    // Controlla accesso clan
-    if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
-        alert('Devi appartenere a un clan per creare thread qui!');
-        return;
-    }
-
-    document.getElementById('threadCreationModal').style.display = 'flex';
-    document.getElementById('thread-title-input').focus();
-
-    // Reset flag e setup
-    imageUploadInitialized = false;
-    setupImageUpload();
-};
-//window.hideThreadCreationModal = hideThreadCreationModal;
-window.hideThreadCreationModal = function() {
-    document.getElementById('threadCreationModal').style.display = 'none';
-    document.getElementById('thread-title-input').value = '';
-    document.getElementById('thread-content-input').value = '';
-    removeSelectedImage();
-    
-    // Reset flag
-    imageUploadInitialized = false;
-};
-
-// Aggiorna openThread per gestire i commenti
-const originalOpenThread = window.openThread;
-window.openThread = async function(threadId, section) {
-    // Chiama la funzione originale
-    await originalOpenThread(threadId, section);
-    
-    // Reset flag per i commenti
-    commentImageUploadInitialized = false;
-};
-
-// Aggiorna backToForum per pulire tutto
-const originalBackToForum = window.backToForum;
-window.backToForum = function() {
-    // Pulisci upload commenti
-    cleanupCommentImageUpload();
-    
-    // Chiama la funzione originale
-    originalBackToForum();
-};
-
+window.showThreadCreationModal = showThreadCreationModal;
+window.hideThreadCreationModal = hideThreadCreationModal;
 window.createThread = createThread;
 window.openThread = openThread;
 window.backToForum = backToForum;
@@ -781,16 +733,15 @@ function saveLocalNotification(targetUserId, notification) {
 // ==============================================
 
 function loadNotifications() {
-    console.log('🚀 CHIAMATA loadNotifications()');
-
-    if (!currentUser) {
-        console.log('⚠️ currentUser è nullo');
-        return;
-    }
+    if (!currentUser) return;
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        console.log('✅ Firebase attivo, in ascolto su notifications/' + currentUser.uid);
-        const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}`);
+        // SOLUZIONE: Limita a solo ultime 20 notifiche
+        const notifRef = query(
+            ref(window.firebaseDatabase, `notifications/${currentUser.uid}`),
+            orderByChild('timestamp'),
+            limitToLast(20) // SOLO ULTIME 20!
+        );
 
         onValue(notifRef, (snapshot) => {
             const notifications = [];
@@ -801,21 +752,50 @@ function loadNotifications() {
                         ...childSnapshot.val()
                     });
                 });
-            } else {
-                console.log('📭 Nessuna notifica trovata su Firebase');
             }
 
             notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
             notificationsData = notifications;
-
-            console.log('📥 Notifiche caricate:', notificationsData);
-
             updateNotificationsUI();
         });
-    } else {
-        console.log('⚠️ Firebase non attivo o non pronto, fallback su localStorage');
     }
+}
+
+// 6. CLEANUP MIGLIORATO - Aggiungi a script.js
+function forceCleanupAllListeners() {
+    console.log('🧹 Pulizia forzata di tutti i listeners Firebase');
+    
+    // Pulisci listeners messaggi
+    Object.keys(messageListeners).forEach(section => {
+        const listener = messageListeners[section];
+        if (listener && listener.path && listener.callback) {
+            try {
+                const messagesRef = ref(window.firebaseDatabase, listener.path);
+                off(messagesRef, listener.callback);
+                console.log(`✅ Listener messaggi ${section} pulito`);
+            } catch (error) {
+                console.warn(`⚠️ Errore pulizia listener ${section}:`, error);
+            }
+        }
+    });
+    messageListeners = {};
+
+    // Pulisci listeners thread
+    Object.keys(threadListeners).forEach(section => {
+        const listener = threadListeners[section];
+        if (listener && listener.path && listener.callback) {
+            try {
+                const threadsRef = ref(window.firebaseDatabase, listener.path);
+                off(threadsRef, listener.callback);
+                console.log(`✅ Listener thread ${section} pulito`);
+            } catch (error) {
+                console.warn(`⚠️ Errore pulizia listener ${section}:`, error);
+            }
+        }
+    });
+    threadListeners = {};
+
+    console.log('✅ Cleanup completato - consumo dati ridotto');
 }
 
 function updateNotificationsUI() {
@@ -1092,36 +1072,51 @@ function handleToastAction(toastId, actionIndex) {
 // ==============================================
 
 // Carica lista utenti per autocomplete con avatar
+let usersCache = null;
+let usersCacheTime = 0;
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minuti
+
 async function loadUsersList() {
+    // SOLUZIONE: Cache degli utenti per 10 minuti
+    const now = Date.now();
+    if (usersCache && (now - usersCacheTime) < CACHE_DURATION) {
+        console.log('👥 Usando cache utenti (evitato download)');
+        allUsers = usersCache;
+        return;
+    }
+
     try {
         let users = [];
 
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // Carica da Firebase
+            // SOLUZIONE: Carica solo username e clan, non tutti i dati
             const usersRef = ref(window.firebaseDatabase, 'users');
             const snapshot = await get(usersRef);
 
             if (snapshot.exists()) {
                 snapshot.forEach((childSnapshot) => {
+                    const userData = childSnapshot.val();
+                    // SOLO DATI ESSENZIALI
                     users.push({
                         uid: childSnapshot.key,
-                        ...childSnapshot.val()
+                        username: userData.username,
+                        clan: userData.clan,
+                        avatarUrl: userData.avatarUrl,
+                        email: userData.email // Solo per amministratori
                     });
                 });
             }
         } else {
-            // Carica da localStorage
             const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
             users = Object.values(localUsers);
         }
 
-        // Aggiorna cache globale
+        // Aggiorna cache
+        usersCache = users;
+        usersCacheTime = now;
         allUsers = users;
-        console.log('👥 Caricati', users.length, 'utenti per autocomplete con avatar');
-
-        // Log per debug degli avatar
-        const usersWithAvatar = users.filter(u => u.avatarUrl).length;
-        console.log(`📷 ${usersWithAvatar} utenti hanno un avatar caricato`);
+        
+        console.log(`👥 ${users.length} utenti caricati e messi in cache`);
 
     } catch (error) {
         console.error('Errore caricamento utenti:', error);
@@ -3244,19 +3239,21 @@ function updateUploadProgress(progress) {
 // Carica thread
 function loadThreads(sectionKey) {
     const dataPath = getDataPath(sectionKey, 'threads');
-    if (!dataPath)
-        return;
+    if (!dataPath) return;
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
-        const threadsRef = ref(window.firebaseDatabase, dataPath);
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        // SOLUZIONE: Limita a solo gli ultimi 20 thread
+        const threadsRef = query(
+            ref(window.firebaseDatabase, dataPath),
+            orderByChild('createdAt'),
+            limitToLast(20) // SOLO ULTIMI 20 THREAD!
+        );
 
-        // Cleanup previous listener
         if (threadListeners[sectionKey]) {
             const oldRef = ref(window.firebaseDatabase, threadListeners[sectionKey].path);
             off(oldRef, threadListeners[sectionKey].callback);
         }
 
-        // Listen for changes
         const callback = (snapshot) => {
             const threads = [];
             snapshot.forEach((childSnapshot) => {
@@ -3266,23 +3263,12 @@ function loadThreads(sectionKey) {
                 });
             });
 
-            // Ordina per data (più recenti prima)
             threads.sort((a, b) => b.createdAt - a.createdAt);
-
             displayThreads(threads);
         };
 
-        threadListeners[sectionKey] = {
-            path: dataPath,
-            callback: callback
-        };
+        threadListeners[sectionKey] = { path: dataPath, callback: callback };
         onValue(threadsRef, callback);
-    } else {
-        // Carica da localStorage (modalità locale)
-        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        threads.sort((a, b) => b.createdAt - a.createdAt);
-        displayThreads(threads);
     }
 }
 
@@ -3401,86 +3387,37 @@ function showThreadCreationModal() {
 
 // Setup image upload
 function setupImageUpload() {
-    console.log('🔧 Setup upload thread...');
-    
-    // Previeni setup multipli
-    if (imageUploadInitialized) {
-        console.log('⚠️ Upload thread già inizializzato, skipping...');
-        return;
-    }
-
     const imageInput = document.getElementById('thread-image-input');
-    const imageLabel = document.querySelector('#threadCreationModal .image-upload-label');
+    const imageLabel = document.querySelector('.image-upload-label');
 
-    if (!imageInput || !imageLabel) {
-        console.error('❌ Elementi upload thread non trovati');
-        return;
-    }
+    // Remove existing listeners
+    imageInput.removeEventListener('change', handleImageSelect);
+    imageLabel.removeEventListener('click', () => imageInput.click());
 
-    // Setup con debouncing
-    let isProcessing = false;
-
-    const handleChange = (event) => {
-        if (isProcessing) {
-            console.log('⏸️ Upload già in corso, ignoro evento');
-            return;
-        }
-        
-        isProcessing = true;
-        console.log('📁 File selezionato per thread');
-        
-        setTimeout(() => {
-            handleImageSelect(event);
-            isProcessing = false;
-        }, 100);
-    };
-
-    const handleClick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        console.log('🖱️ Click su label thread');
-        imageInput.click();
-    };
-
-    // Rimuovi listener esistenti (se presenti)
-    imageInput.removeEventListener('change', handleChange);
-    imageLabel.removeEventListener('click', handleClick);
-
-    // Aggiungi nuovi listener
-    imageInput.addEventListener('change', handleChange);
-    imageLabel.addEventListener('click', handleClick);
-
-    imageUploadInitialized = true;
-    console.log('✅ Upload thread inizializzato');
+    // Add new listeners
+    imageInput.addEventListener('change', handleImageSelect);
+    imageLabel.addEventListener('click', () => imageInput.click());
 }
 
-// Handle image selection per thread - VERSIONE MIGLIORATA
+// Handle image selection
 function handleImageSelect(event) {
-    console.log('🖼️ Gestione selezione immagine thread');
-    
     const file = event.target.files[0];
     const preview = document.getElementById('image-preview');
     const progressContainer = document.getElementById('upload-progress');
 
-    if (!file) {
-        console.log('❌ Nessun file selezionato');
+    if (!file)
         return;
-    }
-
-    console.log('📁 File:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
         alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
-        event.target.value = ''; // Reset input
         return;
     }
 
     // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
         alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
-        event.target.value = ''; // Reset input
         return;
     }
 
@@ -3488,25 +3425,18 @@ function handleImageSelect(event) {
     const reader = new FileReader();
     reader.onload = function (e) {
         preview.innerHTML = `
-            <img src="${e.target.result}" alt="Anteprima immagine">
-            <button type="button" class="remove-image" onclick="removeSelectedImage()">
-                🗑️ Rimuovi Immagine
-            </button>
-        `;
-        console.log('✅ Preview mostrata per thread');
+                    <img src="${e.target.result}" alt="Anteprima immagine">
+                    <button type="button" class="remove-image" onclick="removeSelectedImage()">
+                        🗑️ Rimuovi Immagine
+                    </button>
+                `;
     };
-    
-    reader.onerror = function() {
-        console.error('❌ Errore lettura file');
-        alert('Errore nella lettura del file');
-        event.target.value = '';
-    };
-    
     reader.readAsDataURL(file);
 
     // Hide progress initially
     progressContainer.style.display = 'none';
 }
+
 // Remove selected image
 function removeSelectedImage() {
     document.getElementById('thread-image-input').value = '';
@@ -3544,8 +3474,11 @@ async function createThread() {
         const threadData = {
             title: title,
             content: content,
-            author: getUserDisplayName(), // USA FUNZIONE HELPER
-            authorId: currentUser.uid
+            author: getUserDisplayName(),
+            authorId: currentUser.uid,
+            createdAt: Date.now(), // USA TIMESTAMP LOCALE
+            replies: 0,
+            views: 0
         };
 
         // Upload immagine se presente
@@ -3573,17 +3506,21 @@ async function createThread() {
         }
 
         const dataPath = getDataPath(currentSection, 'threads');
-        if (!dataPath) return;
+        if (!dataPath) {
+            console.error('❌ Path dati non valido per sezione:', currentSection);
+            alert('Errore: sezione non valida');
+            return;
+        }
 
         createBtn.textContent = 'Salvando thread...';
 
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
-            // Salva su Firebase
+        console.log('📤 Creazione thread a:', dataPath);
+        console.log('📝 Dati thread:', threadData);
+
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
             const threadsRef = ref(window.firebaseDatabase, dataPath);
-            threadData.createdAt = serverTimestamp();
-            threadData.replies = 0;
-            threadData.views = 0;
             await push(threadsRef, threadData);
+            console.log('✅ Thread creato con successo');
         } else {
             // Salva in locale
             saveLocalThread(currentSection, threadData);
@@ -3600,8 +3537,14 @@ async function createThread() {
             }
         }
     } catch (error) {
-        console.error('Errore creazione thread:', error);
-        alert('Errore nella creazione del thread: ' + (error.message || error));
+        console.error('❌ Errore creazione thread:', error);
+        
+        if (error.code === 'PERMISSION_DENIED') {
+            console.error('🚫 Permesso negato per path:', dataPath);
+            alert('❌ Errore di permessi nella creazione del thread');
+        } else {
+            alert('Errore nella creazione del thread: ' + (error.message || error));
+        }
     } finally {
         createBtn.disabled = false;
         createBtn.textContent = 'Crea Thread';
@@ -3610,6 +3553,7 @@ async function createThread() {
     
     loadThreads(currentSection);
 }
+
 // Apri thread per visualizzazione
 async function openThread(threadId, section) {
     if (!currentUser) {
@@ -3751,11 +3695,15 @@ async function incrementThreadViews(threadId, section) {
 // Carica commenti thread
 function loadThreadComments(threadId, section) {
     const dataPath = getDataPath(section, 'comments');
-    if (!dataPath)
-        return;
+    if (!dataPath) return;
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
-        const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        // SOLUZIONE: Limita a ultimi 30 commenti
+        const commentsRef = query(
+            ref(window.firebaseDatabase, `${dataPath}/${threadId}`),
+            orderByKey(),
+            limitToLast(30) // SOLO ULTIMI 30 COMMENTI!
+        );
 
         onValue(commentsRef, (snapshot) => {
             const comments = [];
@@ -3766,17 +3714,9 @@ function loadThreadComments(threadId, section) {
                 });
             });
 
-            // Ordina per timestamp
             comments.sort((a, b) => a.timestamp - b.timestamp);
-
             displayThreadComments(comments);
         });
-    } else {
-        // Modalità locale
-        const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
-        const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        comments.sort((a, b) => a.timestamp - b.timestamp);
-        displayThreadComments(comments);
     }
 }
 
@@ -3880,10 +3820,11 @@ async function addComment() {
 
     try {
         const commentData = {
-            author: getUserDisplayName(), // USA FUNZIONE HELPER
+            author: getUserDisplayName(),
             authorId: currentUser.uid,
             content: commentText || '',
-            threadId: currentThreadId
+            threadId: currentThreadId,
+            timestamp: Date.now() // USA TIMESTAMP LOCALE
         };
 
         // Upload immagine se presente
@@ -3902,18 +3843,24 @@ async function addComment() {
         }
 
         const dataPath = getDataPath(currentThreadSection, 'comments');
-        if (!dataPath) return;
+        if (!dataPath) {
+            console.error('❌ Path commenti non valido');
+            alert('Errore: sezione non valida per commenti');
+            return;
+        }
 
         commentBtn.textContent = 'Salvando commento...';
 
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
-            // Salva su Firebase
+        console.log('📤 Invio commento a:', `${dataPath}/${currentThreadId}`);
+        console.log('📝 Dati commento:', commentData);
+
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
             const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${currentThreadId}`);
-            commentData.timestamp = serverTimestamp();
             await push(commentsRef, commentData);
 
             // Aggiorna contatore risposte
             await incrementThreadReplies(currentThreadId, currentThreadSection);
+            console.log('✅ Commento inviato con successo');
         } else {
             // Salva in locale
             saveLocalComment(currentThreadSection, currentThreadId, commentData);
@@ -3939,8 +3886,14 @@ async function addComment() {
         uploadSection.classList.remove('show');
 
     } catch (error) {
-        console.error('Errore invio commento:', error);
-        alert('Errore nell\'invio del commento: ' + (error.message || error));
+        console.error('❌ Errore invio commento:', error);
+        
+        if (error.code === 'PERMISSION_DENIED') {
+            console.error('🚫 Permesso negato per commenti');
+            alert('❌ Errore di permessi nell\'invio del commento');
+        } else {
+            alert('Errore nell\'invio del commento: ' + (error.message || error));
+        }
     } finally {
         commentBtn.disabled = false;
         commentBtn.textContent = 'Commenta';
@@ -4064,11 +4017,15 @@ document.addEventListener('click', function (event) {
 // Carica messaggi
 function loadMessages(sectionKey) {
     const dataPath = getDataPath(sectionKey, 'messages');
-    if (!dataPath)
-        return;
+    if (!dataPath) return;
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
-        const messagesRef = ref(window.firebaseDatabase, dataPath);
+        // SOLUZIONE: Limita a solo gli ultimi 50 messaggi
+        const messagesRef = query(
+            ref(window.firebaseDatabase, dataPath),
+            orderByKey(),
+            limitToLast(50) // SOLO ULTIMI 50 MESSAGGI!
+        );
 
         // Cleanup previous listener
         if (messageListeners[sectionKey]) {
@@ -4076,7 +4033,6 @@ function loadMessages(sectionKey) {
             off(oldRef, messageListeners[sectionKey].callback);
         }
 
-        // Listen for new messages
         const callback = (snapshot) => {
             const messages = [];
             snapshot.forEach((childSnapshot) => {
@@ -4086,9 +4042,7 @@ function loadMessages(sectionKey) {
                 });
             });
 
-            // Ordina per timestamp
             messages.sort((a, b) => a.timestamp - b.timestamp);
-
             displayMessages(messages);
             updateMessageCounter(messages.length);
         };
@@ -4098,16 +4052,8 @@ function loadMessages(sectionKey) {
             callback: callback
         };
         onValue(messagesRef, callback);
-    } else {
-        // Carica da localStorage (modalità locale)
-        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-        const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        messages.sort((a, b) => a.timestamp - b.timestamp);
-        displayMessages(messages);
-        updateMessageCounter(messages.length);
     }
 }
-
 // Mostra messaggi
 // Mostra messaggi stile WhatsApp con avatar potenziati
 // Mostra messaggi stile WhatsApp con avatar potenziati
@@ -4294,18 +4240,26 @@ async function sendMessage() {
 
     try {
         const messageData = {
-            author: getUserDisplayName(), // USA FUNZIONE HELPER
+            author: getUserDisplayName(),
             authorId: currentUser.uid,
-            message: message
+            message: message,
+            timestamp: Date.now() // USA TIMESTAMP LOCALE invece di serverTimestamp per evitare errori
         };
 
         const dataPath = getDataPath(currentSection, 'messages');
-        if (!dataPath) return;
+        if (!dataPath) {
+            console.error('❌ Path dati non valido per sezione:', currentSection);
+            alert('Errore: sezione non valida');
+            return;
+        }
 
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push && serverTimestamp) {
+        console.log('📤 Invio messaggio a:', dataPath);
+        console.log('📝 Dati messaggio:', messageData);
+
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
             const messagesRef = ref(window.firebaseDatabase, dataPath);
-            messageData.timestamp = serverTimestamp();
             await push(messagesRef, messageData);
+            console.log('✅ Messaggio inviato con successo');
         } else {
             saveLocalMessage(currentSection, messageData);
         }
@@ -4321,19 +4275,31 @@ async function sendMessage() {
 
         input.value = '';
         if (window.activityTracker) {
-    window.handleNewContent(currentSection, 'message');
-}
+            window.handleNewContent(currentSection, 'message');
+        }
 
     } catch (error) {
-        console.error('Errore invio messaggio:', error);
-        alert('Errore nell\'invio del messaggio');
+        console.error('❌ Errore invio messaggio:', error);
+        
+        // Gestione errori specifici
+        if (error.code === 'PERMISSION_DENIED') {
+            console.error('🚫 Permesso negato per path:', dataPath);
+            console.error('👤 Utente corrente:', currentUser.uid);
+            console.error('🏰 Clan corrente:', getCurrentUserClan());
+            
+            alert('❌ Errore di permessi. Verifica:\n' +
+                  '1. Di essere loggato correttamente\n' +
+                  '2. Di appartenere al clan per chat clan\n' +
+                  '3. Che le regole Firebase siano aggiornate');
+        } else {
+            alert('Errore nell\'invio del messaggio: ' + (error.message || error));
+        }
     } finally {
         input.disabled = false;
         sendBtn.disabled = false;
         input.focus();
     }
 }
-
 // Utility
 function formatTime(timestamp) {
     if (!timestamp)
@@ -4502,62 +4468,42 @@ function toggleCommentImageUpload() {
 
 // Setup comment image upload SICURO (previene doppi listener)
 function setupCommentImageUploadSafe() {
-    console.log('🔧 Setup upload commenti...');
-    
-    // Previeni setup multipli
-    if (commentImageUploadInitialized) {
-        console.log('⚠️ Upload commenti già inizializzato, skipping...');
-        return;
-    }
-
     const imageInput = document.getElementById('comment-image-input');
     const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
 
     if (!imageInput || !imageLabel) {
-        console.error('❌ Elementi upload commenti non trovati');
+        console.log('❌ Elementi upload commento non trovati');
         return;
     }
 
-    // Setup con debouncing
-    let isProcessing = false;
+    // Rimuovi TUTTI i listener esistenti prima di aggiungerne di nuovi
+    cleanupCommentImageListeners();
 
-    const handleChange = (event) => {
-        if (isProcessing) {
-            console.log('⏸️ Upload commento già in corso, ignoro evento');
-            return;
-        }
-        
-        isProcessing = true;
-        console.log('📁 File selezionato per commento');
-        
-        setTimeout(() => {
-            handleCommentImageSelect(event);
-            isProcessing = false;
-        }, 100);
-    };
+    console.log('🔧 Setup listener upload commento (SAFE)');
 
-    const handleClick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        console.log('🖱️ Click su label commento');
+    // Aggiungi listener per il click sulla label
+    const clickHandler = () => {
+        console.log('🖱️ Click su label upload');
         imageInput.click();
     };
 
-    // Pulisci listener esistenti
-    cleanupCommentImageListeners();
+    // Aggiungi listener per la selezione file
+    const changeHandler = (event) => {
+        console.log('📁 File selezionato tramite input');
+        handleCommentImageSelect(event);
+    };
 
     // Salva riferimenti per cleanup futuro
-    imageLabel._commentClickHandler = handleClick;
-    imageInput._commentChangeHandler = handleChange;
+    imageLabel._commentClickHandler = clickHandler;
+    imageInput._commentChangeHandler = changeHandler;
 
     // Aggiungi listener
-    imageLabel.addEventListener('click', handleClick);
-    imageInput.addEventListener('change', handleChange);
+    imageLabel.addEventListener('click', clickHandler);
+    imageInput.addEventListener('change', changeHandler);
 
     commentImageUploadInitialized = true;
-    console.log('✅ Upload commenti inizializzato');
+    console.log('✅ Listener upload commento configurati');
 }
-
 
 // Pulisci tutti i listener per evitare duplicati
 function cleanupCommentImageListeners() {
@@ -4567,16 +4513,15 @@ function cleanupCommentImageListeners() {
     if (imageInput && imageInput._commentChangeHandler) {
         imageInput.removeEventListener('change', imageInput._commentChangeHandler);
         delete imageInput._commentChangeHandler;
-        console.log('🧹 Rimosso listener change commenti');
+        console.log('🧹 Rimosso listener change esistente');
     }
 
     if (imageLabel && imageLabel._commentClickHandler) {
         imageLabel.removeEventListener('click', imageLabel._commentClickHandler);
         delete imageLabel._commentClickHandler;
-        console.log('🧹 Rimosso listener click commenti');
+        console.log('🧹 Rimosso listener click esistente');
     }
 }
-
 
 // Pulisci tutto quando si chiude il thread o si cambia sezione
 function cleanupCommentImageUpload() {
@@ -4591,56 +4536,31 @@ function cleanupCommentImageUpload() {
     }
 }
 
-function cleanupAllImageUploads() {
-    console.log('🧹 Cleanup globale upload immagini');
-    
-    // Reset flags
-    imageUploadInitialized = false;
-    commentImageUploadInitialized = false;
-    avatarUploadInitialized = false;
-    
-    // Cleanup specifici
-    cleanupCommentImageUpload();
-    
-    // Reset input values
-    const threadInput = document.getElementById('thread-image-input');
-    const commentInput = document.getElementById('comment-image-input');
-    const avatarInput = document.getElementById('avatar-upload');
-    
-    if (threadInput) threadInput.value = '';
-    if (commentInput) commentInput.value = '';
-    if (avatarInput) avatarInput.value = '';
-    
-    console.log('✅ Cleanup globale completato');
-}
-
 // Handle comment image selection
 function handleCommentImageSelect(event) {
-    console.log('🖼️ Gestione selezione immagine commento');
+    console.log('🖼️ Selezione immagine commento avviata');
 
     const file = event.target.files[0];
     const preview = document.getElementById('comment-image-preview');
     const progressContainer = document.getElementById('comment-upload-progress');
 
     if (!file) {
-        console.log('❌ Nessun file selezionato per commento');
+        console.log('❌ Nessun file selezionato');
         return;
     }
 
-    console.log('📁 File commento:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
+    console.log('📁 File selezionato:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
         alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
-        event.target.value = ''; // Reset input
         return;
     }
 
     // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
         alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
-        event.target.value = ''; // Reset input
         return;
     }
 
@@ -4653,15 +4573,7 @@ function handleCommentImageSelect(event) {
                 🗑️
             </button>
         `;
-        console.log('✅ Preview mostrata per commento');
     };
-    
-    reader.onerror = function() {
-        console.error('❌ Errore lettura file commento');
-        alert('Errore nella lettura del file');
-        event.target.value = '';
-    };
-    
     reader.readAsDataURL(file);
 
     // Hide progress initially
@@ -4702,48 +4614,15 @@ function updateCommentUploadProgress(progress) {
 }
 
 function setupAvatarUpload() {
-    console.log('🔧 Setup upload avatar...');
-    
-    // Previeni setup multipli
-    if (avatarUploadInitialized) {
-        console.log('⚠️ Upload avatar già inizializzato, skipping...');
-        return;
-    }
-
     const avatarUpload = document.getElementById('avatar-upload');
     const avatarControls = document.getElementById('avatarControls');
 
     if (avatarUpload && currentUser) {
         avatarControls.style.display = 'block';
-        
-        // Setup con debouncing
-        let isProcessing = false;
-        
-        const handleAvatarChange = (event) => {
-            if (isProcessing) {
-                console.log('⏸️ Upload avatar già in corso, ignoro evento');
-                return;
-            }
-            
-            isProcessing = true;
-            console.log('📁 File avatar selezionato');
-            
-            setTimeout(() => {
-                handleAvatarUpload(event);
-                isProcessing = false;
-            }, 100);
-        };
-
-        // Rimuovi listener esistente
-        avatarUpload.removeEventListener('change', handleAvatarChange);
-        
-        // Aggiungi nuovo listener
-        avatarUpload.addEventListener('change', handleAvatarChange);
-        
-        avatarUploadInitialized = true;
-        console.log('✅ Upload avatar inizializzato');
+        avatarUpload.addEventListener('change', handleAvatarUpload);
     }
 }
+
 // Handle avatar upload
 function handleAvatarUpload(event) {
     const file = event.target.files[0];
@@ -5271,34 +5150,53 @@ function processContent(content, enableAutoFormat = true) {
     return escapeHtml(content);
 }
 
-window.debugImageUploads = function() {
-    console.log('🔍 Debug Upload Immagini:');
-    console.log('- Thread inizializzato:', imageUploadInitialized);
-    console.log('- Commenti inizializzato:', commentImageUploadInitialized);
-    console.log('- Avatar inizializzato:', avatarUploadInitialized);
-    
-    const threadInput = document.getElementById('thread-image-input');
-    const commentInput = document.getElementById('comment-image-input');
-    const avatarInput = document.getElementById('avatar-upload');
-    
-    console.log('- Thread input exists:', !!threadInput);
-    console.log('- Comment input exists:', !!commentInput);
-    console.log('- Avatar input exists:', !!avatarInput);
-    
-    if (threadInput) console.log('- Thread input listeners:', getEventListeners(threadInput));
-    if (commentInput) console.log('- Comment input listeners:', getEventListeners(commentInput));
-    if (avatarInput) console.log('- Avatar input listeners:', getEventListeners(avatarInput));
+let dataTransferLog = {
+    reads: 0,
+    writes: 0,
+    lastReset: Date.now()
 };
 
-// Funzione per resettare forzatamente tutto
-window.resetImageUploads = function() {
-    console.log('🔄 Reset forzato upload immagini...');
-    cleanupAllImageUploads();
+function logFirebaseOperation(type, path, dataSize = 0) {
+    dataTransferLog[type === 'read' ? 'reads' : 'writes']++;
     
-    // Re-setup se necessario
-    if (document.getElementById('threadCreationModal').style.display === 'flex') {
-        setupImageUpload();
+    // Log ogni 10 operazioni
+    if ((dataTransferLog.reads + dataTransferLog.writes) % 10 === 0) {
+        console.log('📊 Firebase Usage:', {
+            reads: dataTransferLog.reads,
+            writes: dataTransferLog.writes,
+            session: `${Math.round((Date.now() - dataTransferLog.lastReset) / 1000)}s`
+        });
+    }
+}
+
+
+window.emergencyCleanup = function() {
+    console.log('🚨 CLEANUP DI EMERGENZA ATTIVATO');
+    
+    // Ferma tutti i refresh
+    if (window.dashboardManager && window.dashboardManager.refreshInterval) {
+        clearInterval(window.dashboardManager.refreshInterval);
+        console.log('⏹️ Dashboard refresh fermato');
     }
     
-    console.log('✅ Reset completato');
+    // Pulisci tutti i listeners
+    forceCleanupAllListeners();
+    
+    // Svuota cache
+    usersCache = null;
+    allUsers = [];
+    
+    console.log('✅ Cleanup di emergenza completato');
 };
+
+window.checkDataUsage = function() {
+    console.log('📊 REPORT CONSUMO DATI:');
+    console.log('- Operazioni lettura:', dataTransferLog.reads);
+    console.log('- Operazioni scrittura:', dataTransferLog.writes);
+    console.log('- Tempo sessione:', Math.round((Date.now() - dataTransferLog.lastReset) / 1000), 'secondi');
+    console.log('- Listeners attivi messaggi:', Object.keys(messageListeners).length);
+    console.log('- Listeners attivi thread:', Object.keys(threadListeners).length);
+    console.log('- Cache utenti attiva:', !!usersCache);
+};
+
+console.log('🚀 Ottimizzazioni Firebase caricate - consumo dati ridotto drasticamente!');

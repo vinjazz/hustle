@@ -334,6 +334,8 @@ class DashboardManager {
             // Fallback con dati di esempio
             this.loadFallbackStats();
         }
+
+    
     }
 
     // Calcola statistiche reali
@@ -893,20 +895,20 @@ class DashboardManager {
     }
 
     // Setup auto-refresh
-    setupAutoRefresh() {
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-        }
-
-        this.refreshInterval = setInterval(() => {
-            if (currentSection === 'home' && currentUser) {
-                this.loadStatsOverview();
-                this.loadLatestNotifications();
-                this.loadLatestGeneralThreads();
-                this.loadLatestClanThreads();
-            }
-        }, 60000); // Refresh ogni minuto
+setupAutoRefresh() {
+    if (this.refreshInterval) {
+        clearInterval(this.refreshInterval);
     }
+
+    // SOLUZIONE: Refresh molto meno frequente
+    this.refreshInterval = setInterval(() => {
+        if (currentSection === 'home' && currentUser) {
+            // SOLO statistiche, non tutto!
+            this.loadStatsOverview();
+            // NON ricaricare thread e notifiche così spesso
+        }
+    }, 5 * 60 * 1000); // 5 MINUTI invece di 1!
+}
 
     // Cleanup migliorato
     cleanup() {
