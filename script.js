@@ -29,8 +29,7 @@ let currentUserData = null; // Dati completi dell'utente corrente
 let currentThread = null;
 let currentThreadId = null;
 let currentThreadSection = null;
-// Flag per evitare listener multipli
-let commentImageUploadInitialized = false;
+
 let notificationsData = [];
 let unreadNotificationsCount = 0;
 let allUsers = []; // Cache degli utenti per autocomplete
