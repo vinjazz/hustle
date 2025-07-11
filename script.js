@@ -16,7 +16,7 @@ window.addEventListener('load', async() => {
     initializeApp();
 });
 
-const { query, orderByKey, orderByChild, limitToLast, limitToFirst } = window.firebaseImports;
+import { query, orderByKey, orderByChild, limitToLast, limitToFirst } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
 
 
 // Variabili globali
