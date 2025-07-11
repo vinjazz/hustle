@@ -3772,7 +3772,6 @@ function safeInitializeFirebaseQueries() {
     const checkInterval = setInterval(() => {
         attempts++;
         
-        const threadsRef = ref(window.firebaseDatabase, dataPath);
         
     }, 1000); // Controlla ogni secondo
 }
