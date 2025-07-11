@@ -16,8 +16,6 @@ window.addEventListener('load', async() => {
     initializeApp();
 });
 
-import { query, orderByKey, orderByChild, limitToLast, limitToFirst } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
-
 
 // Variabili globali
 let currentUser = null;
@@ -1149,7 +1147,7 @@ function initializeApp() {
             storageRef,
             uploadBytes,
             getDownloadURL,
-            deleteObject
+            deleteObject, query, orderByKey, orderByChild, limitToLast, limitToFirst
         } = window.firebaseImports);
         firebaseReady = true;
     }
