@@ -1,3 +1,6 @@
+// ===============================================
+// USERNAME HANDLER - Gestione Username per utenti Google
+// ===============================================
 
 class UsernameManager {
     constructor() {
@@ -6,141 +9,63 @@ class UsernameManager {
         this.pendingUser = null;
         this.maxRetries = 3;
         this.currentRetry = 0;
-        this.isModalShowing = false; // Flag per evitare modal multipli
-        this.saveInProgress = false;  // Flag per evitare salvataggi multipli
     }
 
-    // Mostra modal con controlli anti-duplicazione
+    // Mostra il modal per scegliere username
     async showUsernameModal(user, userData = null) {
         console.log('🎯 Mostrando modal username per:', user.email);
         
-        // Previeni modal multipli
-        if (this.isModalShowing) {
-            console.log('⚠️ Modal già in mostra, ignorando richiesta duplicata');
+        this.pendingUser = user;
+        this.currentRetry = 0;
+        
+        // Nasconde il modal di login
+        const loginModal = document.getElementById('loginModal');
+        if (loginModal) {
+            loginModal.style.display = 'none';
+        }
+        
+        // Mostra il modal username
+        const modal = document.getElementById('usernameModal');
+        if (!modal) {
+            console.error('❌ Modal username non trovato nel DOM');
+            this.fallbackToDirectLogin(user);
             return;
         }
         
-        this.pendingUser = user;
-        this.currentRetry = 0;
-        this.isModalShowing = true;
+        modal.style.display = 'flex';
         
+        // Precompila i clan disponibili
         try {
-            // Nascondi altri modal
-            const loginModal = document.getElementById('loginModal');
-            if (loginModal) {
-                loginModal.style.display = 'none';
-            }
-            
-            // Verifica che il modal esista
-            const modal = document.getElementById('usernameModal');
-            if (!modal) {
-                console.error('❌ Modal username non trovato nel DOM');
-                throw new Error('Modal username non disponibile');
-            }
-            
-            // Reset completo del modal prima di mostrarlo
-            await this.resetModalState();
-            
-            // Mostra il modal
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-            
-            // Caricamento clan con timeout
-            try {
-                await Promise.race([
-                    this.loadAvailableClans(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout clan')), 5000))
-                ]);
-            } catch (clanError) {
-                console.warn('⚠️ Errore/timeout caricamento clan (non critico):', clanError);
-            }
-            
-            // Focus con retry
-            await this.focusUsernameInputWithRetry();
-            
-            // Setup listeners
-            this.setupUsernameValidation();
-            
-            console.log('✅ Modal username mostrato con successo');
-            
+            await this.loadAvailableClans();
         } catch (error) {
-            console.error('❌ Errore mostrando modal username:', error);
-            this.isModalShowing = false;
-            throw error; // Rilancia per permettere fallback
-        }
-    }
-
-    // Reset completo dello stato del modal
-    async resetModalState() {
-        const usernameInput = document.getElementById('usernameInput');
-        const clanSelect = document.getElementById('clanSelect');
-        const saveBtn = document.getElementById('saveUsernameBtn');
-        const errorEl = document.getElementById('usernameError');
-        const successEl = document.getElementById('usernameSuccess');
-        const loadingEl = document.getElementById('usernameLoading');
-        const formEl = document.querySelector('.username-form');
-        
-        // Reset input
-        if (usernameInput) {
-            usernameInput.value = '';
-            usernameInput.classList.remove('valid', 'invalid');
+            console.warn('⚠️ Errore caricamento clan:', error);
         }
         
-        // Reset select
-        if (clanSelect) {
-            clanSelect.value = 'Nessuno';
-        }
-        
-        // Reset button
-        if (saveBtn) {
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Conferma Username';
-        }
-        
-        // Reset messaggi
-        if (errorEl) {
-            errorEl.textContent = '';
-            errorEl.classList.remove('show');
-        }
-        if (successEl) {
-            successEl.textContent = '';
-            successEl.classList.remove('show');
-        }
-        
-        // Reset loading/form visibility
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (formEl) formEl.style.display = 'block';
-        
-        // Reset validazione
-        this.updateValidationDisplay('', '');
-        this.isValidating = false;
-        this.saveInProgress = false;
-        
-        if (this.validationTimeout) {
-            clearTimeout(this.validationTimeout);
-            this.validationTimeout = null;
-        }
-    }
-
-    // Focus con retry automatico
-    async focusUsernameInputWithRetry(maxAttempts = 5) {
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                const usernameInput = document.getElementById('usernameInput');
-                if (usernameInput) {
-                    usernameInput.focus();
-                    console.log(`✅ Focus username input riuscito (tentativo ${attempt})`);
-                    return;
-                }
-                throw new Error('Input non trovato');
-            } catch (error) {
-                console.log(`⚠️ Tentativo focus ${attempt} fallito:`, error.message);
-                if (attempt < maxAttempts) {
-                    await new Promise(resolve => setTimeout(resolve, 200 * attempt));
-                }
+        // Focus sull'input username
+        setTimeout(() => {
+            const usernameInput = document.getElementById('usernameInput');
+            if (usernameInput) {
+                usernameInput.focus();
             }
-        }
-        console.warn('⚠️ Non è stato possibile focalizzare input username');
+        }, 300);
+        
+        // Setup listeners
+        this.setupUsernameValidation();
+        
+        // Previeni chiusura accidentale
+        document.body.style.overflow = 'hidden';
+    }
+
+    // Fallback se il modal non è disponibile
+    fallbackToDirectLogin(user) {
+        console.log('🔄 Fallback: login diretto senza username personalizzato');
+        
+        // Usa l'email come username temporaneo
+        const tempUsername = user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
+        
+        // Simula un salvataggio diretto
+        this.pendingUser = user;
+        this.saveUsernameDirectly(tempUsername + '_user');
     }
 
     // Carica i clan disponibili nel select
@@ -397,14 +322,8 @@ class UsernameManager {
         }
     }
 
-    // Salva username con protezione anti-duplicazione
+    // Salva username (versione principale)
     async saveUsername() {
-        // Previeni salvataggi multipli
-        if (this.saveInProgress) {
-            console.log('⚠️ Salvataggio già in corso, ignorando richiesta duplicata');
-            return;
-        }
-        
         const usernameInput = document.getElementById('usernameInput');
         const clanSelect = document.getElementById('clanSelect');
         
@@ -422,15 +341,7 @@ class UsernameManager {
             return;
         }
         
-        this.saveInProgress = true;
-        
-        try {
-            await this.saveUsernameInternal(username, selectedClan);
-        } catch (error) {
-            console.error('❌ Errore nel salvataggio:', error);
-        } finally {
-            this.saveInProgress = false;
-        }
+        await this.saveUsernameInternal(username, selectedClan);
     }
 
     // Salva username direttamente (versione fallback)
@@ -447,7 +358,7 @@ class UsernameManager {
         try {
             console.log('💾 Iniziando salvataggio username:', username);
             
-            // UI feedback migliorato
+            // Mostra loading se UI disponibile
             if (!skipUI && saveBtn && loadingEl && formEl) {
                 saveBtn.disabled = true;
                 saveBtn.textContent = 'Salvando...';
@@ -455,9 +366,8 @@ class UsernameManager {
                 loadingEl.style.display = 'flex';
             }
             
-            // Controllo disponibilità solo se non skip
+            // Controlla di nuovo la disponibilità (solo se non skip)
             if (!skipUI) {
-                console.log('🔍 Controllo finale disponibilità username...');
                 const isAvailable = await this.isUsernameAvailable(username);
                 if (!isAvailable) {
                     throw new Error('Username non più disponibile');
@@ -466,10 +376,10 @@ class UsernameManager {
             
             // Determina ruolo utente
             const userRole = await this.determineUserRole();
-            console.log('👤 Ruolo determinato:', userRole);
+            console.log('👤 Ruolo utente determinato:', userRole);
             
-            // Dati utente più robusti
-            const timestamp = Date.now();
+            // Prepara dati utente con timestamp sicuro
+            const timestamp = Date.now(); // Usa sempre timestamp locale per compatibilità
             const userData = {
                 username: username,
                 email: this.pendingUser.email,
@@ -478,16 +388,15 @@ class UsernameManager {
                 createdAt: timestamp,
                 lastSeen: timestamp,
                 provider: 'google',
-                needsUsername: false,
-                loginCompleted: true // Flag per tracciare completamento
+                needsUsername: false
             };
             
             console.log('📝 Dati utente preparati:', userData);
             
-            // Salva nel database con retry
-            await this.saveUserDataWithRetry(userData);
+            // Salva nel database
+            await this.saveUserData(userData);
             
-            // Aggiornamento displayName migliorato
+            // Aggiorna profilo Firebase Auth se possibile
             try {
                 if (window.firebaseImports && typeof window.firebaseImports.updateProfile === 'function') {
                     await window.firebaseImports.updateProfile(this.pendingUser, {
@@ -507,11 +416,8 @@ class UsernameManager {
             
             console.log('✅ Username salvato con successo');
             
-            // Chiusura e login più sicuri
+            // Chiudi modal e continua login
             this.hideUsernameModal();
-            
-            // Attendi un momento per permettere la chiusura del modal
-            await new Promise(resolve => setTimeout(resolve, 500));
             
             // Completa il login
             if (typeof window.completeUserLogin === 'function') {
@@ -526,7 +432,7 @@ class UsernameManager {
             
             setTimeout(() => {
                 alert(`✅ Username "${username}" salvato con successo!${roleMessage}`);
-            }, 1000);
+            }, 500);
             
         } catch (error) {
             console.error('❌ Errore salvataggio username:', error);
@@ -536,12 +442,12 @@ class UsernameManager {
             if (this.currentRetry < this.maxRetries) {
                 console.log(`🔄 Tentativo ${this.currentRetry} di ${this.maxRetries}`);
                 
-                // Mostra messaggio di retry
-                this.showUsernameError(`Tentativo ${this.currentRetry}/${this.maxRetries}... Riprovando...`);
+                // Riprova dopo un delay
+                setTimeout(() => {
+                    this.saveUsernameInternal(username, selectedClan, skipUI);
+                }, 1000 * this.currentRetry);
                 
-                // Riprova dopo un delay crescente
-                await new Promise(resolve => setTimeout(resolve, 1000 * this.currentRetry));
-                return this.saveUsernameInternal(username, selectedClan, skipUI);
+                return;
             }
             
             // Ripristina form se UI disponibile
@@ -553,86 +459,45 @@ class UsernameManager {
             }
             
             // Mostra errore
-            const errorMsg = `Errore salvataggio (${this.currentRetry}/${this.maxRetries}): ${error.message || error}`;
+            const errorMsg = `Errore salvataggio (tentativo ${this.currentRetry}/${this.maxRetries}): ${error.message || error}`;
             this.showUsernameError(errorMsg);
             
-            // Se tutti i tentativi falliscono, offri opzioni
+            // Se tutti i tentativi falliscono, procedi con login diretto
             if (this.currentRetry >= this.maxRetries) {
-                console.log('🚨 Tutti i tentativi falliti');
+                console.log('🚨 Tutti i tentativi falliti, procedendo con login diretto');
+                this.hideUsernameModal();
                 
-                setTimeout(() => {
-                    const action = confirm(
-                        'Impossibile salvare username personalizzato.\n\n' +
-                        'Vuoi continuare con username temporaneo?\n\n' +
-                        'OK = Continua con username temporaneo\n' +
-                        'Annulla = Riprova il salvataggio'
-                    );
-                    
-                    if (action) {
-                        // Procedi con username temporaneo
-                        console.log('🔄 Procedendo con username temporaneo');
-                        this.hideUsernameModal();
-                        
-                        if (typeof window.fallbackDirectLogin === 'function') {
-                            window.fallbackDirectLogin(this.pendingUser);
-                        } else if (typeof window.completeUserLogin === 'function') {
-                            window.completeUserLogin(this.pendingUser);
-                        }
-                    } else {
-                        // Reset per nuovo tentativo
-                        this.currentRetry = 0;
-                        this.resetModalState();
-                    }
-                }, 2000);
+                if (typeof window.completeUserLogin === 'function') {
+                    window.completeUserLogin(this.pendingUser);
+                } else if (typeof window.handleUserLogin === 'function') {
+                    window.handleUserLogin(this.pendingUser);
+                }
             }
         }
     }
 
-    // Salvataggio con retry automatico
-    async saveUserDataWithRetry(userData) {
-        const maxAttempts = 3;
-        
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                if (window.useFirebase && window.firebaseDatabase && window.firebaseImports && 
-                    typeof window.firebaseImports.ref === 'function' && 
-                    typeof window.firebaseImports.set === 'function') {
-                    
-                    console.log(`💾 Tentativo salvataggio Firebase ${attempt}/${maxAttempts}...`);
-                    const { ref, set } = window.firebaseImports;
-                    const userRef = ref(window.firebaseDatabase, `users/${this.pendingUser.uid}`);
-                    
-                    // Timeout per il salvataggio
-                    const savePromise = set(userRef, userData);
-                    const timeoutPromise = new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Timeout salvataggio')), 10000)
-                    );
-                    
-                    await Promise.race([savePromise, timeoutPromise]);
-                    console.log('✅ Salvato su Firebase');
-                    return; // Successo
-                    
-                } else {
-                    console.log(`💾 Tentativo salvataggio localStorage ${attempt}/${maxAttempts}...`);
-                    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                    users[this.pendingUser.email] = {
-                        uid: this.pendingUser.uid,
-                        ...userData
-                    };
-                    localStorage.setItem('hc_local_users', JSON.stringify(users));
-                    console.log('✅ Salvato in localStorage');
-                    return; // Successo
-                }
-                
-            } catch (error) {
-                console.warn(`⚠️ Tentativo salvataggio ${attempt} fallito:`, error);
-                
-                if (attempt < maxAttempts) {
-                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                } else {
-                    throw new Error(`Salvataggio fallito dopo ${maxAttempts} tentativi: ${error.message}`);
-                }
-            }
+    // Salva dati utente nel database
+    async saveUserData(userData) {
+        if (window.useFirebase && window.firebaseDatabase && window.firebaseImports && 
+            typeof window.firebaseImports.ref === 'function' && 
+            typeof window.firebaseImports.set === 'function') {
+            
+            console.log('💾 Salvando su Firebase...');
+            const { ref, set } = window.firebaseImports;
+            const userRef = ref(window.firebaseDatabase, `users/${this.pendingUser.uid}`);
+            await set(userRef, userData);
+            console.log('✅ Salvato su Firebase');
+            
+        } else {
+            console.log('💾 Salvando in localStorage...');
+            // Modalità locale
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            users[this.pendingUser.email] = {
+                uid: this.pendingUser.uid,
+                ...userData
+            };
+            localStorage.setItem('hc_local_users', JSON.stringify(users));
+            console.log('✅ Salvato in localStorage');
         }
     }
 
@@ -670,12 +535,12 @@ class UsernameManager {
         if (errorEl) {
             errorEl.textContent = message;
             errorEl.classList.add('show');
-            setTimeout(() => errorEl.classList.remove('show'), 10000); // Più tempo per leggere
+            setTimeout(() => errorEl.classList.remove('show'), 8000);
         }
         console.error('🚨 Errore username:', message);
     }
 
-    // Chiusura modal migliorata
+    // Nascondi modal username
     hideUsernameModal() {
         const modal = document.getElementById('usernameModal');
         if (modal) {
@@ -683,86 +548,71 @@ class UsernameManager {
         }
         document.body.style.overflow = 'auto';
         
-        // Reset stato manager
-        this.isModalShowing = false;
-        this.saveInProgress = false;
+        // Reset form
+        const usernameInput = document.getElementById('usernameInput');
+        const clanSelect = document.getElementById('clanSelect');
+        const saveBtn = document.getElementById('saveUsernameBtn');
+        
+        if (usernameInput) usernameInput.value = '';
+        if (clanSelect) clanSelect.value = 'Nessuno';
+        if (saveBtn) saveBtn.disabled = true;
+        
+        this.updateValidationDisplay('', '');
+        
+        // Pulisci stato
         this.pendingUser = null;
         this.isValidating = false;
         this.currentRetry = 0;
-        
         if (this.validationTimeout) {
             clearTimeout(this.validationTimeout);
             this.validationTimeout = null;
         }
-        
-        console.log('✅ Modal username nascosto e stato resettato');
     }
 
-    // Controllo più robusto se serve username
+    // Controlla se un utente ha bisogno di scegliere username
     async checkUserNeedsUsername(user) {
         if (!user) return false;
         
         try {
-            const result = await Promise.race([
-                this.checkUserNeedsUsernameInternal(user),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout controllo')), 5000))
-            ]);
-            
-            return result;
+            if (window.useFirebase && window.firebaseDatabase && window.firebaseImports && 
+                typeof window.firebaseImports.ref === 'function' && 
+                typeof window.firebaseImports.get === 'function') {
+                
+                const { ref, get } = window.firebaseImports;
+                const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
+                const snapshot = await get(userRef);
+                
+                if (snapshot.exists()) {
+                    const userData = snapshot.val();
+                    return userData.needsUsername === true || !userData.username || userData.username.trim() === '';
+                }
+                return true; // Nuovo utente
+            } else {
+                // Modalità locale
+                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+                const userData = users[user.email];
+                
+                if (userData) {
+                    return userData.needsUsername === true || !userData.username || userData.username.trim() === '';
+                }
+                return true; // Nuovo utente
+            }
         } catch (error) {
             console.error('Errore controllo needsUsername:', error);
-            return false; // In caso di errore, assumiamo che non serva
-        }
-    }
-
-    async checkUserNeedsUsernameInternal(user) {
-        if (window.useFirebase && window.firebaseDatabase && window.firebaseImports && 
-            typeof window.firebaseImports.ref === 'function' && 
-            typeof window.firebaseImports.get === 'function') {
-            
-            const { ref, get } = window.firebaseImports;
-            const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
-            const snapshot = await get(userRef);
-            
-            if (snapshot.exists()) {
-                const userData = snapshot.val();
-                return userData.needsUsername === true || 
-                       !userData.username || 
-                       userData.username.trim() === '' ||
-                       !userData.loginCompleted;
-            }
-            return true; // Nuovo utente
-        } else {
-            // Modalità locale
-            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            const userData = users[user.email];
-            
-            if (userData) {
-                return userData.needsUsername === true || 
-                       !userData.username || 
-                       userData.username.trim() === '' ||
-                       !userData.loginCompleted;
-            }
-            return true; // Nuovo utente
+            return false;
         }
     }
 }
 
-// Istanza globale con protezione
-if (!window.usernameManager) {
-    window.usernameManager = new UsernameManager();
-} else {
-    // Reset dell'istanza esistente se necessario
-    window.usernameManager.hideUsernameModal();
-}
+// Istanza globale
+window.usernameManager = new UsernameManager();
 
-// Funzione globale migliorata
+// Funzione globale per salvare username (chiamata dall'onclick nel HTML)
 window.saveUsername = function() {
-    if (window.usernameManager && typeof window.usernameManager.saveUsername === 'function') {
+    if (window.usernameManager) {
         window.usernameManager.saveUsername();
     } else {
-        console.error('❌ usernameManager non inizializzato o metodo non disponibile');
-        alert('Errore nel sistema username. Ricarica la pagina e riprova.');
+        console.error('❌ usernameManager non inizializzato');
     }
 };
 
