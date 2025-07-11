@@ -1,6 +1,3 @@
-// ===============================================
-// USERNAME HANDLER - Gestione Username per utenti Google
-// ===============================================
 
 class UsernameManager {
     constructor() {
@@ -9,11 +6,11 @@ class UsernameManager {
         this.pendingUser = null;
         this.maxRetries = 3;
         this.currentRetry = 0;
-        this.isModalShowing = false; // NUOVO: flag per evitare modal multipli
-        this.saveInProgress = false;  // NUOVO: flag per evitare salvataggi multipli
+        this.isModalShowing = false; // Flag per evitare modal multipli
+        this.saveInProgress = false;  // Flag per evitare salvataggi multipli
     }
 
-    // CORREZIONE 1: Mostra modal con controlli anti-duplicazione
+    // Mostra modal con controlli anti-duplicazione
     async showUsernameModal(user, userData = null) {
         console.log('🎯 Mostrando modal username per:', user.email);
         
@@ -41,14 +38,14 @@ class UsernameManager {
                 throw new Error('Modal username non disponibile');
             }
             
-            // CORREZIONE 2: Reset completo del modal prima di mostrarlo
+            // Reset completo del modal prima di mostrarlo
             await this.resetModalState();
             
             // Mostra il modal
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
             
-            // CORREZIONE 3: Caricamento clan con timeout
+            // Caricamento clan con timeout
             try {
                 await Promise.race([
                     this.loadAvailableClans(),
@@ -58,7 +55,7 @@ class UsernameManager {
                 console.warn('⚠️ Errore/timeout caricamento clan (non critico):', clanError);
             }
             
-            // CORREZIONE 4: Focus con retry
+            // Focus con retry
             await this.focusUsernameInputWithRetry();
             
             // Setup listeners
@@ -73,7 +70,7 @@ class UsernameManager {
         }
     }
 
-    // CORREZIONE 5: Reset completo dello stato del modal
+    // Reset completo dello stato del modal
     async resetModalState() {
         const usernameInput = document.getElementById('usernameInput');
         const clanSelect = document.getElementById('clanSelect');
@@ -125,7 +122,7 @@ class UsernameManager {
         }
     }
 
-    // CORREZIONE 6: Focus con retry automatico
+    // Focus con retry automatico
     async focusUsernameInputWithRetry(maxAttempts = 5) {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -146,7 +143,261 @@ class UsernameManager {
         console.warn('⚠️ Non è stato possibile focalizzare input username');
     }
 
-    // CORREZIONE 7: Salvataggio con protezione anti-duplicazione
+    // Carica i clan disponibili nel select
+    async loadAvailableClans() {
+        const clanSelect = document.getElementById('clanSelect');
+        if (!clanSelect) {
+            console.warn('⚠️ Select clan non trovato');
+            return;
+        }
+        
+        try {
+            const clans = await this.getAvailableClans();
+            
+            // Pulisci opzioni esistenti tranne "Nessuno"
+            clanSelect.innerHTML = '<option value="Nessuno">Nessun clan per ora</option>';
+            
+            // Aggiungi clan disponibili
+            clans.forEach(clan => {
+                const option = document.createElement('option');
+                option.value = clan;
+                option.textContent = `🏰 ${clan}`;
+                clanSelect.appendChild(option);
+            });
+            
+        } catch (error) {
+            console.warn('Errore caricamento clan:', error);
+        }
+    }
+
+    // Ottieni clan disponibili
+    async getAvailableClans() {
+        let clans = [];
+
+        try {
+            if (window.useFirebase && window.firebaseDatabase && window.firebaseImports && 
+                typeof window.firebaseImports.ref === 'function' && 
+                typeof window.firebaseImports.get === 'function') {
+                
+                const { ref, get } = window.firebaseImports;
+                const usersRef = ref(window.firebaseDatabase, 'users');
+                const snapshot = await get(usersRef);
+
+                if (snapshot.exists()) {
+                    const clanSet = new Set();
+                    snapshot.forEach((childSnapshot) => {
+                        const userData = childSnapshot.val();
+                        if (userData.clan && userData.clan !== 'Nessuno') {
+                            clanSet.add(userData.clan);
+                        }
+                    });
+                    clans = Array.from(clanSet);
+                }
+            } else {
+                // Modalità locale
+                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+                const clanSet = new Set();
+                Object.values(users).forEach(user => {
+                    if (user.clan && user.clan !== 'Nessuno') {
+                        clanSet.add(user.clan);
+                    }
+                });
+                clans = Array.from(clanSet);
+            }
+        } catch (error) {
+            console.error('Errore ottenimento clan:', error);
+        }
+
+        return clans.sort();
+    }
+
+    // Setup validazione username in tempo reale
+    setupUsernameValidation() {
+        const usernameInput = document.getElementById('usernameInput');
+        const saveBtn = document.getElementById('saveUsernameBtn');
+        
+        if (!usernameInput || !saveBtn) {
+            console.error('❌ Elementi username form non trovati');
+            return;
+        }
+        
+        // Rimuovi listener esistenti
+        usernameInput.removeEventListener('input', this.handleUsernameInput);
+        usernameInput.removeEventListener('keypress', this.handleUsernameKeypress);
+        
+        // Aggiungi nuovi listener
+        usernameInput.addEventListener('input', this.handleUsernameInput.bind(this));
+        usernameInput.addEventListener('keypress', this.handleUsernameKeypress.bind(this));
+        
+        // Reset stato iniziale
+        saveBtn.disabled = true;
+        this.updateValidationDisplay('', '');
+    }
+
+    // Gestisce input username
+    handleUsernameInput(event) {
+        const username = event.target.value.trim();
+        const input = event.target;
+        
+        // Cancella timeout precedente
+        if (this.validationTimeout) {
+            clearTimeout(this.validationTimeout);
+        }
+        
+        // Reset classi
+        input.classList.remove('valid', 'invalid');
+        
+        if (username.length === 0) {
+            this.updateValidationDisplay('', '');
+            document.getElementById('saveUsernameBtn').disabled = true;
+            return;
+        }
+        
+        // Validazione formato immediata
+        const formatValid = this.validateUsernameFormat(username);
+        if (!formatValid.valid) {
+            input.classList.add('invalid');
+            this.updateValidationDisplay(formatValid.message, 'invalid');
+            document.getElementById('saveUsernameBtn').disabled = true;
+            return;
+        }
+        
+        // Mostra stato "controllo"
+        this.updateValidationDisplay('🔍 Controllo disponibilità...', 'checking');
+        
+        // Debounce per controllo unicità
+        this.validationTimeout = setTimeout(() => {
+            this.checkUsernameAvailability(username);
+        }, 500);
+    }
+
+    // Gestisce pressione tasti
+    handleUsernameKeypress(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const saveBtn = document.getElementById('saveUsernameBtn');
+            if (saveBtn && !saveBtn.disabled) {
+                this.saveUsername();
+            }
+        }
+    }
+
+    // Valida formato username
+    validateUsernameFormat(username) {
+        // Lunghezza
+        if (username.length < 3) {
+            return { valid: false, message: '❌ Username troppo corto (minimo 3 caratteri)' };
+        }
+        if (username.length > 20) {
+            return { valid: false, message: '❌ Username troppo lungo (massimo 20 caratteri)' };
+        }
+        
+        // Caratteri consentiti (lettere, numeri, underscore)
+        const validChars = /^[a-zA-Z0-9_]+$/;
+        if (!validChars.test(username)) {
+            return { valid: false, message: '❌ Solo lettere, numeri e underscore consentiti' };
+        }
+        
+        // Non può iniziare o finire con underscore
+        if (username.startsWith('_') || username.endsWith('_')) {
+            return { valid: false, message: '❌ Non può iniziare o finire con underscore' };
+        }
+        
+        // Non può essere solo numeri
+        if (/^\d+$/.test(username)) {
+            return { valid: false, message: '❌ Non può essere composto solo da numeri' };
+        }
+        
+        return { valid: true };
+    }
+
+    // Controlla disponibilità username
+    async checkUsernameAvailability(username) {
+        try {
+            this.isValidating = true;
+            
+            const isAvailable = await this.isUsernameAvailable(username);
+            const input = document.getElementById('usernameInput');
+            const saveBtn = document.getElementById('saveUsernameBtn');
+            
+            if (!input || !saveBtn) {
+                throw new Error('Elementi form non trovati');
+            }
+            
+            if (isAvailable) {
+                input.classList.remove('invalid');
+                input.classList.add('valid');
+                this.updateValidationDisplay('✅ Username disponibile!', 'valid');
+                saveBtn.disabled = false;
+            } else {
+                input.classList.remove('valid');
+                input.classList.add('invalid');
+                this.updateValidationDisplay('❌ Username già in uso', 'invalid');
+                saveBtn.disabled = true;
+            }
+            
+        } catch (error) {
+            console.error('Errore controllo username:', error);
+            this.updateValidationDisplay('⚠️ Errore nel controllo. Riprova.', 'invalid');
+            const saveBtn = document.getElementById('saveUsernameBtn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+            }
+        } finally {
+            this.isValidating = false;
+        }
+    }
+
+    // Verifica se username è disponibile
+    async isUsernameAvailable(username) {
+        const lowerUsername = username.toLowerCase();
+        
+        try {
+            if (window.useFirebase && window.firebaseDatabase && window.firebaseImports && 
+                typeof window.firebaseImports.ref === 'function' && 
+                typeof window.firebaseImports.get === 'function') {
+                
+                const { ref, get } = window.firebaseImports;
+                const usersRef = ref(window.firebaseDatabase, 'users');
+                const snapshot = await get(usersRef);
+                
+                if (snapshot.exists()) {
+                    let found = false;
+                    snapshot.forEach((childSnapshot) => {
+                        const userData = childSnapshot.val();
+                        if (userData.username && userData.username.toLowerCase() === lowerUsername) {
+                            found = true;
+                            return true; // break
+                        }
+                    });
+                    return !found;
+                }
+                return true;
+            } else {
+                // Modalità locale
+                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+                const existingUsernames = Object.values(users)
+                    .filter(user => user.username)
+                    .map(user => user.username.toLowerCase());
+                
+                return !existingUsernames.includes(lowerUsername);
+            }
+        } catch (error) {
+            console.error('Errore verifica disponibilità username:', error);
+            throw error;
+        }
+    }
+
+    // Aggiorna display validazione
+    updateValidationDisplay(message, type) {
+        const validationEl = document.getElementById('usernameValidation');
+        if (validationEl) {
+            validationEl.textContent = message;
+            validationEl.className = `username-validation ${type}`;
+        }
+    }
+
+    // Salva username con protezione anti-duplicazione
     async saveUsername() {
         // Previeni salvataggi multipli
         if (this.saveInProgress) {
@@ -182,7 +433,12 @@ class UsernameManager {
         }
     }
 
-    // CORREZIONE 8: Logica di salvataggio migliorata
+    // Salva username direttamente (versione fallback)
+    async saveUsernameDirectly(username, clan = 'Nessuno') {
+        await this.saveUsernameInternal(username, clan, true);
+    }
+
+    // Logica interna di salvataggio
     async saveUsernameInternal(username, selectedClan = 'Nessuno', skipUI = false) {
         const saveBtn = document.getElementById('saveUsernameBtn');
         const loadingEl = document.getElementById('usernameLoading');
@@ -191,7 +447,7 @@ class UsernameManager {
         try {
             console.log('💾 Iniziando salvataggio username:', username);
             
-            // CORREZIONE 9: UI feedback migliorato
+            // UI feedback migliorato
             if (!skipUI && saveBtn && loadingEl && formEl) {
                 saveBtn.disabled = true;
                 saveBtn.textContent = 'Salvando...';
@@ -212,7 +468,7 @@ class UsernameManager {
             const userRole = await this.determineUserRole();
             console.log('👤 Ruolo determinato:', userRole);
             
-            // CORREZIONE 10: Dati utente più robusti
+            // Dati utente più robusti
             const timestamp = Date.now();
             const userData = {
                 username: username,
@@ -223,7 +479,7 @@ class UsernameManager {
                 lastSeen: timestamp,
                 provider: 'google',
                 needsUsername: false,
-                loginCompleted: true // NUOVO: flag per tracciare completamento
+                loginCompleted: true // Flag per tracciare completamento
             };
             
             console.log('📝 Dati utente preparati:', userData);
@@ -231,7 +487,7 @@ class UsernameManager {
             // Salva nel database con retry
             await this.saveUserDataWithRetry(userData);
             
-            // CORREZIONE 11: Aggiornamento displayName migliorato
+            // Aggiornamento displayName migliorato
             try {
                 if (window.firebaseImports && typeof window.firebaseImports.updateProfile === 'function') {
                     await window.firebaseImports.updateProfile(this.pendingUser, {
@@ -251,7 +507,7 @@ class UsernameManager {
             
             console.log('✅ Username salvato con successo');
             
-            // CORREZIONE 12: Chiusura e login più sicuri
+            // Chiusura e login più sicuri
             this.hideUsernameModal();
             
             // Attendi un momento per permettere la chiusura del modal
@@ -332,7 +588,7 @@ class UsernameManager {
         }
     }
 
-    // CORREZIONE 13: Salvataggio con retry automatico
+    // Salvataggio con retry automatico
     async saveUserDataWithRetry(userData) {
         const maxAttempts = 3;
         
@@ -380,7 +636,46 @@ class UsernameManager {
         }
     }
 
-    // CORREZIONE 14: Chiusura modal migliorata
+    // Determina ruolo del nuovo utente
+    async determineUserRole() {
+        try {
+            if (window.useFirebase && window.firebaseDatabase) {
+                // In Firebase, per sicurezza, assumiamo sempre USER come ruolo di default
+                return window.USER_ROLES?.USER || 'user';
+            } else {
+                // Modalità locale - controlla se ci sono utenti reali (non di esempio)
+                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+                
+                // Filtra solo utenti reali (non quelli di esempio)
+                const realUsers = Object.values(users).filter(user =>
+                    !user.uid.startsWith('super_admin_') &&
+                    !user.uid.startsWith('clan_mod_') &&
+                    !user.uid.startsWith('user_'));
+                
+                if (realUsers.length === 0) {
+                    return window.USER_ROLES?.SUPERUSER || 'superuser';
+                }
+            }
+            
+            return window.USER_ROLES?.USER || 'user';
+        } catch (error) {
+            console.error('Errore determinazione ruolo:', error);
+            return window.USER_ROLES?.USER || 'user';
+        }
+    }
+
+    // Mostra errore username
+    showUsernameError(message) {
+        const errorEl = document.getElementById('usernameError');
+        if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+            setTimeout(() => errorEl.classList.remove('show'), 10000); // Più tempo per leggere
+        }
+        console.error('🚨 Errore username:', message);
+    }
+
+    // Chiusura modal migliorata
     hideUsernameModal() {
         const modal = document.getElementById('usernameModal');
         if (modal) {
@@ -400,11 +695,10 @@ class UsernameManager {
             this.validationTimeout = null;
         }
         
-        // Reset form sarà fatto dal prossimo showModal se necessario
         console.log('✅ Modal username nascosto e stato resettato');
     }
 
-    // CORREZIONE 15: Controllo più robusto se serve username
+    // Controllo più robusto se serve username
     async checkUserNeedsUsername(user) {
         if (!user) return false;
         
@@ -452,27 +746,14 @@ class UsernameManager {
             return true; // Nuovo utente
         }
     }
-
-    // Resto dei metodi rimangono uguali...
-    // (validateUsernameFormat, isUsernameAvailable, etc.)
-    
-    // CORREZIONE 16: Messaggi di errore più informativi
-    showUsernameError(message) {
-        const errorEl = document.getElementById('usernameError');
-        if (errorEl) {
-            errorEl.textContent = message;
-            errorEl.classList.add('show');
-            setTimeout(() => errorEl.classList.remove('show'), 10000); // Più tempo per leggere
-        }
-        console.error('🚨 Errore username:', message);
-    }
-
-    // ... resto dei metodi esistenti senza modifiche ...
 }
 
 // Istanza globale con protezione
 if (!window.usernameManager) {
     window.usernameManager = new UsernameManager();
+} else {
+    // Reset dell'istanza esistente se necessario
+    window.usernameManager.hideUsernameModal();
 }
 
 // Funzione globale migliorata
@@ -484,6 +765,7 @@ window.saveUsername = function() {
         alert('Errore nel sistema username. Ricarica la pagina e riprova.');
     }
 };
+
 // Export per altri moduli
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = UsernameManager;
