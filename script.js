@@ -1154,56 +1154,7 @@ function handleToastAction(toastId, actionIndex) {
 let usersCache = null;
 let usersCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minuti
-async function loadUsersList() {
-    console.log('👥 loadUsersList chiamata...');
-    
-    // Cache degli utenti per 10 minuti
-    const now = Date.now();
-    if (usersCache && (now - usersCacheTime) < CACHE_DURATION) {
-        console.log('👥 Usando cache utenti (evitato download)');
-        allUsers = usersCache;
-        return;
-    }
 
-    try {
-        let users = [];
-
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            console.log('👥 Costruendo lista utenti da fonti accessibili...');
-            users = await buildUsersListFromAccessibleData();
-        } else {
-            // Modalità locale - funziona normalmente
-            const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            users = Object.values(localUsers);
-        }
-
-        // Aggiorna cache
-        usersCache = users;
-        usersCacheTime = now;
-        allUsers = users;
-        
-        console.log(`👥 ${users.length} utenti caricati e messi in cache`);
-
-    } catch (error) {
-        console.error('Errore caricamento utenti:', error);
-        
-        // FALLBACK: Usa solo l'utente corrente se tutto fallisce
-        if (currentUser && currentUserData) {
-            allUsers = [{
-                uid: currentUser.uid,
-                username: currentUserData.username || currentUser.displayName || currentUser.email,
-                clan: currentUserData.clan || 'Nessuno',
-                avatarUrl: currentUserData.avatarUrl || null,
-                email: currentUser.email
-            }];
-            console.log('👥 Fallback: usando solo utente corrente');
-        } else {
-            // Fallback finale: array vuoto
-            allUsers = [];
-            console.log('👥 Fallback finale: array vuoto');
-        }
-    }
-}
 async function buildUsersListFromAccessibleData() {
     const users = new Map(); // Usa Map per evitare duplicati
     const sectionsToCheck = ['chat-generale'];
@@ -1273,6 +1224,252 @@ async function buildUsersListFromAccessibleData() {
     
     return Array.from(users.values());
 }
+
+window.loadUsersList = async function() {
+    try {
+        console.log('👥 Caricamento lista utenti...');
+        allUsers = await buildUsersListFromAccessibleData();
+        console.log(`✅ Lista utenti caricata: ${allUsers.length} utenti`);
+        return allUsers;
+    } catch (error) {
+        console.error('❌ Errore caricamento lista utenti:', error);
+        allUsers = [];
+        return [];
+    }
+};
+
+// NUOVA FUNZIONE: Carica tutti gli utenti per admin (accesso diretto)
+async function loadAllUsersForAdmin() {
+    console.log('👑 Admin: caricamento di tutti gli utenti...');
+    
+    if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) {
+        console.log('📱 Modalità locale: carico da localStorage');
+        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+        return Object.values(users);
+    }
+
+    try {
+        // Accesso diretto al nodo users per superuser
+        const usersRef = ref(window.firebaseDatabase, 'users');
+        const snapshot = await get(usersRef);
+        
+        if (!snapshot.exists()) {
+            console.log('📭 Nessun utente trovato nel database');
+            return [];
+        }
+
+        const users = [];
+        snapshot.forEach((childSnapshot) => {
+            users.push({
+                id: childSnapshot.key,
+                uid: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+
+        console.log(`👑 Admin: caricati ${users.length} utenti completi`);
+        return users;
+
+    } catch (error) {
+        console.error('❌ Errore accesso admin agli utenti:', error);
+        console.log('🔄 Fallback: uso metodo standard');
+        
+        // Fallback: usa il metodo standard
+        return await loadUsersList();
+    }
+}
+
+// CORREGGI loadUsersGrid per gestire meglio gli errori
+async function loadUsersGrid() {
+    const usersGrid = document.getElementById('users-grid');
+
+    if (!usersGrid) {
+        console.error('❌ Elemento users-grid non trovato');
+        return;
+    }
+
+    // Mostra caricamento
+    usersGrid.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div>🔄 Caricamento utenti...</div>
+        </div>
+    `;
+
+    try {
+        let users = [];
+
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+            // CORREZIONE: Accesso diverso per superuser vs utenti normali
+            if (getCurrentUserRole() === USER_ROLES.SUPERUSER) {
+                console.log('👑 Superuser: accesso completo agli utenti');
+                users = await loadAllUsersForAdmin();
+            } else {
+                console.log('👤 Utente normale: usa lista utenti limitata');
+                users = await loadUsersList();
+                users = users.filter(user => user.email); // Solo utenti con email
+            }
+            
+            // Messaggio informativo per non-superuser
+            if (users.length < 5 && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
+                usersGrid.innerHTML = `
+                    <div style="text-align: center; padding: 20px; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin: 10px 0;">
+                        <div style="color: #856404; margin-bottom: 10px;">⚠️ Lista utenti limitata</div>
+                        <div style="font-size: 14px; color: #856404;">
+                            Solo i superuser possono vedere tutti gli utenti.<br>
+                            Questa lista mostra utenti attivi recentemente.
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px;"></div>
+                `;
+            }
+        } else {
+            // Modalità locale
+            console.log('📱 Modalità locale attiva');
+            const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            users = Object.values(localUsers);
+        }
+
+        // Mostra gli utenti se ce ne sono
+        if (users.length > 0) {
+            // Se c'era già un messaggio, aggiungilo alla fine
+            const existingContent = usersGrid.innerHTML;
+            if (existingContent.includes('Lista utenti limitata')) {
+                // Mantieni il messaggio e aggiungi la lista sotto
+            } else {
+                usersGrid.innerHTML = ''; // Pulisci solo se non c'è messaggio
+            }
+            
+            displayUsersList(users);
+        } else {
+            // Nessun utente trovato
+            usersGrid.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #666;">
+                    <div style="margin-bottom: 10px;">👥 Nessun utente trovato</div>
+                    <div style="font-size: 14px;">
+                        ${getCurrentUserRole() === USER_ROLES.SUPERUSER 
+                            ? 'Il database sembra vuoto.'
+                            : 'Prova a tornare più tardi quando altri utenti saranno attivi.'
+                        }
+                    </div>
+                </div>
+            `;
+        }
+
+    } catch (error) {
+        console.error('❌ Errore caricamento utenti admin:', error);
+        
+        usersGrid.innerHTML = `
+            <div style="text-align: center; color: red; padding: 20px;">
+                <div style="margin-bottom: 10px;">❌ Errore nel caricamento degli utenti</div>
+                <div style="font-size: 14px; margin-bottom: 15px;">
+                    ${error.message || 'Errore sconosciuto'}
+                </div>
+                <button onclick="loadUsersGrid()" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    🔄 Riprova
+                </button>
+            </div>
+        `;
+    }
+}
+
+// MIGLIORA displayUsersList per gestire il caso di lista limitata
+function displayUsersList(users) {
+    const usersGrid = document.getElementById('users-grid');
+    
+    if (!users || users.length === 0) {
+        // Non sovrascrivere se c'è già un messaggio di errore
+        if (!usersGrid.innerHTML.includes('Lista utenti limitata')) {
+            usersGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun utente trovato</div>';
+        }
+        return;
+    }
+
+    // Genera HTML per gli utenti
+    const usersHtml = users.map(user => {
+        const roleText = user.role === 'superuser' ? 'SUPER' :
+            user.role === 'clan_mod' ? 'CLAN MOD' : 'USER';
+        const roleClass = user.role === 'superuser' ? 'role-superuser' :
+            user.role === 'clan_mod' ? 'role-moderator' : 'role-user';
+
+        return `
+            <div class="user-card">
+                <div class="user-card-header">
+                    <div class="user-card-name">
+                        ${user.username || 'Utente'} 
+                        <span class="user-role ${roleClass}">
+                            ${roleText}
+                        </span>
+                    </div>
+                    <div style="font-size: 12px; color: #666;">
+                        ${formatTime(user.createdAt)}
+                    </div>
+                </div>
+                <div class="user-card-info">
+                    <div>📧 ${user.email || 'N/A'}</div>
+                    <div>🏰 Clan: ${user.clan || 'Nessuno'}</div>
+                    <div>🔗 Provider: ${user.provider || 'email'}</div>
+                </div>
+                <div class="user-card-actions">
+                    <button class="admin-btn btn-assign-clan" onclick="assignClan('${user.id || user.uid}', '${user.username}')">
+                        Assegna Clan
+                    </button>
+                    ${getCurrentUserRole() === USER_ROLES.SUPERUSER ? `
+                        <button class="admin-btn btn-change-role" onclick="changeUserRole('${user.id || user.uid}', '${user.username}', '${user.role || 'user'}')">
+                            Cambia Ruolo
+                        </button>
+                    ` : ''}
+                    ${user.clan && user.clan !== 'Nessuno' ? `
+                        <button class="admin-btn btn-remove-clan" onclick="removFromClan('${user.id || user.uid}', '${user.username}')">
+                            Rimuovi Clan
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Se c'è già contenuto (messaggio di avviso), appendici la lista
+    if (usersGrid.innerHTML.includes('Lista utenti limitata')) {
+        usersGrid.innerHTML += usersHtml;
+    } else {
+        usersGrid.innerHTML = usersHtml;
+    }
+
+    console.log(`✅ Mostrati ${users.length} utenti nel pannello admin`);
+}
+
+// AGGIUNGI FUNZIONE DI DEBUG PER TESTARE
+window.debugAdminUsers = function() {
+    console.log('🔍 Debug Admin Users:');
+    console.log('- Ruolo corrente:', getCurrentUserRole());
+    console.log('- È superuser:', getCurrentUserRole() === USER_ROLES.SUPERUSER);
+    console.log('- Firebase ready:', firebaseReady);
+    console.log('- UseFirebase:', window.useFirebase);
+    console.log('- Current user:', currentUser?.uid, currentUser?.email);
+    
+    if (typeof loadUsersList === 'function') {
+        console.log('✅ loadUsersList è definita');
+    } else {
+        console.log('❌ loadUsersList NON è definita');
+    }
+    
+    if (typeof loadAllUsersForAdmin === 'function') {
+        console.log('✅ loadAllUsersForAdmin è definita');
+    } else {
+        console.log('❌ loadAllUsersForAdmin NON è definita');
+    }
+};
+
+// ESEGUI SUBITO IL FIX
+console.log('🔧 Fix loadUsersList applicato!');
+
+// Test per verificare che tutto funzioni
+if (typeof window.loadUsersList === 'function') {
+    console.log('✅ loadUsersList ora è definita correttamente');
+} else {
+    console.error('❌ loadUsersList ancora non definita!');
+}
+
 
 // NUOVA FUNZIONE: Ottiene messaggi recenti per costruire lista utenti
 async function getRecentMessagesForUserList(section) {
