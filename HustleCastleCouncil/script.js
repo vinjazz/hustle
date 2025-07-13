@@ -2982,51 +2982,204 @@ async function loadUsersGrid() {
         let users = [];
 
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // SOLUZIONE: Usa la lista utenti costruita invece di interrogare Firebase
-            await loadUsersList(); // Questo ora usa il metodo sicuro
-            users = allUsers.filter(user => user.email); // Solo utenti con email per admin
+            // Verifica se l'utente è superuser
+            const currentUserRole = getCurrentUserRole();
             
-            // Se abbiamo pochi utenti, mostra messaggio informativo
-            if (users.length < 3) {
-                usersGrid.innerHTML = `
-                    <div style="text-align: center; padding: 20px; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin: 10px 0;">
-                        <div style="color: #856404; margin-bottom: 10px;">⚠️ Lista utenti limitata</div>
-                        <div style="font-size: 14px; color: #856404;">
-                            La lista mostra solo utenti attivi recentemente.<br>
-                            Altri utenti potrebbero esistere ma non essere visibili.
-                        </div>
-                    </div>
-                `;
+            if (currentUserRole === USER_ROLES.SUPERUSER) {
+                console.log('🔐 Superuser rilevato, caricamento diretto utenti...');
+                
+                try {
+                    // Carica direttamente tutti gli utenti per superuser
+                    const usersRef = ref(window.firebaseDatabase, 'users');
+                    const snapshot = await get(usersRef);
+                    
+                    if (snapshot.exists()) {
+                        const userData = snapshot.val();
+                        users = Object.keys(userData).map(uid => ({
+                            uid: uid,
+                            ...userData[uid]
+                        }));
+                        
+                        console.log('✅ Caricati', users.length, 'utenti direttamente da Firebase');
+                    } else {
+                        console.warn('⚠️ Nodo users vuoto in Firebase');
+                    }
+                    
+                } catch (directError) {
+                    console.warn('⚠️ Errore accesso diretto Firebase per utenti:', directError.message);
+                    console.log('🔄 Fallback su metodo alternativo...');
+                    
+                    // Fallback: usa il metodo esistente
+                    await loadUsersList();
+                    users = allUsers.filter(user => user.email);
+                }
+                
+            } else {
+                console.log('⚠️ Utente non superuser, usando metodo limitato');
+                // Usa metodo limitato per non-superuser
+                await loadUsersList();
+                users = allUsers.filter(user => user.email);
             }
+            
         } else {
-            // Carica da localStorage
+            // Modalità locale
+            console.log('🏠 Modalità locale, caricamento da localStorage...');
             const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
             users = Object.values(localUsers);
         }
 
-        // Aggiungi utenti alla griglia esistente se ce ne sono
-        if (users.length > 0) {
-            const existingContent = usersGrid.innerHTML;
-            if (existingContent.includes('Lista utenti limitata')) {
-                usersGrid.innerHTML = existingContent + '<div style="margin-top: 20px;"></div>';
+        // Mostra risultati
+        if (users.length === 0) {
+            usersGrid.innerHTML = `
+                <div style="text-align: center; padding: 20px; background: rgba(231, 76, 60, 0.1); border-radius: 8px; color: #e74c3c;">
+                    <div style="margin-bottom: 10px;">❌ Nessun utente trovato</div>
+                    <div style="font-size: 14px;">
+                        Verifica le regole Firebase o i permessi utente.
+                    </div>
+                </div>
+            `;
+        } else {
+            // Mostra messaggio informativo sui permessi
+            const currentUserRole = getCurrentUserRole();
+            let infoMessage = '';
+            
+            if (currentUserRole === USER_ROLES.SUPERUSER) {
+                infoMessage = `
+                    <div style="background: rgba(39, 174, 96, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid rgba(39, 174, 96, 0.2);">
+                        <div style="color: #27ae60; font-weight: 600; margin-bottom: 5px;">✅ Accesso Completo Superuser</div>
+                        <div style="font-size: 14px; color: #27ae60;">Caricati ${users.length} utenti con permessi completi di gestione.</div>
+                    </div>
+                `;
+            } else {
+                infoMessage = `
+                    <div style="background: rgba(255, 193, 7, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid rgba(255, 193, 7, 0.2);">
+                        <div style="color: #f39c12; font-weight: 600; margin-bottom: 5px;">⚠️ Accesso Limitato</div>
+                        <div style="font-size: 14px; color: #f39c12;">Visualizzazione limitata ai dati disponibili (${users.length} utenti).</div>
+                    </div>
+                `;
             }
             
+            usersGrid.innerHTML = infoMessage;
             displayUsersList(users);
         }
 
     } catch (error) {
-        console.error('Errore caricamento utenti admin:', error);
+        console.error('❌ Errore caricamento utenti admin:', error);
+        
+        // Analizza il tipo di errore per dare suggerimenti specifici
+        let errorDetails = error.message || 'Errore sconosciuto';
+        let suggestion = '';
+        
+        if (error.code === 'PERMISSION_DENIED') {
+            suggestion = `
+                <div style="margin-top: 10px; padding: 10px; background: rgba(231, 76, 60, 0.1); border-radius: 5px;">
+                    <strong>💡 Suggerimenti:</strong><br>
+                    1. Verifica che le regole Firebase siano aggiornate<br>
+                    2. Assicurati di essere superuser<br>
+                    3. Controlla la configurazione App Check
+                </div>
+            `;
+        } else if (errorDetails.includes('network')) {
+            suggestion = `
+                <div style="margin-top: 10px; padding: 10px; background: rgba(255, 193, 7, 0.1); border-radius: 5px;">
+                    <strong>💡 Suggerimento:</strong> Problema di connessione. Riprova tra qualche momento.
+                </div>
+            `;
+        }
+        
         usersGrid.innerHTML = `
-            <div style="text-align: center; color: red; padding: 20px;">
-                <div>❌ Errore nel caricamento degli utenti</div>
-                <div style="font-size: 14px; margin-top: 10px;">
-                    Verifica le regole Firebase o usa la modalità locale per l'amministrazione completa.
+            <div style="text-align: center; color: #e74c3c; padding: 20px; background: rgba(231, 76, 60, 0.1); border-radius: 8px;">
+                <div style="margin-bottom: 10px;">❌ Errore nel caricamento degli utenti</div>
+                <div style="font-size: 14px; margin-bottom: 10px;">
+                    <strong>Dettagli:</strong> ${errorDetails}
+                </div>
+                ${suggestion}
+                <div style="margin-top: 15px;">
+                    <button onclick="loadUsersGrid()" style="background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">
+                        🔄 Riprova
+                    </button>
                 </div>
             </div>
         `;
     }
 }
 
+// Funzione di debug per testare i permessi utente
+window.debugUserPermissions = function() {
+    console.log('🔍 DEBUG PERMESSI UTENTE:');
+    console.log('- Utente corrente:', currentUser?.uid, currentUser?.email);
+    console.log('- Dati utente:', currentUserData);
+    console.log('- Ruolo corrente:', getCurrentUserRole());
+    console.log('- È superuser?', getCurrentUserRole() === USER_ROLES.SUPERUSER);
+    console.log('- Firebase attivo?', window.useFirebase);
+    console.log('- Firebase pronto?', firebaseReady);
+    console.log('- Database disponibile?', !!window.firebaseDatabase);
+    
+    // Test accesso diretto users
+    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
+        console.log('🧪 Test accesso diretto nodo users...');
+        const usersRef = ref(window.firebaseDatabase, 'users');
+        get(usersRef).then(snapshot => {
+            if (snapshot.exists()) {
+                console.log('✅ Accesso riuscito! Trovati', Object.keys(snapshot.val()).length, 'utenti');
+            } else {
+                console.warn('⚠️ Nodo users vuoto o inesistente');
+            }
+        }).catch(error => {
+            console.error('❌ Errore accesso users:', error.code, error.message);
+        });
+    }
+};
+
+// Funzione di test per verificare le regole Firebase
+window.testFirebaseRules = async function() {
+    if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) {
+        console.log('❌ Firebase non attivo per il test');
+        return;
+    }
+    
+    console.log('🧪 TEST REGOLE FIREBASE INIZIATO...');
+    
+    const tests = [
+        {
+            name: 'Lettura nodo users (generale)',
+            path: 'users',
+            operation: 'read'
+        },
+        {
+            name: 'Lettura profilo utente corrente',
+            path: `users/${currentUser?.uid}`,
+            operation: 'read'
+        },
+        {
+            name: 'Scrittura profilo utente corrente',
+            path: `users/${currentUser?.uid}/lastSeen`,
+            operation: 'write',
+            data: Date.now()
+        }
+    ];
+    
+    for (const test of tests) {
+        try {
+            console.log(`🔍 Testing: ${test.name}`);
+            
+            if (test.operation === 'read') {
+                const testRef = ref(window.firebaseDatabase, test.path);
+                const snapshot = await get(testRef);
+                console.log(`✅ ${test.name}: OK`, snapshot.exists() ? 'Dati trovati' : 'Nodo vuoto');
+            } else if (test.operation === 'write') {
+                const testRef = ref(window.firebaseDatabase, test.path);
+                await set(testRef, test.data);
+                console.log(`✅ ${test.name}: OK`);
+            }
+            
+        } catch (error) {
+            console.error(`❌ ${test.name}: FAILED`, error.code, error.message);
+        }
+    }
+    
+    console.log('🏁 Test regole Firebase completato');
+};
 // Visualizza lista utenti
 function displayUsersList(users) {
     const usersGrid = document.getElementById('users-grid');
