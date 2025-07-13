@@ -47,10 +47,10 @@ const USER_ROLES = {
     USER: 'user'
 };
 
-// Funzioni Firebase (saranno assegnate quando Firebase è pronto)
 let signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged,
 signOut, updateProfile, GoogleAuthProvider, signInWithPopup, ref, push, set, get, onValue, off, serverTimestamp,
-onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject;
+onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject,
+query, orderByChild, limitToLast, orderByKey, endBefore; // <-- AGGIUNGI QUESTI
 
 // Rendi le funzioni globali per gli onclick
 window.switchToLogin = switchToLogin;
@@ -1357,7 +1357,11 @@ function initializeApp() {
             storageRef,
             uploadBytes,
             getDownloadURL,
-            deleteObject, query, orderByKey, orderByChild, limitToLast, limitToFirst
+            deleteObject, query,           // <-- AGGIUNGI
+    orderByChild,    // <-- AGGIUNGI
+    limitToLast,     // <-- AGGIUNGI
+    orderByKey,      // <-- AGGIUNGI
+    endBefore    
         } = window.firebaseImports);
         firebaseReady = true;
     }
