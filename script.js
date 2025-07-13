@@ -938,6 +938,8 @@ function getNotificationIcon(type) {
         return '↩️';
     case 'like':
         return '❤️';
+    case 'new_user':  // 🆕 NUOVO
+            return '🆕';
     default:
         return '🔔';
     }
@@ -945,12 +947,14 @@ function getNotificationIcon(type) {
 
 function getNotificationMessage(notification) {
     switch (notification.type) {
-    case 'mention':
-        return `ti ha menzionato: "${notification.message || 'Messaggio'}"`;
-    case 'reply':
-        return `ha risposto al tuo thread: "${notification.message || 'Risposta'}"`;
-    default:
-        return notification.message || 'Nuova notifica';
+        case 'mention':
+            return `ti ha menzionato: "${notification.message || 'Messaggio'}"`;
+        case 'reply':
+            return `ha risposto al tuo thread: "${notification.message || 'Risposta'}"`;
+        case 'new_user':  // 🆕 NUOVO
+            return notification.message || 'Nuovo utente registrato';
+        default:
+            return notification.message || 'Nuova notifica';
     }
 }
 
@@ -2207,6 +2211,7 @@ async function handleRegister() {
     try {
         // Determina il ruolo del nuovo utente
         const userRole = await determineUserRole();
+        const isFirstUser = userRole === USER_ROLES.SUPERUSER;
 
         if (window.useFirebase && firebaseReady && createUserWithEmailAndPassword) {
             // Registrazione Firebase
@@ -2217,8 +2222,7 @@ async function handleRegister() {
                 displayName: username
             });
 
-            // CORREZIONE: Aggiungi needsUsername = false per utenti email/password
-            await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
+            const userData = {
                 username: username,
                 email: email,
                 clan: 'Nessuno',
@@ -2226,11 +2230,40 @@ async function handleRegister() {
                 createdAt: serverTimestamp(),
                 lastSeen: serverTimestamp(),
                 provider: 'email',
-                needsUsername: false // IMPORTANTE: Non ha mai bisogno di scegliere username
-            });
+                needsUsername: false
+            };
+
+            await set(ref(window.firebaseDatabase, `users/${user.uid}`), userData);
+
+            // 🆕 NUOVA PARTE: Gestisci benvenuto nuovo utente
+            const newUserData = {
+                uid: user.uid,
+                username: username,
+                email: email,
+                clan: 'Nessuno',
+                role: userRole,
+                provider: 'email'
+            };
+            
+            // Chiama il sistema di benvenuto
+            await handleNewUserComplete(newUserData, isFirstUser);
+
         } else {
             // Registrazione locale (demo)
             await simulateRegister(email, password, username, 'Nessuno', userRole);
+            
+            // 🆕 NUOVA PARTE: Gestisci benvenuto per utente locale
+            const newUserData = {
+                uid: 'local_' + Date.now(),
+                username: username,
+                email: email,
+                clan: 'Nessuno',
+                role: userRole,
+                provider: 'email'
+            };
+            
+            // Chiama il sistema di benvenuto
+            await handleNewUserComplete(newUserData, isFirstUser);
         }
 
         const roleMessage = userRole === USER_ROLES.SUPERUSER ?
@@ -2254,7 +2287,6 @@ async function handleRegister() {
         showLoading(false);
     }
 }
-
 
 // Determina il ruolo del nuovo utente
 async function determineUserRole() {
@@ -4517,6 +4549,20 @@ async function displayMessages(messages) {
 
     for (let index = 0; index < messages.length; index++) {
         const msg = messages[index];
+
+        if (msg.isSystemMessage) {
+        htmlContent += `
+            <div class="message-bubble-container system-message">
+                <div class="message-bubble system-bubble">
+                    <div class="message-text">${highlightMentions(processContent(msg.message, true), currentUser?.uid)}</div>
+                    <div class="message-meta">
+                        <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        continue; // Salta il resto del loop per i messaggi di sistema
+        }
         
         // Trova dati utente per avatar e clan
         const user = allUsers.find(u => u.uid === msg.authorId) || {
@@ -5636,3 +5682,159 @@ window.checkDataUsage = function() {
 console.log('🚀 Ottimizzazioni Firebase caricate - consumo dati ridotto drasticamente!');
 
 
+async function findAllSuperUsers() {
+    const superUsers = [];
+    
+    try {
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
+            // Firebase
+            const usersRef = ref(window.firebaseDatabase, 'users');
+            const snapshot = await get(usersRef);
+            
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    const userData = childSnapshot.val();
+                    if (userData.role === USER_ROLES.SUPERUSER) {
+                        superUsers.push({
+                            uid: childSnapshot.key,
+                            ...userData
+                        });
+                    }
+                });
+            }
+        } else {
+            // Modalità locale
+            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+            Object.values(users).forEach(user => {
+                if (user.role === USER_ROLES.SUPERUSER) {
+                    superUsers.push(user);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Errore ricerca superuser:', error);
+    }
+    
+    return superUsers;
+}
+
+// Invia notifica di nuovo utente a tutti i superuser
+async function notifyNewUserRegistration(newUser, isFirstUser = false) {
+    try {
+        const superUsers = await findAllSuperUsers();
+        console.log(`📨 Inviando notifiche di nuovo utente a ${superUsers.length} superuser`);
+        
+        for (const superUser of superUsers) {
+            // Non inviare notifica a se stesso se il nuovo utente è anche superuser
+            if (superUser.uid === newUser.uid) continue;
+            
+            const notificationData = {
+                type: 'new_user',
+                message: isFirstUser ? 
+                    `🎉 ${newUser.username} si è registrato ed è diventato il primo SUPERUSER!` :
+                    `${newUser.username} si è registrato al forum`,
+                userInfo: {
+                    username: newUser.username,
+                    email: newUser.email,
+                    clan: newUser.clan || 'Nessuno',
+                    provider: newUser.provider || 'email'
+                },
+                section: 'home',
+                sectionTitle: 'Nuovi Utenti'
+            };
+            
+            await createNotification('new_user', superUser.uid, notificationData);
+        }
+        
+        console.log('✅ Notifiche superuser inviate');
+    } catch (error) {
+        console.error('Errore invio notifiche superuser:', error);
+    }
+}
+
+// Invia messaggio di benvenuto nella chat globale
+async function sendWelcomeMessage(newUser, isFirstUser = false) {
+    try {
+        console.log('🎉 Inviando messaggio di benvenuto per:', newUser.username);
+        
+        const welcomeMessages = [
+            `🎉 Benvenuto @${newUser.username}! Siamo felici di averti nella community di Hustle Castle Council!`,
+            `👋 Un caloroso benvenuto a @${newUser.username}! Preparati per epiche battaglie e strategie!`,
+            `🏰 @${newUser.username} si è unito al consiglio! Benvenuto nella famiglia!`,
+            `⚔️ Un nuovo guerriero si è unito a noi: @${newUser.username}! Benvenuto!`,
+            `🛡️ @${newUser.username} ha attraversato le porte del castello! Benvenuto nella community!`
+        ];
+        
+        let welcomeText;
+        if (isFirstUser) {
+            welcomeText = `🎊 @${newUser.username} è il PRIMO utente registrato e ha ottenuto i privilegi di SUPERUSER! Un benvenuto speciale al nostro fondatore! 👑`;
+        } else {
+            // Scegli un messaggio casuale
+            welcomeText = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
+        }
+        
+        // Aggiungi informazioni sul clan se presente
+        if (newUser.clan && newUser.clan !== 'Nessuno') {
+            welcomeText += `\n🏰 Clan: ${newUser.clan}`;
+        }
+        
+        // Crea il messaggio di sistema
+        const systemMessage = {
+            author: '🤖 Sistema', // Username del sistema
+            authorId: 'system_bot', // ID fittizio per il sistema
+            message: welcomeText,
+            timestamp: Date.now(),
+            isSystemMessage: true // Flag per distinguere i messaggi di sistema
+        };
+        
+        // Invia nella chat globale
+        const dataPath = getDataPath('chat-generale', 'messages');
+        if (!dataPath) {
+            console.warn('⚠️ Path chat generale non valido');
+            return;
+        }
+        
+        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
+            // Firebase
+            const messagesRef = ref(window.firebaseDatabase, dataPath);
+            await push(messagesRef, systemMessage);
+            console.log('✅ Messaggio di benvenuto inviato su Firebase');
+        } else {
+            // Modalità locale
+            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+            const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            systemMessage.id = 'welcome_' + Date.now();
+            messages.push(systemMessage);
+            localStorage.setItem(storageKey, JSON.stringify(messages));
+            console.log('✅ Messaggio di benvenuto inviato in locale');
+        }
+        
+    } catch (error) {
+        console.error('Errore invio messaggio di benvenuto:', error);
+    }
+}
+
+// Funzione wrapper per gestire tutto il processo di benvenuto
+async function handleNewUserComplete(newUser, isFirstUser = false) {
+    try {
+        console.log('🎯 Gestendo benvenuto per nuovo utente:', newUser.username);
+        
+        // Piccolo delay per assicurarsi che il salvataggio sia completato
+        setTimeout(async () => {
+            try {
+                // 1. Invia notifiche ai superuser
+                await notifyNewUserRegistration(newUser, isFirstUser);
+                
+                // 2. Invia messaggio di benvenuto nella chat globale
+                await sendWelcomeMessage(newUser, isFirstUser);
+                
+                console.log('✅ Processo di benvenuto completato per:', newUser.username);
+            } catch (error) {
+                console.error('Errore nel processo di benvenuto:', error);
+            }
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Errore gestione benvenuto:', error);
+    }
+}
