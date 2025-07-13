@@ -2104,26 +2104,36 @@ window.handleUserLogin = handleUserLogin;
 window.completeUserLogin = completeUserLogin;
 // 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
 function handleUserLogin(user) {
-    console.log('👤 Utente loggato:', user.email);
+    console.log('👤 Gestione login per:', user.email);
 
-    // Controlla se l'utente ha bisogno di scegliere username
-    if (window.usernameManager) {
+    // CORREZIONE: Controlla il provider di autenticazione
+    const isGoogleUser = user.providerData && user.providerData.some(provider => 
+        provider.providerId === 'google.com'
+    );
+    
+    // IMPORTANTE: Solo gli utenti Google devono scegliere username
+    if (isGoogleUser && window.usernameManager) {
+        console.log('🔍 Utente Google - controllo username necessario...');
+        
         window.usernameManager.checkUserNeedsUsername(user).then(needsUsername => {
             if (needsUsername) {
-                console.log('⚠️ Utente ha bisogno di username, mostrando modal...');
+                console.log('⚠️ Utente Google ha bisogno di username, mostrando modal...');
                 setTimeout(() => {
                     window.usernameManager.showUsernameModal(user);
-                }, 1000);
+                }, 500);
                 return; // Non procedere con il login completo
             }
             
-            // Procedi con login normale
+            // Utente Google con username già impostato
+            console.log('✅ Utente Google con username esistente');
             completeUserLogin(user);
         }).catch(error => {
             console.error('Errore controllo username:', error);
             completeUserLogin(user); // Procedi comunque
         });
     } else {
+        // Utenti email/password o altri provider - mai mostrare modal username
+        console.log('✅ Utente email/password - procedo direttamente con login');
         completeUserLogin(user);
     }
 }
@@ -2207,6 +2217,7 @@ async function handleRegister() {
                 displayName: username
             });
 
+            // CORREZIONE: Aggiungi needsUsername = false per utenti email/password
             await set(ref(window.firebaseDatabase, `users/${user.uid}`), {
                 username: username,
                 email: email,
@@ -2214,7 +2225,8 @@ async function handleRegister() {
                 role: userRole,
                 createdAt: serverTimestamp(),
                 lastSeen: serverTimestamp(),
-                provider: 'email'
+                provider: 'email',
+                needsUsername: false // IMPORTANTE: Non ha mai bisogno di scegliere username
             });
         } else {
             // Registrazione locale (demo)
@@ -2242,6 +2254,7 @@ async function handleRegister() {
         showLoading(false);
     }
 }
+
 
 // Determina il ruolo del nuovo utente
 async function determineUserRole() {
@@ -5621,3 +5634,5 @@ window.checkDataUsage = function() {
 };
 
 console.log('🚀 Ottimizzazioni Firebase caricate - consumo dati ridotto drasticamente!');
+
+
