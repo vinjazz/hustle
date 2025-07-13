@@ -1238,7 +1238,85 @@ window.loadUsersList = async function() {
     }
 };
 
-// NUOVA FUNZIONE: Carica tutti gli utenti per admin (accesso diretto)
+window.testAdminAccess = async function() {
+    console.log('🧪 Test accesso admin iniziato...');
+    
+    const userRole = getCurrentUserRole();
+    console.log('👤 Ruolo corrente:', userRole);
+    
+    if (userRole !== USER_ROLES.SUPERUSER) {
+        alert('❌ Solo i superuser possono effettuare questo test');
+        return;
+    }
+    
+    try {
+        // Test accesso ai dati utente corrente
+        const myUserRef = ref(window.firebaseDatabase, `users/${currentUser.uid}`);
+        const mySnapshot = await get(myUserRef);
+        console.log('👤 Accesso ai miei dati:', mySnapshot.exists());
+        
+        if (mySnapshot.exists()) {
+            const myData = mySnapshot.val();
+            console.log('📊 Miei dati:', { 
+                username: myData.username, 
+                role: myData.role, 
+                clan: myData.clan 
+            });
+        }
+        
+        // Test accesso completo agli utenti
+        console.log('🔍 Test accesso completo utenti...');
+        const usersRef = ref(window.firebaseDatabase, 'users');
+        const usersSnapshot = await get(usersRef);
+        
+        if (usersSnapshot.exists()) {
+            console.log('✅ Accesso utenti riuscito!');
+            console.log('📊 Totale utenti nel database:', usersSnapshot.size);
+            
+            // Mostra dettagli primi utenti
+            let count = 0;
+            usersSnapshot.forEach((childSnapshot) => {
+                if (count < 3) {
+                    const userData = childSnapshot.val();
+                    console.log(`👤 Utente ${count + 1}:`, {
+                        uid: childSnapshot.key,
+                        username: userData.username,
+                        email: userData.email,
+                        role: userData.role,
+                        clan: userData.clan
+                    });
+                    count++;
+                }
+            });
+            
+            alert(`✅ Test riuscito! Trovati ${usersSnapshot.size} utenti nel database.`);
+            
+            // Ora ricarica il pannello admin
+            console.log('🔄 Ricaricando pannello admin...');
+            loadUsersGrid();
+            
+        } else {
+            console.log('📭 Database utenti vuoto');
+            alert('⚠️ Database utenti vuoto o accesso negato');
+        }
+        
+    } catch (error) {
+        console.error('❌ Errore test admin:', error);
+        
+        let message = '❌ Test fallito: ' + error.message;
+        
+        if (error.code === 'PERMISSION_DENIED') {
+            message += '\n\n🚫 PERMISSION_DENIED - Possibili soluzioni:';
+            message += '\n1. Verifica che il tuo ruolo sia "superuser" nel database';
+            message += '\n2. Controlla le regole Firebase';
+            message += '\n3. Assicurati che il ruolo sia salvato correttamente';
+        }
+        
+        alert(message);
+    }
+};
+
+// 2. FUNZIONE LOADUSERSFORADMIN MIGLIORATA
 async function loadAllUsersForAdmin() {
     console.log('👑 Admin: caricamento completo di tutti gli utenti...');
     
@@ -1252,9 +1330,16 @@ async function loadAllUsersForAdmin() {
     }
 
     try {
-        // ACCESSO DIRETTO per superuser - questo è quello che mancava!
+        console.log('🔥 Tentativo accesso Firebase per admin...');
+        console.log('📊 User ID:', currentUser.uid);
+        console.log('📊 User Role:', getCurrentUserRole());
+        
+        // ACCESSO DIRETTO per superuser
         const usersRef = ref(window.firebaseDatabase, 'users');
+        console.log('📡 Effettuando richiesta a Firebase...');
+        
         const snapshot = await get(usersRef);
+        console.log('📥 Risposta ricevuta da Firebase');
         
         if (!snapshot.exists()) {
             console.log('📭 Nessun utente trovato nel database Firebase');
@@ -1262,13 +1347,27 @@ async function loadAllUsersForAdmin() {
         }
 
         const users = [];
+        console.log('📊 Processando utenti...');
+        
         snapshot.forEach((childSnapshot) => {
             const userData = childSnapshot.val();
-            users.push({
+            const userObj = {
                 id: childSnapshot.key,
                 uid: childSnapshot.key,
                 ...userData
-            });
+            };
+            users.push(userObj);
+            
+            // Log primi 3 utenti per debug
+            if (users.length <= 3) {
+                console.log(`👤 Utente ${users.length}:`, {
+                    uid: userObj.uid,
+                    username: userObj.username,
+                    email: userObj.email,
+                    role: userObj.role,
+                    clan: userObj.clan
+                });
+            }
         });
 
         console.log(`👑 Admin: caricati ${users.length} utenti completi da Firebase`);
@@ -1276,19 +1375,20 @@ async function loadAllUsersForAdmin() {
 
     } catch (error) {
         console.error('❌ Errore accesso admin Firebase:', error);
+        console.error('📊 Dettagli errore:', {
+            code: error.code,
+            message: error.message,
+            stack: error.stack
+        });
         
-        // Se fallisce l'accesso admin, mostra il motivo
-        if (error.code === 'PERMISSION_DENIED') {
-            console.error('🚫 PERMISSION_DENIED: Le regole Firebase bloccano l\'accesso');
-            console.error('💡 Verifica che il ruolo "superuser" sia configurato correttamente');
-        }
-        
+        // Se fallisce l'accesso admin, usa fallback
         console.log('🔄 Fallback: uso metodo standard limitato');
-        return await window.loadUsersList();
+        await loadUsersList(); // Assicurati che allUsers sia popolato
+        return allUsers.slice(); // Restituisci copia di allUsers
     }
 }
 
-// CORREGGI loadUsersGrid per gestire meglio gli errori
+// 3. LOADUSERSGRID COMPLETAMENTE RISCRITTA
 async function loadUsersGrid() {
     const usersGrid = document.getElementById('users-grid');
 
@@ -1297,12 +1397,15 @@ async function loadUsersGrid() {
         return;
     }
 
-    // Mostra caricamento
+    // Mostra caricamento con debug info
     usersGrid.innerHTML = `
         <div style="text-align: center; padding: 20px;">
             <div>🔄 Caricamento utenti...</div>
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
-                Ruolo: ${getCurrentUserRole()}
+                Ruolo: ${getCurrentUserRole()}<br>
+                Firebase attivo: ${window.useFirebase}<br>
+                Firebase ready: ${firebaseReady}<br>
+                Utente: ${currentUser?.email}
             </div>
         </div>
     `;
@@ -1316,33 +1419,72 @@ async function loadUsersGrid() {
 
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
             if (isSuperuser) {
-                console.log('👑 SUPERUSER: Tentativo accesso completo agli utenti...');
+                console.log('👑 SUPERUSER: Accesso completo agli utenti...');
+                
+                // Mostra che stiamo tentando l'accesso admin
+                usersGrid.innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <div>👑 Accesso amministratore...</div>
+                        <div style="font-size: 12px; color: #3498db; margin-top: 10px;">
+                            Caricamento di tutti gli utenti dal database...
+                        </div>
+                    </div>
+                `;
+                
                 users = await loadAllUsersForAdmin();
                 
                 if (users.length === 0) {
-                    // Se non otteniamo utenti, potrebbe essere un problema di regole
+                    console.warn('⚠️ Nessun utente restituito da loadAllUsersForAdmin');
+                    
+                    // Prova accesso diretto di emergenza
+                    console.log('🚑 Tentativo accesso diretto di emergenza...');
+                    try {
+                        const emergencyUsersRef = ref(window.firebaseDatabase, 'users');
+                        const emergencySnapshot = await get(emergencyUsersRef);
+                        
+                        if (emergencySnapshot.exists()) {
+                            emergencySnapshot.forEach((childSnapshot) => {
+                                users.push({
+                                    id: childSnapshot.key,
+                                    uid: childSnapshot.key,
+                                    ...childSnapshot.val()
+                                });
+                            });
+                            console.log(`🚑 Accesso di emergenza riuscito: ${users.length} utenti`);
+                        }
+                    } catch (emergencyError) {
+                        console.error('🚑 Accesso di emergenza fallito:', emergencyError);
+                    }
+                }
+                
+                if (users.length === 0) {
+                    // Se ancora nessun utente, mostra errore con test button
                     usersGrid.innerHTML = `
                         <div style="text-align: center; padding: 20px; background: rgba(231, 76, 60, 0.1); border-radius: 8px; margin: 10px 0;">
                             <div style="color: #c0392b; margin-bottom: 10px;">⚠️ Nessun utente caricato</div>
                             <div style="font-size: 14px; color: #c0392b; margin-bottom: 15px;">
+                                Il superuser dovrebbe vedere tutti gli utenti.<br>
                                 Possibili cause:<br>
-                                • Regole Firebase non configurate correttamente<br>
-                                • Ruolo "superuser" non riconosciuto<br>
+                                • Regole Firebase non configurate per admin<br>
+                                • Problema di connessione<br>
                                 • Database utenti vuoto
                             </div>
-                            <button onclick="testAdminAccess()" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            <button onclick="testAdminAccess()" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
                                 🔍 Test Accesso Admin
+                            </button>
+                            <button onclick="debugAdminUsers()" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                🔧 Debug Info
                             </button>
                         </div>
                     `;
                     return;
                 }
                 
-                console.log(`✅ Superuser: ${users.length} utenti caricati`);
+                console.log(`✅ Superuser: ${users.length} utenti caricati con successo`);
             } else {
                 console.log('👤 Utente normale: uso lista limitata');
-                users = await window.loadUsersList();
-                users = users.filter(user => user.email);
+                await loadUsersList(); // Carica lista limitata
+                users = allUsers.filter(user => user.email); // Solo utenti con email
                 
                 // Avviso per utenti non-admin
                 usersGrid.innerHTML = `
@@ -1367,24 +1509,22 @@ async function loadUsersGrid() {
 
         // Mostra gli utenti se ce ne sono
         if (users.length > 0) {
-            displayUsersList(users);
+            displayUsersListWithStats(users);
             console.log(`📊 Mostrati ${users.length} utenti nel pannello admin`);
-        } else {
-            // Aggiorna messaggio se non ci sono utenti
+        } else if (!usersGrid.innerHTML.includes('Test Accesso Admin')) {
+            // Solo se non è già mostrato il messaggio di errore
             const existingContent = usersGrid.innerHTML;
-            if (!existingContent.includes('Nessun utente caricato')) {
-                usersGrid.innerHTML += `
-                    <div style="text-align: center; padding: 20px; color: #666; border-top: 1px solid #333; margin-top: 20px;">
-                        <div style="margin-bottom: 10px;">👥 Nessun utente trovato</div>
-                        <div style="font-size: 14px;">
-                            ${isSuperuser 
-                                ? 'Il database sembra vuoto o ci sono problemi di connessione.'
-                                : 'Gli utenti non sono visibili con il tuo ruolo corrente.'
-                            }
-                        </div>
+            usersGrid.innerHTML = existingContent + `
+                <div style="text-align: center; padding: 20px; color: #666; border-top: 1px solid #333; margin-top: 20px;">
+                    <div style="margin-bottom: 10px;">👥 Nessun utente trovato</div>
+                    <div style="font-size: 14px;">
+                        ${isSuperuser 
+                            ? 'Il database sembra vuoto o ci sono problemi di accesso.'
+                            : 'Gli utenti non sono visibili con il tuo ruolo corrente.'
+                        }
                     </div>
-                `;
-            }
+                </div>
+            `;
         }
 
     } catch (error) {
@@ -1400,10 +1540,14 @@ async function loadUsersGrid() {
                     <strong>Debug Info:</strong><br>
                     • Ruolo: ${getCurrentUserRole()}<br>
                     • Firebase attivo: ${window.useFirebase}<br>
-                    • Firebase ready: ${firebaseReady}
+                    • Firebase ready: ${firebaseReady}<br>
+                    • Codice errore: ${error.code || 'N/A'}
                 </div>
-                <button onclick="loadUsersGrid()" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                <button onclick="loadUsersGrid()" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
                     🔄 Riprova
+                </button>
+                <button onclick="testAdminAccess()" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    🔍 Test Accesso
                 </button>
             </div>
         `;
@@ -1411,71 +1555,513 @@ async function loadUsersGrid() {
 }
 
 
-// MIGLIORA displayUsersList per gestire il caso di lista limitata
-function displayUsersList(users) {
+function displayUsersListWithStats(users) {
     const usersGrid = document.getElementById('users-grid');
     
-    if (!users || users.length === 0) {
-        // Non sovrascrivere se c'è già un messaggio di errore
-        if (!usersGrid.innerHTML.includes('Lista utenti limitata')) {
-            usersGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun utente trovato</div>';
-        }
+    if (!usersGrid) {
+        console.error('❌ Elemento users-grid non trovato');
         return;
     }
-
-    // Genera HTML per gli utenti
-    const usersHtml = users.map(user => {
-        const roleText = user.role === 'superuser' ? 'SUPER' :
-            user.role === 'clan_mod' ? 'CLAN MOD' : 'USER';
-        const roleClass = user.role === 'superuser' ? 'role-superuser' :
-            user.role === 'clan_mod' ? 'role-moderator' : 'role-user';
-
-        return `
-            <div class="user-card">
-                <div class="user-card-header">
-                    <div class="user-card-name">
-                        ${user.username || 'Utente'} 
-                        <span class="user-role ${roleClass}">
-                            ${roleText}
-                        </span>
-                    </div>
-                    <div style="font-size: 12px; color: #666;">
-                        ${formatTime(user.createdAt)}
-                    </div>
-                </div>
-                <div class="user-card-info">
-                    <div>📧 ${user.email || 'N/A'}</div>
-                    <div>🏰 Clan: ${user.clan || 'Nessuno'}</div>
-                    <div>🔗 Provider: ${user.provider || 'email'}</div>
-                </div>
-                <div class="user-card-actions">
-                    <button class="admin-btn btn-assign-clan" onclick="assignClan('${user.id || user.uid}', '${user.username}')">
-                        Assegna Clan
-                    </button>
-                    ${getCurrentUserRole() === USER_ROLES.SUPERUSER ? `
-                        <button class="admin-btn btn-change-role" onclick="changeUserRole('${user.id || user.uid}', '${user.username}', '${user.role || 'user'}')">
-                            Cambia Ruolo
-                        </button>
-                    ` : ''}
-                    ${user.clan && user.clan !== 'Nessuno' ? `
-                        <button class="admin-btn btn-remove-clan" onclick="removFromClan('${user.id || user.uid}', '${user.username}')">
-                            Rimuovi Clan
-                        </button>
-                    ` : ''}
+    
+    if (!users || users.length === 0) {
+        usersGrid.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 18px; color: #666; margin-bottom: 10px;">👥</div>
+                <div style="color: #666;">Nessun utente trovato</div>
+                <div style="font-size: 12px; color: #999; margin-top: 10px;">
+                    La lista utenti è vuota o non accessibile
                 </div>
             </div>
         `;
-    }).join('');
-
-    // Se c'è già contenuto (messaggio di avviso), appendici la lista
-    if (usersGrid.innerHTML.includes('Lista utenti limitata')) {
-        usersGrid.innerHTML += usersHtml;
-    } else {
-        usersGrid.innerHTML = usersHtml;
+        return;
     }
 
-    console.log(`✅ Mostrati ${users.length} utenti nel pannello admin`);
+    // Calcola statistiche dettagliate
+    const stats = calculateUserStats(users);
+    
+    // Costruisci HTML
+    const headerHtml = createStatsHeader(stats);
+    const controlsHtml = createUserControls(users.length);
+    const usersListHtml = createUsersList(users);
+    
+    // Combina tutto
+    const finalHtml = headerHtml + controlsHtml + usersListHtml;
+    
+    // Aggiorna il DOM
+    if (usersGrid.innerHTML.includes('Accesso limitato')) {
+        // Mantieni il messaggio di avviso e aggiungi la lista
+        usersGrid.innerHTML += finalHtml;
+    } else {
+        usersGrid.innerHTML = finalHtml;
+    }
+
+    // Aggiungi functionality dopo il rendering
+    setupUserListInteractions();
+    
+    console.log(`✅ Visualizzati ${users.length} utenti con statistiche complete`);
 }
+
+// ===============================================
+// FUNZIONI HELPER
+// ===============================================
+
+function calculateUserStats(users) {
+    const stats = {
+        total: users.length,
+        superuser: 0,
+        clanMod: 0,
+        user: 0,
+        withClan: 0,
+        noClan: 0,
+        google: 0,
+        email: 0,
+        recent: 0, // Ultimi 7 giorni
+        clans: new Set()
+    };
+    
+    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    
+    users.forEach(user => {
+        // Ruoli
+        switch (user.role) {
+            case 'superuser':
+                stats.superuser++;
+                break;
+            case 'clan_mod':
+                stats.clanMod++;
+                break;
+            default:
+                stats.user++;
+        }
+        
+        // Clan
+        if (user.clan && user.clan !== 'Nessuno') {
+            stats.withClan++;
+            stats.clans.add(user.clan);
+        } else {
+            stats.noClan++;
+        }
+        
+        // Provider
+        if (user.provider === 'google') {
+            stats.google++;
+        } else {
+            stats.email++;
+        }
+        
+        // Attività recente
+        if (user.createdAt && user.createdAt > oneWeekAgo) {
+            stats.recent++;
+        }
+    });
+    
+    stats.uniqueClans = stats.clans.size;
+    return stats;
+}
+
+function createStatsHeader(stats) {
+    return `
+        <div class="admin-stats-header">
+            <div class="stats-title">
+                <h3>📊 Statistiche Utenti</h3>
+                <div class="stats-subtitle">Panoramica completa degli utenti del sistema</div>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card total">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">Totale Utenti</div>
+                </div>
+                
+                <div class="stat-card superuser">
+                    <div class="stat-number">${stats.superuser}</div>
+                    <div class="stat-label">Superuser</div>
+                    <div class="stat-percent">${getPercentage(stats.superuser, stats.total)}%</div>
+                </div>
+                
+                <div class="stat-card clan-mod">
+                    <div class="stat-number">${stats.clanMod}</div>
+                    <div class="stat-label">Clan Mod</div>
+                    <div class="stat-percent">${getPercentage(stats.clanMod, stats.total)}%</div>
+                </div>
+                
+                <div class="stat-card user">
+                    <div class="stat-number">${stats.user}</div>
+                    <div class="stat-label">Utenti Base</div>
+                    <div class="stat-percent">${getPercentage(stats.user, stats.total)}%</div>
+                </div>
+                
+                <div class="stat-card clan">
+                    <div class="stat-number">${stats.withClan}</div>
+                    <div class="stat-label">Con Clan</div>
+                    <div class="stat-percent">${getPercentage(stats.withClan, stats.total)}%</div>
+                </div>
+                
+                <div class="stat-card clans">
+                    <div class="stat-number">${stats.uniqueClans}</div>
+                    <div class="stat-label">Clan Attivi</div>
+                </div>
+                
+                <div class="stat-card recent">
+                    <div class="stat-number">${stats.recent}</div>
+                    <div class="stat-label">Nuovi (7gg)</div>
+                    <div class="stat-percent">${getPercentage(stats.recent, stats.total)}%</div>
+                </div>
+                
+                <div class="stat-card provider">
+                    <div class="stat-number">${stats.google}</div>
+                    <div class="stat-label">Google Auth</div>
+                    <div class="stat-percent">${getPercentage(stats.google, stats.total)}%</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function createUserControls(totalUsers) {
+    return `
+        <div class="users-controls">
+            <div class="controls-left">
+                <span class="users-count">👥 ${totalUsers} utenti totali</span>
+            </div>
+            
+            <div class="controls-right">
+                <select id="userRoleFilter" onchange="filterUsers()">
+                    <option value="all">Tutti i ruoli</option>
+                    <option value="superuser">Solo Superuser</option>
+                    <option value="clan_mod">Solo Clan Mod</option>
+                    <option value="user">Solo Utenti Base</option>
+                </select>
+                
+                <select id="userClanFilter" onchange="filterUsers()">
+                    <option value="all">Tutti i clan</option>
+                    <option value="with-clan">Con clan</option>
+                    <option value="no-clan">Senza clan</option>
+                </select>
+                
+                <button onclick="exportUsers()" class="export-btn" title="Esporta lista utenti">
+                    📥 Esporta
+                </button>
+                
+                <button onclick="refreshUsersList()" class="refresh-btn" title="Ricarica lista utenti">
+                    🔄 Aggiorna
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function createUsersList(users) {
+    const sortedUsers = [...users].sort((a, b) => {
+        // Ordina per ruolo (superuser first), poi per username
+        const roleOrder = { 'superuser': 0, 'clan_mod': 1, 'user': 2 };
+        const aRole = roleOrder[a.role] || 2;
+        const bRole = roleOrder[b.role] || 2;
+        
+        if (aRole !== bRole) return aRole - bRole;
+        return (a.username || '').localeCompare(b.username || '');
+    });
+
+    const usersHtml = sortedUsers.map((user, index) => createUserCard(user, index)).join('');
+    
+    return `
+        <div class="users-list-container">
+            <div class="users-list" id="usersList">
+                ${usersHtml}
+            </div>
+        </div>
+    `;
+}
+
+function createUserCard(user, index) {
+    const roleInfo = getUserRoleInfo(user.role);
+    const isCurrentUser = user.uid === currentUser?.uid;
+    const timeAgo = getTimeAgo(user.createdAt);
+    const lastSeenText = getLastSeenText(user.lastSeen);
+    
+    return `
+        <div class="user-card ${isCurrentUser ? 'current-user' : ''}" data-user-id="${user.uid}" data-role="${user.role || 'user'}" data-clan="${user.clan || 'none'}">
+            <div class="user-card-header">
+                <div class="user-info-main">
+                    <div class="user-avatar-small">
+                        ${createUserAvatar(user)}
+                    </div>
+                    
+                    <div class="user-details">
+                        <div class="user-name-row">
+                            <span class="user-name">${user.username || 'Utente'}</span>
+                            ${isCurrentUser ? '<span class="current-user-badge">Tu</span>' : ''}
+                            <span class="user-role ${roleInfo.class}">
+                                ${roleInfo.text}
+                            </span>
+                        </div>
+                        
+                        <div class="user-meta">
+                            <span class="user-id" title="ID Utente">${(user.uid || '').substring(0, 8)}...</span>
+                            <span class="user-joined" title="Registrato">${timeAgo}</span>
+                            ${lastSeenText ? `<span class="user-last-seen" title="Ultima attività">${lastSeenText}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="user-status-indicators">
+                    ${getUserStatusIndicators(user)}
+                </div>
+            </div>
+            
+            <div class="user-card-info">
+                <div class="info-row">
+                    <span class="info-icon">📧</span>
+                    <span class="info-text" title="${user.email}">${truncateEmail(user.email)}</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-icon">🏰</span>
+                    <span class="info-text ${!user.clan || user.clan === 'Nessuno' ? 'no-clan' : 'has-clan'}">
+                        ${user.clan || 'Nessun clan'}
+                    </span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-icon">🔗</span>
+                    <span class="info-text provider-${user.provider || 'email'}">
+                        ${getProviderText(user.provider)}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="user-card-actions">
+                ${createUserActions(user)}
+            </div>
+        </div>
+    `;
+}
+
+// ===============================================
+// FUNZIONI UTILITY
+// ===============================================
+
+function getUserRoleInfo(role) {
+    switch (role) {
+        case 'superuser':
+            return { text: 'SUPER', class: 'role-superuser' };
+        case 'clan_mod':
+            return { text: 'MOD', class: 'role-moderator' };
+        default:
+            return { text: 'USER', class: 'role-user' };
+    }
+}
+
+function createUserAvatar(user) {
+    if (user.avatarUrl) {
+        return `<img src="${user.avatarUrl}" alt="Avatar ${user.username}" class="avatar-img">`;
+    }
+    return `<div class="avatar-default">${(user.username || 'U').charAt(0).toUpperCase()}</div>`;
+}
+
+function getUserStatusIndicators(user) {
+    const indicators = [];
+    
+    if (user.uid === currentUser?.uid) {
+        indicators.push('<span class="status-indicator current" title="Il tuo account">👤</span>');
+    }
+    
+    if (user.role === 'superuser') {
+        indicators.push('<span class="status-indicator super" title="Superuser">👑</span>');
+    }
+    
+    if (user.role === 'clan_mod') {
+        indicators.push('<span class="status-indicator mod" title="Moderatore Clan">🛡️</span>');
+    }
+    
+    if (user.provider === 'google') {
+        indicators.push('<span class="status-indicator google" title="Account Google">🔵</span>');
+    }
+    
+    const isRecent = user.createdAt && (Date.now() - user.createdAt) < (7 * 24 * 60 * 60 * 1000);
+    if (isRecent) {
+        indicators.push('<span class="status-indicator new" title="Nuovo utente">🆕</span>');
+    }
+    
+    return indicators.join('');
+}
+
+function createUserActions(user) {
+    const isCurrentUser = user.uid === currentUser?.uid;
+    const isSuperuser = getCurrentUserRole() === USER_ROLES.SUPERUSER;
+    
+    const actions = [];
+    
+    // Azione Clan sempre disponibile per admin
+    actions.push(`
+        <button class="admin-btn btn-assign-clan" 
+                onclick="assignClan('${user.uid}', '${user.username}')" 
+                title="Gestisci clan di ${user.username}">
+            🏠 Clan
+        </button>
+    `);
+    
+    // Azione Ruolo solo per superuser e non su se stesso
+    if (isSuperuser && !isCurrentUser) {
+        actions.push(`
+            <button class="admin-btn btn-change-role" 
+                    onclick="changeUserRole('${user.uid}', '${user.username}', '${user.role || 'user'}')" 
+                    title="Cambia ruolo di ${user.username}">
+                👤 Ruolo
+            </button>
+        `);
+    }
+    
+    // Azione Rimuovi clan se ha un clan
+    if (user.clan && user.clan !== 'Nessuno') {
+        actions.push(`
+            <button class="admin-btn btn-remove-clan" 
+                    onclick="removFromClan('${user.uid}', '${user.username}')" 
+                    title="Rimuovi ${user.username} da ${user.clan}">
+                ❌ Rimuovi
+            </button>
+        `);
+    }
+    
+    // Azione Info/Dettagli
+    actions.push(`
+        <button class="admin-btn btn-user-info" 
+                onclick="showUserDetails('${user.uid}')" 
+                title="Mostra dettagli di ${user.username}">
+            ℹ️ Info
+        </button>
+    `);
+    
+    return actions.join('');
+}
+
+function getPercentage(value, total) {
+    return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function getTimeAgo(timestamp) {
+    if (!timestamp) return 'Sconosciuto';
+    
+    const now = Date.now();
+    const diff = now - timestamp;
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    
+    if (days === 0) return 'Oggi';
+    if (days === 1) return 'Ieri';
+    if (days < 7) return `${days} giorni fa`;
+    if (days < 30) return `${Math.floor(days / 7)} settimane fa`;
+    if (days < 365) return `${Math.floor(days / 30)} mesi fa`;
+    return `${Math.floor(days / 365)} anni fa`;
+}
+
+function getLastSeenText(lastSeen) {
+    if (!lastSeen) return null;
+    
+    const now = Date.now();
+    const diff = now - lastSeen;
+    const minutes = Math.floor(diff / (60 * 1000));
+    
+    if (minutes < 5) return 'Online';
+    if (minutes < 60) return `${minutes}m fa`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h fa`;
+    
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}g fa`;
+    
+    return null; // Non mostrare se troppo vecchio
+}
+
+function truncateEmail(email) {
+    if (!email) return 'N/A';
+    if (email.length <= 25) return email;
+    
+    const [local, domain] = email.split('@');
+    if (local.length > 15) {
+        return local.substring(0, 12) + '...' + '@' + domain;
+    }
+    return email;
+}
+
+function getProviderText(provider) {
+    switch (provider) {
+        case 'google':
+            return 'Google';
+        case 'email':
+            return 'Email';
+        default:
+            return 'Email';
+    }
+}
+
+// ===============================================
+// FUNZIONI INTERATTIVE
+// ===============================================
+
+function setupUserListInteractions() {
+    // Setup filtri se non già fatto
+    if (!window.userFiltersSetup) {
+        window.userFiltersSetup = true;
+        console.log('⚙️ Setup filtri utenti completato');
+    }
+}
+
+window.filterUsers = function() {
+    const roleFilter = document.getElementById('userRoleFilter')?.value || 'all';
+    const clanFilter = document.getElementById('userClanFilter')?.value || 'all';
+    const userCards = document.querySelectorAll('.user-card');
+    
+    let visibleCount = 0;
+    
+    userCards.forEach(card => {
+        const userRole = card.dataset.role;
+        const userClan = card.dataset.clan;
+        
+        let showCard = true;
+        
+        // Filtro ruolo
+        if (roleFilter !== 'all' && userRole !== roleFilter) {
+            showCard = false;
+        }
+        
+        // Filtro clan
+        if (clanFilter === 'with-clan' && userClan === 'none') {
+            showCard = false;
+        } else if (clanFilter === 'no-clan' && userClan !== 'none') {
+            showCard = false;
+        }
+        
+        card.style.display = showCard ? 'block' : 'none';
+        if (showCard) visibleCount++;
+    });
+    
+    // Aggiorna contatore
+    const countElement = document.querySelector('.users-count');
+    if (countElement) {
+        countElement.textContent = `👥 ${visibleCount} utenti mostrati`;
+    }
+    
+    console.log(`🔍 Filtri applicati: ${visibleCount} utenti visibili`);
+};
+
+window.exportUsers = function() {
+    // Implementa export CSV/JSON
+    console.log('📥 Export utenti richiesto');
+    alert('📥 Funzione export in sviluppo');
+};
+
+window.refreshUsersList = function() {
+    console.log('🔄 Ricaricamento lista utenti...');
+    loadUsersGrid();
+};
+
+window.showUserDetails = function(userId) {
+    console.log('ℹ️ Mostra dettagli utente:', userId);
+    alert(`ℹ️ Dettagli utente ${userId}\n\nFunzione in sviluppo`);
+};
+
+
 
 // AGGIUNGI FUNZIONE DI DEBUG PER TESTARE
 window.debugAdminUsers = function() {
