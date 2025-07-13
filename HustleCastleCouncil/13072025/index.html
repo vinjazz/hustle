@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏰 Hustle Castle Council</title>
+    <!-- reCAPTCHA v3 -->
+    <script src="https://www.google.com/recaptcha/api.js?render=6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF"></script>
+    
+    <!-- Firebase SDK v9 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult} from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+        import { query, orderByKey, orderByChild, limitToLast, limitToFirst } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+
+        import { getDatabase, ref, push, set, get, onValue, off, serverTimestamp, onDisconnect, child, update } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js';
+        
+        // 🔥 CONFIGURAZIONE FIREBASE - INIZIALIZZAZIONE SINGOLA
+          const firebaseConfig = {
+            apiKey: "AIzaSyDjHhviNJSn13Mz0XhoJ9hrjgdPz88fRJU",
+            authDomain: "hustlecastlecouncil.firebaseapp.com",
+            databaseURL: "https://hustlecastlecouncil-default-rtdb.firebaseio.com",
+            projectId: "hustlecastlecouncil",
+            storageBucket: "hustlecastlecouncil.firebasestorage.app",
+            messagingSenderId: "778970862600",
+            appId: "1:778970862600:web:f4950fe582887ab72eadbd",
+            measurementId: "G-TXX1ZLPLLR"
+        };
+        
+        // Inizializza Firebase UNA SOLA VOLTA - CON APP CHECK RIABILITATO
+        let useFirebase = true;
+        let app = null;
+        let appCheckEnabled = false;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            console.log('🔥 Firebase inizializzato con successo');
+            
+            // 🛡️ App Check RIABILITATO - Configurazione migliorata
+            try {
+                console.log('🔄 Inizializzando App Check...');
+                const appCheck = initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider('6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF'),
+                    isTokenAutoRefreshEnabled: true
+                });
+                appCheckEnabled = true;
+                console.log('✅ App Check inizializzato con successo');
+                console.log('🛡️ Protezione Firebase App Check attiva');
+                
+                // Aggiorna l'interfaccia utente per mostrare App Check attivo
+                setTimeout(() => updateAppCheckStatus(true, 'Protezione completa'), 500);
+                
+            } catch (appCheckError) {
+                console.warn('⚠️ App Check non disponibile:', appCheckError.message);
+                console.log('📝 Dettagli errore App Check:', appCheckError);
+                
+                // Aggiorna l'interfaccia utente per mostrare errore App Check
+                setTimeout(() => updateAppCheckError(appCheckError.message), 500);
+                
+                // Analizza l'errore per dare suggerimenti
+                if (appCheckError.message.includes('not configured')) {
+                    console.error('💡 SOLUZIONE: Configura App Check nella Firebase Console');
+                    console.error('   1. Vai su Firebase Console > Project Settings > App Check');
+                    console.error('   2. Registra la tua app web');
+                    console.error('   3. Configura reCAPTCHA v3 provider');
+                } else if (appCheckError.message.includes('token')) {
+                    console.error('💡 SOLUZIONE: Problema con i token App Check');
+                    console.error('   - Verifica che il site key reCAPTCHA sia corretto');
+                    console.error('   - Controlla che il dominio sia autorizzato');
+                } else if (appCheckError.message.includes('throttled')) {
+                    console.error('💡 SOLUZIONE: Richieste limitate per errori 403');
+                    console.error('   - Attendi 24 ore per il reset automatico');
+                    console.error('   - Oppure configura correttamente App Check');
+                }
+                
+                console.log('📝 Il forum funzionerà senza App Check');
+                appCheckEnabled = false;
+                
+                // Aggiorna l'interfaccia utente per mostrare App Check disabilitato
+                setTimeout(() => updateAppCheckStatus(false, 'Errore configurazione'), 500);
+            }
+            
+        } catch (error) {
+            console.error('❌ Errore inizializzazione Firebase:', error);
+            useFirebase = false;
+            setTimeout(() => updateAppCheckStatus(false, 'Firebase non attivo'), 500);
+            alert('⚠️ Firebase non configurato. Il forum funzionerà in modalità demo locale.');
+        }
+        
+        const auth = useFirebase ? getAuth(app) : null;
+        const database = useFirebase ? getDatabase(app) : null;
+        const storage = useFirebase ? getStorage(app) : null;
+        const googleProvider = useFirebase ? new GoogleAuthProvider() : null;
+        
+        // Configura Google Provider per evitare problemi CORS
+        if (googleProvider) {
+            // Forza l'uso di redirect invece di popup per evitare CORS issues
+            googleProvider.setCustomParameters({
+                prompt: 'select_account'
+            });
+        }
+        
+        // Esponi Firebase globalmente per compatibilità
+        window.firebaseApp = app;
+        window.firebaseAuth = auth;
+        window.firebaseDatabase = database;
+        window.firebaseStorage = storage;
+        window.useFirebase = useFirebase;
+        window.appCheckEnabled = appCheckEnabled;
+        window.firebaseImports = {
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut,
+            updateProfile,
+            GoogleAuthProvider,
+            signInWithPopup,
+            signInWithRedirect,
+            getRedirectResult,
+            ref,
+            push,
+            set,
+            get,
+            onValue,
+            off,
+            serverTimestamp,
+            onDisconnect,
+            child,
+            update,
+            storageRef,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
+        };
+        window.googleProvider = googleProvider;
+        
+        // 🤖 FUNZIONI reCAPTCHA v3 - GESTIONE MIGLIORATA
+        const RECAPTCHA_SITE_KEY = '6LfvVn4rAAAAAKeRyW_aQJKd-wadk5juPRX6zqAF'; // ✅ AGGIORNATO CON IL TUO SITE KEY
+        let recaptchaReady = false;
+        let recaptchaError = null;
+        
+        // Verifica reCAPTCHA v3 con punteggio - CON APP CHECK RIABILITATO
+        window.verifyRecaptcha = async function(action = 'submit') {
+            // Aggiorna lo stato nel UI
+            updateRecaptchaStatus('checking', 'Verificando sicurezza...');
+            
+            if (!window.useFirebase) {
+                console.log('🤖 Firebase non attivo, permettendo accesso');
+                updateRecaptchaStatus('disabled', 'Firebase non attivo');
+                return { success: true, score: 1.0, token: null };
+            }
+            
+            if (recaptchaError) {
+                console.log('🤖 reCAPTCHA v3 in errore, permettendo accesso');
+                updateRecaptchaStatus('error', 'Verifica non disponibile');
+                return { success: true, score: 1.0, token: null };
+            }
+            
+            if (!recaptchaReady || typeof grecaptcha === 'undefined') {
+                console.log('🤖 reCAPTCHA v3 non pronto, permettendo accesso');
+                updateRecaptchaStatus('loading', 'Caricando verifica...');
+                return { success: true, score: 1.0, token: null };
+            }
+            
+            try {
+                console.log('🔍 Eseguendo reCAPTCHA v3 per azione:', action);
+                // Esegui reCAPTCHA v3 per l'azione specificata
+                const token = await grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: action });
+                
+                // In un'app reale, dovresti inviare il token al server per verifica
+                // Qui simuliamo una verifica lato client (NON sicura in produzione)
+                console.log('🤖 reCAPTCHA v3 token ottenuto:', token.substring(0, 20) + '...');
+                
+                if (appCheckEnabled) {
+                    updateRecaptchaStatus('success', '🛡️ Verifica completa OK');
+                    console.log('✅ reCAPTCHA v3 + App Check: Verifica completa');
+                } else {
+                    updateRecaptchaStatus('success', '🛡️ Verifica base OK');
+                    console.log('✅ reCAPTCHA v3: Verifica base completata');
+                }
+                
+                return { 
+                    success: true, 
+                    score: 0.9, // In produzione questo viene dal server
+                    token: token,
+                    appCheckEnabled: appCheckEnabled
+                };
+            } catch (error) {
+                console.error('❌ Errore reCAPTCHA v3:', error);
+                updateRecaptchaStatus('error', 'Errore verifica');
+                return { success: false, score: 0.0, token: null };
+            }
+        };
+        
+        // Non serve più reset per v3
+        window.resetRecaptcha = function() {
+            // reCAPTCHA v3 non ha bisogno di reset
+            console.log('🤖 reCAPTCHA v3: reset non necessario');
+        };
+
+        // Funzione per aggiornare lo stato del reCAPTCHA nel UI
+        window.updateRecaptchaStatus = function(status, message) {
+            const statusElement = document.getElementById('recaptchaStatus');
+            const statusText = document.getElementById('recaptchaStatusText');
+            
+            if (statusElement && statusText) {
+                statusElement.className = 'recaptcha-status ' + status;
+                statusText.textContent = message;
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`Status: ${status} - ${message}`);
+            }
+        };
+
+        // Funzione per aggiornare lo stato di App Check nel UI
+        window.updateAppCheckStatus = function(enabled, message) {
+            const appCheckElement = document.getElementById('appCheckIndicator');
+            const appCheckText = document.getElementById('appCheckStatusText');
+            
+            if (appCheckElement && appCheckText) {
+                if (enabled) {
+                    appCheckElement.className = 'app-check-indicator enabled';
+                    appCheckText.textContent = '🛡️ App Check: Attivo';
+                } else {
+                    appCheckElement.className = 'app-check-indicator disabled';
+                    appCheckText.textContent = '🛡️ App Check: ' + (message || 'Disabilitato');
+                }
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`App Check: ${enabled ? 'Attivo' : 'Disabilitato'} - ${message}`);
+            }
+        };
+
+        // Funzione per aggiornare lo stato di App Check in caso di errore
+        window.updateAppCheckError = function(error) {
+            const appCheckElement = document.getElementById('appCheckIndicator');
+            const appCheckText = document.getElementById('appCheckStatusText');
+            
+            if (appCheckElement && appCheckText) {
+                appCheckElement.className = 'app-check-indicator error';
+                appCheckText.textContent = '🛡️ App Check: Errore';
+                
+                // Aggiungi log di debug
+                addRecaptchaDebugLog(`App Check ERROR: ${error}`);
+            }
+        };
+
+        // Funzione per aggiungere log di debug
+        window.addRecaptchaDebugLog = function(message) {
+            const debugElement = document.getElementById('recaptchaDebug');
+            if (debugElement) {
+                // Mostra l'area debug
+                debugElement.style.display = 'block';
+                
+                // Aggiungi il nuovo log
+                const logLine = document.createElement('div');
+                logLine.className = 'debug-line';
+                logLine.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+                debugElement.appendChild(logLine);
+                
+                // Mantieni solo gli ultimi 5 log
+                const logs = debugElement.querySelectorAll('.debug-line');
+                if (logs.length > 6) { // 6 perché il primo è il titolo
+                    logs[1].remove(); // Rimuovi il secondo (primo log)
+                }
+                
+                // Scroll automatico
+                debugElement.scrollTop = debugElement.scrollHeight;
+            }
+        };
+
+        // Inizializza reCAPTCHA v3 quando pronto - CON APP CHECK RIABILITATO
+        window.initRecaptchaV3 = function() {
+            console.log('🚀 Inizializzazione reCAPTCHA v3...');
+            addRecaptchaDebugLog('Avvio inizializzazione...');
+            
+            if (!window.useFirebase) {
+                console.log('🤖 reCAPTCHA v3 disabilitato - Firebase non attivo');
+                addRecaptchaDebugLog('Firebase non attivo');
+                updateRecaptchaStatus('disabled', 'Firebase non attivo');
+                return;
+            }
+            
+            if (!appCheckEnabled) {
+                console.log('🤖 reCAPTCHA v3 attivo senza App Check');
+                addRecaptchaDebugLog('App Check disabilitato - reCAPTCHA standalone');
+                updateRecaptchaStatus('active', 'Protezione base attiva');
+                // Continua comunque con reCAPTCHA standalone
+            } else {
+                console.log('🛡️ reCAPTCHA v3 + App Check attivi');
+                addRecaptchaDebugLog('App Check + reCAPTCHA attivi');
+            }
+            
+            // Verifica che grecaptcha sia disponibile
+            if (typeof grecaptcha === 'undefined') {
+                console.error('❌ grecaptcha non definito');
+                addRecaptchaDebugLog('ERRORE: grecaptcha non definito');
+                updateRecaptchaStatus('error', 'Libreria non caricata');
+                return;
+            }
+            
+            // Verifica che grecaptcha.ready sia disponibile
+            if (typeof grecaptcha.ready !== 'function') {
+                console.error('❌ grecaptcha.ready non disponibile');
+                addRecaptchaDebugLog('ERRORE: grecaptcha.ready non disponibile');
+                updateRecaptchaStatus('error', 'API non pronta');
+                return;
+            }
+            
+            console.log('✅ grecaptcha disponibile, eseguendo ready...');
+            addRecaptchaDebugLog('grecaptcha disponibile');
+            
+            grecaptcha.ready(function() {
+                console.log('🎯 grecaptcha.ready eseguito');
+                addRecaptchaDebugLog('grecaptcha.ready eseguito');
+                
+                // Verifica che grecaptcha.execute sia disponibile
+                if (typeof grecaptcha.execute !== 'function') {
+                    console.error('❌ grecaptcha.execute non disponibile');
+                    addRecaptchaDebugLog('ERRORE: grecaptcha.execute non disponibile');
+                    updateRecaptchaStatus('error', 'Funzione execute mancante');
+                    return;
+                }
+                
+                try {
+                    console.log('🔍 Eseguendo test con site key:', RECAPTCHA_SITE_KEY);
+                    addRecaptchaDebugLog('Eseguendo test con site key...');
+                    
+                    // Esegui un test iniziale per verificare che il site key sia valido
+                    grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'homepage' })
+                        .then(function(token) {
+                            recaptchaReady = true;
+                            recaptchaError = null;
+                            console.log('✅ reCAPTCHA v3 inizializzato con successo!');
+                            console.log('🎫 Token di test ottenuto:', token.substring(0, 30) + '...');
+                            addRecaptchaDebugLog('✅ Inizializzazione completata!');
+                            addRecaptchaDebugLog('Token ottenuto: ' + token.substring(0, 20) + '...');
+                            
+                            // Mostra lo stato completo
+                            if (appCheckEnabled) {
+                                updateRecaptchaStatus('active', '🛡️ Protezione completa attiva');
+                                addRecaptchaDebugLog('🛡️ App Check + reCAPTCHA completamente attivi');
+                            } else {
+                                updateRecaptchaStatus('active', '🛡️ Protezione base attiva');
+                                addRecaptchaDebugLog('🛡️ Solo reCAPTCHA attivo (App Check offline)');
+                            }
+                        })
+                        .catch(function(error) {
+                            console.error('❌ Errore durante l\'esecuzione di reCAPTCHA:', error);
+                            recaptchaError = error;
+                            
+                            // Analizza l'errore per dare suggerimenti
+                            const errorMsg = error.message || error.toString();
+                            console.error('📝 Dettagli errore:', errorMsg);
+                            addRecaptchaDebugLog('❌ ERRORE: ' + errorMsg);
+                            
+                            if (errorMsg.includes('Invalid site key')) {
+                                console.error('💡 SOLUZIONE: Il site key non è valido o non è configurato per questo dominio');
+                                addRecaptchaDebugLog('💡 Site key non valido per questo dominio');
+                                updateRecaptchaStatus('error', 'Site key non valido');
+                            } else if (errorMsg.includes('not allowed')) {
+                                console.error('💡 SOLUZIONE: Dominio non autorizzato. Aggiungi il dominio corrente alla lista dei domini autorizzati');
+                                addRecaptchaDebugLog('💡 Dominio non autorizzato');
+                                updateRecaptchaStatus('error', 'Dominio non autorizzato');
+                            } else {
+                                console.error('💡 SOLUZIONE: Verifica la configurazione reCAPTCHA');
+                                addRecaptchaDebugLog('💡 Errore di configurazione');
+                                updateRecaptchaStatus('error', 'Errore configurazione');
+                            }
+                        });
+                } catch (error) {
+                    console.error('❌ Errore critico nell\'inizializzazione:', error);
+                    recaptchaError = error;
+                    addRecaptchaDebugLog('❌ Errore critico: ' + error.message);
+                    updateRecaptchaStatus('error', 'Errore critico');
+                }
+            });
+        };
+        
+        // Gestione Google Auth con fallback da popup a redirect
+        window.handleGoogleAuth = async function(useRedirect = false) {
+            if (!window.useFirebase || !auth || !googleProvider) {
+                alert('❌ Firebase non configurato per l\'autenticazione Google');
+                return;
+            }
+            
+            try {
+                let result;
+                
+                if (useRedirect) {
+                    console.log('🔄 Usando redirect per Google Auth...');
+                    // Usa redirect se popup fallisce
+                    await signInWithRedirect(auth, googleProvider);
+                    return; // Il redirect gestirà il resto
+                } else {
+                    console.log('🔄 Usando popup per Google Auth...');
+                    // Prova prima con popup
+                    result = await signInWithPopup(auth, googleProvider);
+                }
+                
+                if (result && result.user) {
+                    console.log('✅ Autenticazione Google riuscita:', result.user.displayName);
+                    return result.user;
+                }
+                
+            } catch (error) {
+                console.error('❌ Errore Google Auth:', error);
+                
+                // Se il popup fallisce a causa di CORS, prova con redirect
+                if (error.code === 'auth/popup-blocked' || 
+                    error.code === 'auth/popup-closed-by-user' || 
+                    error.message.includes('Cross-Origin-Opener-Policy')) {
+                    
+                    console.log('⚠️ Popup bloccato, provo con redirect...');
+                    
+                    if (confirm('Il popup è stato bloccato dal browser. Vuoi provare con un redirect?')) {
+                        return await window.handleGoogleAuth(true); // Retry con redirect
+                    }
+                } else {
+                    alert('❌ Errore nell\'autenticazione Google: ' + error.message);
+                }
+            }
+        };
+        
+        // Gestisci il risultato del redirect all'avvio
+        window.addEventListener('load', async () => {
+            if (auth && typeof getRedirectResult === 'function') {
+                try {
+                    const result = await getRedirectResult(auth);
+                    if (result && result.user) {
+                        console.log('✅ Autenticazione Google completata dopo redirect:', result.user.displayName);
+                        // L'utente è già autenticato, verrà gestito da onAuthStateChanged
+                    }
+                } catch (error) {
+                    console.error('❌ Errore nel gestire il redirect result:', error);
+                }
+            }
+        });
+        
+        // Inizializza quando la pagina è caricata - CON RETRY AUTOMATICO
+        window.addEventListener('load', () => {
+            let initAttempts = 0;
+            const maxAttempts = 10;
+            
+            const tryInitRecaptcha = () => {
+                initAttempts++;
+                console.log(`🤖 Tentativo inizializzazione reCAPTCHA v3 #${initAttempts}`);
+                addRecaptchaDebugLog(`Tentativo #${initAttempts}/${maxAttempts}`);
+                
+                if (typeof grecaptcha !== 'undefined') {
+                    console.log('✅ grecaptcha disponibile, inizializzo...');
+                    addRecaptchaDebugLog('grecaptcha caricato, inizializzo...');
+                    window.initRecaptchaV3();
+                } else if (initAttempts < maxAttempts) {
+                    console.log(`⏳ grecaptcha non ancora disponibile, riprovo tra 1s...`);
+                    addRecaptchaDebugLog(`Aspetto grecaptcha... (${initAttempts}/${maxAttempts})`);
+                    setTimeout(tryInitRecaptcha, 1000);
+                } else {
+                    console.warn('❌ reCAPTCHA v3 non disponibile dopo 10 tentativi');
+                    addRecaptchaDebugLog('❌ Timeout: grecaptcha non caricato');
+                    updateRecaptchaStatus('error', 'Caricamento fallito');
+                    updateAppCheckStatus(false, 'reCAPTCHA non disponibile');
+                }
+            };
+            
+            // Inizia dopo 1 secondo per dare tempo al caricamento
+            setTimeout(tryInitRecaptcha, 1000);
+        });
+    </script>
+    
+    <!-- CSS Files -->
+    <link href="style.css" rel="stylesheet">
+    <link href="dashboard_css_clean.css" rel="stylesheet">
+    
+    <!-- Username Modal Styles -->
+    <style>
+        /* Username Modal Styles */
+        .username-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+
+        .username-modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .username-modal-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-secondary);
+        }
+
+        .username-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .username-header h2 {
+            color: var(--accent-4);
+            margin-bottom: 1rem;
+            font-size: 1.6rem;
+            background: var(--gradient-secondary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .username-header p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .username-form .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .username-form label {
+            display: block;
+            margin-bottom: 0.6rem;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .username-form input,
+        .username-form select {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .username-form input:focus,
+        .username-form select:focus {
+            outline: none;
+            border-color: var(--accent-2);
+            box-shadow: 0 0 0 3px rgba(45, 130, 181, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .username-form input.valid {
+            border-color: var(--success);
+            box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.2);
+        }
+
+        .username-form input.invalid {
+            border-color: var(--error);
+            box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2);
+        }
+
+        .username-hints {
+            margin-top: 0.8rem;
+            padding: 1rem;
+            background: rgba(45, 130, 181, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(45, 130, 181, 0.2);
+        }
+
+        .hint-item {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .hint-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .username-validation {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            min-height: 20px;
+        }
+
+        .username-validation.valid { color: var(--success); }
+        .username-validation.invalid { color: var(--error); }
+        .username-validation.checking { color: var(--text-secondary); }
+
+        .form-help {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .username-actions {
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .btn-save-username {
+            background: var(--gradient-secondary);
+            color: white;
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 20px rgba(45, 130, 181, 0.3);
+        }
+
+        .btn-save-username:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(45, 130, 181, 0.4);
+        }
+
+        .btn-save-username:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .action-note {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .username-loading {
+            display: flex !important;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .username-loading .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--accent-3);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes usernameSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .username-modal-content {
+            animation: usernameSlideIn 0.4s ease-out;
+        }
+
+        @media (max-width: 480px) {
+            .username-modal-content {
+                width: 95%;
+                padding: 1.5rem;
+                margin: 1rem;
+            }
+            
+            .username-header h2 {
+                font-size: 1.4rem;
+            }
+            
+            .username-header p {
+                font-size: 0.9rem;
+            }
+            
+            .btn-save-username {
+                width: 100%;
+                padding: 1.2rem;
+            }
+        }
+
+        /* reCAPTCHA v3 Status Indicator */
+        .recaptcha-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: rgba(45, 130, 181, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(45, 130, 181, 0.2);
+        }
+
+        .recaptcha-status.active {
+            color: var(--success);
+            background: rgba(39, 174, 96, 0.1);
+            border-color: rgba(39, 174, 96, 0.2);
+        }
+
+        .recaptcha-status.error {
+            color: var(--error);
+            background: rgba(231, 76, 60, 0.1);
+            border-color: rgba(231, 76, 60, 0.2);
+        }
+
+        .recaptcha-status.success {
+            color: var(--success);
+            background: rgba(39, 174, 96, 0.15);
+            border-color: rgba(39, 174, 96, 0.3);
+        }
+
+        .recaptcha-status.checking {
+            color: var(--accent-2);
+            background: rgba(45, 130, 181, 0.15);
+            border-color: rgba(45, 130, 181, 0.3);
+        }
+
+        .recaptcha-status.loading {
+            color: var(--text-secondary);
+            background: rgba(128, 128, 128, 0.1);
+            border-color: rgba(128, 128, 128, 0.2);
+        }
+
+        /* Indicatore App Check */
+        .app-check-indicator {
+            margin-top: 0.5rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid;
+        }
+
+        .app-check-indicator.enabled {
+            background: rgba(39, 174, 96, 0.1);
+            border-color: rgba(39, 174, 96, 0.3);
+            color: var(--success);
+        }
+
+        .app-check-indicator.disabled {
+            background: rgba(255, 193, 7, 0.1);
+            border-color: rgba(255, 193, 7, 0.3);
+            color: #ffa000;
+        }
+
+        .app-check-indicator.error {
+            background: rgba(231, 76, 60, 0.1);
+            border-color: rgba(231, 76, 60, 0.3);
+            color: var(--error);
+        }
+
+        .recaptcha-status.disabled {
+            color: var(--text-muted);
+            background: rgba(128, 128, 128, 0.1);
+            border-color: rgba(128, 128, 128, 0.2);
+        }
+
+        .recaptcha-debug {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(128, 128, 128, 0.1);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-family: monospace;
+            color: var(--text-muted);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .recaptcha-debug .debug-line {
+            margin-bottom: 2px;
+        }
+
+        .recaptcha-debug .debug-line:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Menu Toggle -->
+    <button id="mobileMenuToggle" class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
+    
+    <!-- Mobile Overlay -->
+    <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
+    
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status offline">🔴 Disconnesso</div>
+    
+    <!-- Message Counter -->
+    <div id="messageCounter" class="message-counter">💬 0 messaggi</div>
+	
+    <!-- Notifications Bell -->
+    <button id="notificationsBell" class="notifications-bell" onclick="toggleNotificationsPanel()">
+        🔔
+        <span id="notificationBadge" class="notification-badge hidden">0</span>
+    </button>
+
+    <!-- Notifications Panel -->
+    <div id="notificationsPanel" class="notifications-panel">
+        <div class="notifications-header">
+            <h3>🔔 Notifiche</h3>
+            <button class="mark-all-read" onclick="markAllNotificationsAsRead()">
+                Segna tutte come lette
+            </button>
+        </div>
+        <div id="notificationsList" class="notifications-list">
+            <div class="notifications-empty">
+                <div class="empty-icon">🔕</div>
+                <div>Nessuna notifica</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container">
+        <!-- I toast verranno generati dinamicamente -->
+    </div>
+
+    <!-- Mention Autocomplete -->
+    <div id="mentionAutocomplete" class="mention-autocomplete">
+        <!-- I suggerimenti verranno generati dinamicamente -->
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="login-modal">
+        <div class="login-form">
+            <h2>🏰 Benvenuto nel Forum</h2>
+            
+            <!-- Tabs per Login/Registrazione -->
+            <div class="login-tabs">
+                <button id="loginTab" class="login-tab active" onclick="switchToLogin()">Accedi</button>
+                <button id="registerTab" class="login-tab" onclick="switchToRegister()">Registrati</button>
+            </div>
+            
+            <div id="firebase-status" style="text-align: center; margin-bottom: 15px; padding: 10px; border-radius: 8px; font-size: 12px;">
+                <!-- Status will be updated by JavaScript -->
+            </div>
+            
+            <!-- Login con Google -->
+            <button id="googleLoginBtn" class="google-login-btn" onclick="window.handleGoogleAuth()">
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                <span id="googleBtnText">Continua con Google</span>
+            </button>
+            
+            <div class="divider">
+                <span>oppure</span>
+            </div>
+            
+            <div id="loginError" class="error"></div>
+            <div id="loginSuccess" class="success"></div>
+            
+            <!-- Campi per registrazione (nascosti inizialmente) -->
+            <div id="registrationFields" class="registration-fields">
+                <div class="form-group">
+                    <label for="username">Username *</label>
+                    <input type="text" id="username" placeholder="Scegli il tuo username">
+                </div>
+            </div>
+            
+            <!-- Campi comuni -->
+            <div class="form-group">
+                <label for="email">Email *</label>
+                <input type="email" id="email" placeholder="Inserisci la tua email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password *</label>
+                <input type="password" id="password" placeholder="Inserisci la password">
+            </div>
+            
+            <!-- reCAPTCHA v3 Status con Debug e App Check Indicator -->
+            <div id="recaptchaStatus" class="recaptcha-status">
+                <span>🤖</span>
+                <span id="recaptchaStatusText">Inizializzando verifica sicurezza...</span>
+            </div>
+            <div id="appCheckIndicator" class="app-check-indicator disabled">
+                <span id="appCheckStatusText">🛡️ App Check: Caricamento...</span>
+            </div>
+            <div class="form-buttons">
+                <button id="submitBtn" class="btn-primary" onclick="handleSubmit()">Accedi</button>
+            </div>
+            
+            <div id="loading" class="loading">
+                <div>🔄 Connessione in corso...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ✨ NEW: Username Selection Modal -->
+    <div id="usernameModal" class="username-modal" style="display: none;">
+        <div class="username-modal-content">
+            <div class="username-header">
+                <h2>🎯 Scegli il tuo Username</h2>
+                <p>Benvenuto! Per completare la registrazione, scegli un username univoco che ti rappresenterà nel forum.</p>
+            </div>
+            
+            <div class="username-form">
+                <div id="usernameError" class="error"></div>
+                <div id="usernameSuccess" class="success"></div>
+                
+                <div class="form-group">
+                    <label for="usernameInput">Username *</label>
+                    <input type="text" 
+                           id="usernameInput" 
+                           placeholder="Es: GuerrieroDelCastello"
+                           maxlength="20"
+                           autocomplete="off">
+                    <div class="username-hints">
+                        <div class="hint-item">✓ Tra 3 e 20 caratteri</div>
+                        <div class="hint-item">✓ Solo lettere, numeri e underscore</div>
+                        <div class="hint-item">✓ Deve essere univoco</div>
+                    </div>
+                    <div id="usernameValidation" class="username-validation"></div>
+                </div>
+                
+                <div class="form-group"  style="display: none;">
+                    <label for="clanSelect">Clan (opzionale)</label>
+                    <select id="clanSelect">
+                        <option value="Nessuno">Nessun clan per ora</option>
+                    </select>
+                    <div class="form-help">
+                        💡 Puoi sempre unirti a un clan in seguito tramite la sezione "Associa Clan"
+                    </div>
+                </div>
+                
+                <div class="username-actions">
+                    <button id="saveUsernameBtn" class="btn-save-username" onclick="saveUsername()" disabled>
+                        Conferma Username
+                    </button>
+                    <div class="action-note">
+                        ⚠️ L'username non potrà essere modificato in seguito
+                    </div>
+                </div>
+            </div>
+            
+            <div id="usernameLoading" class="loading username-loading" style="display: none;">
+                <div class="loading-spinner"></div>
+                <span>Salvando il tuo username...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="logo">
+            <h1>🏰 Hustle Castle Council</h1>
+        </div>
+        
+        <!-- User Info con Avatar Enhanced -->
+        <div class="user-info">
+            <div class="user-avatar" id="userAvatar">
+                <img id="userAvatarImg" src="" alt="Avatar" style="display: none; width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                <div id="userAvatarDefault" class="user-avatar-default">👤</div>
+            </div>
+            <div style="display: inline-block; vertical-align: middle;">
+                <div class="user-name">
+                    <span id="currentUsername">Ospite</span>
+                    <span id="userStatus" class="offline-indicator"></span>
+                </div>
+                <div class="user-clan">Clan: <span id="currentClan">Nessuno</span></div>
+                <div class="avatar-controls" id="avatarControls" style="margin-top: 8px; display: none;">
+                    <label for="avatar-upload" class="avatar-upload-btn">📷 Cambia Avatar</label>
+                    <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+                </div>
+                <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
+            </div>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-title">🏠 Comando</div>
+            <div class="nav-item active" data-section="home">
+                <span>🏰 Dashboard</span>
+            </div>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-title">🌍 Generale</div>
+            <div class="nav-item" data-section="eventi">
+                <span>📅 Eventi</span>
+            </div>
+            <div class="nav-item" data-section="oggetti">
+                <span>⚔️ Oggetti</span>
+            </div>
+            <div class="nav-item" data-section="novita">
+                <span>🆕 Novità</span>
+            </div>
+            <div class="nav-item" data-section="salotto">
+                <span>🛋️ Salotto</span>
+            </div>
+            <div class="nav-item" data-section="segnalazioni">
+                <span>📢 Segnalazioni</span>
+            </div>
+            <div class="nav-item" data-section="chat-generale">
+                <span>💬 Chat Generale</span>
+            </div>
+			<div class="nav-item" data-section="associa-clan">
+                <span>🏠 Associa Clan</span>
+            </div>
+        </div>
+
+        <div class="nav-section" id="adminSection" style="display: none;">
+            <div class="nav-title">⚙️ Amministrazione</div>
+            <div class="nav-item" data-section="admin-users">
+                <span>👥 Gestione Utenti</span>
+            </div>
+            <div class="nav-item" data-section="admin-clans">
+                <span>🏰 Gestione Clan</span>
+            </div>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-title">🛡️ Clan: <span id="sidebarClan">Nessuno</span></div>
+            <div class="nav-item clan-only" data-section="clan-moderation" id="clanModerationItem" style="display: none;">
+                <span>🛡️ Moderazione</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-chat">
+                <span>💬 Chat Clan</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-war">
+                <span>⚔️ Guerra</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-premi">
+                <span>🏆 Premi</span>
+            </div>
+            <div class="nav-item clan-only" data-section="clan-consigli">
+                <span>💡 Consigli</span>
+            </div>
+			<div class="nav-item clan-only" data-section="clan-bacheca">
+                <span>🏰 Bacheca</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Banner Hero Enhanced -->
+        <div class="banner">
+            <div class="banner-content">
+                <div class="banner-title">⚔️ Hustle Castle Council ⚔️</div>
+                <div class="banner-subtitle">Il Comando Supremo della Community</div>
+            </div>
+        </div>
+
+        <div class="header">
+            <h2 id="section-title">🏰 Dashboard</h2>
+            <p id="section-description">Il tuo centro di comando per gestire strategie, clan e conquiste</p>
+        </div>
+
+        <div class="content-area">
+            <!-- Forum Layout -->
+            <div class="forum-layout" id="forum-content">
+                <div class="thread-list" id="thread-list">
+                    <!-- I contenuti verranno generati dinamicamente -->
+                </div>
+            </div>
+
+            <!-- Chat Layout -->
+            <div class="chat-mode" id="chat-content">
+                <div class="chat-messages" id="chat-messages">
+                    <!-- I messaggi verranno generati dinamicamente -->
+                </div>
+                <div id="typingIndicator" class="typing-indicator"></div>
+                <div class="chat-input">
+                    <div style="display: flex; align-items: flex-end; gap: 10px;">
+                        <div style="flex: 1; position: relative;">
+							<input type="text" id="message-input" placeholder="Scrivi un messaggio... (usa @nome per taggare)" />
+						</div>
+                        <div style="display: flex; gap: 5px;">
+                            <div class="emoticon-picker">
+                                <button class="emoticon-btn" onclick="toggleEmoticonPicker('chat')">😊</button>
+                                <div class="emoticon-panel" id="chat-emoticon-panel">
+                                    <div class="emoticon-grid">
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '😊')">😊</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '😂')">😂</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🎉')">🎉</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '❤️')">❤️</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '👍')">👍</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '👎')">👎</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🔥')">🔥</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '💪')">💪</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🎯')">🎯</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '⚔️')">⚔️</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🏰')">🏰</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🛡️')">🛡️</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🏆')">🏆</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '💎')">💎</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '⭐')">⭐</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🚀')">🚀</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '💯')">💯</button>
+                                        <button class="emoticon-item" onclick="addEmoticon('chat', '🤔')">🤔</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="send-message-btn" onclick="sendMessage()">🚀</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thread View -->
+            <div class="thread-view" id="thread-view">
+                <div style="width: 100%; display: flex; flex-direction: column; height: 100%;">
+                    <!-- MODIFICATO: Aggiunto title per tooltip -->
+                    <button class="back-btn" onclick="backToForum()" title="Torna al forum (Escape o swipe da sinistra)">← Torna al Forum</button>
+                    
+                    <div class="thread-header">
+                        <h1 id="thread-title">Titolo Thread</h1>
+                        <div class="thread-meta">
+                            <span id="thread-author">Autore</span> • 
+                            <span id="thread-date">Data</span> • 
+                            <span id="thread-views">0 visualizzazioni</span>
+                        </div>
+                        <div class="thread-content" id="thread-content">
+                            Contenuto del thread...
+                        </div>
+                    </div>
+                    
+                    <div class="thread-comments" id="thread-comments">
+                        <div style="text-align: center; padding: 20px; color: #666;">
+                            Nessun commento ancora. Sii il primo a commentare!
+                        </div>
+                    </div>
+                    
+                    <div class="comment-input">
+                        <div class="comment-input-container">
+                            <div class="comment-input-main">
+                                <div class="comment-textarea-container">
+                                    <textarea id="comment-text" placeholder="Scrivi un commento... (usa @nome per taggare)"></textarea>
+                                </div>
+                                <div class="comment-controls">
+                                    <div class="comment-buttons-row">
+                                        <button class="small-upload-btn" onclick="toggleCommentImageUpload()" title="Aggiungi immagine">📷</button>
+                                        <div class="emoticon-picker">
+                                            <button class="emoticon-btn" onclick="toggleEmoticonPicker('comment')">😊</button>
+                                            <div class="emoticon-panel" id="comment-emoticon-panel">
+                                                <div class="emoticon-grid">
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😊')">😊</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '😂')">😂</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎉')">🎉</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '❤️')">❤️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👍')">👍</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '👎')">👎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🔥')">🔥</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💪')">💪</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🎯')">🎯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⚔️')">⚔️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏰')">🏰</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🛡️')">🛡️</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🏆')">🏆</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💎')">💎</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '⭐')">⭐</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🚀')">🚀</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '💯')">💯</button>
+                                                    <button class="emoticon-item" onclick="addEmoticon('comment', '🤔')">🤔</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button id="submit-comment-btn" onclick="addComment()" class="submit-comment-btn">Commenta</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Image Upload Section for Comments -->
+                            <div id="comment-image-upload" class="comment-image-upload">
+                                <label for="comment-image-input" class="image-upload-label">
+                                    📷 Seleziona Immagine
+                                </label>
+                                <input type="file" id="comment-image-input" accept="image/*" class="image-upload-input" />
+                                <div id="comment-image-preview" class="image-preview"></div>
+                                <div id="comment-upload-progress" class="upload-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+				</div>
+            </div>
+        </div>
+    </div>
+
+    <button id="new-thread-btn" class="new-thread-btn" onclick="showThreadCreationModal()">+ Nuovo Thread</button>
+
+    <!-- Thread Creation Modal -->
+    <div id="threadCreationModal" class="thread-creation-modal">
+        <div class="thread-creation-form">
+            <h3>🏰 Crea Nuovo Thread</h3>
+            
+            <input type="text" id="thread-title-input" placeholder="Titolo del thread *" />
+            <textarea id="thread-content-input" placeholder="Contenuto del thread * (usa @nome per taggare)"></textarea>
+            
+            <!-- Image Upload Section -->
+            <div class="image-upload-section">
+                <label for="thread-image-input" class="image-upload-label">
+                    📷 Aggiungi Immagine (opzionale)
+                </label>
+                <input type="file" id="thread-image-input" accept="image/*" class="image-upload-input" />
+                <div id="image-preview" class="image-preview"></div>
+                <div id="upload-progress" class="upload-progress"></div>
+            </div>
+            
+            <div class="thread-creation-buttons">
+                <button class="btn-create-thread" onclick="createThread()">Crea Thread</button>
+                <button class="btn-cancel-thread" onclick="hideThreadCreationModal()">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Avatar Modal -->
+    <div id="avatarModal" class="avatar-modal" style="display: none;">
+        <div class="avatar-modal-content">
+            <h3>🖼️ Imposta il tuo Avatar</h3>
+            <div class="avatar-preview-container">
+                <div class="avatar-preview-large">
+                    <img id="avatarPreviewLarge" src="" alt="Preview">
+                </div>
+                <div class="avatar-preview-small">
+                    <img id="avatarPreviewSmall" src="" alt="Preview piccolo">
+                    <p>Anteprima</p>
+                </div>
+            </div>
+            <div class="avatar-modal-buttons">
+                <button class="btn-save-avatar" onclick="saveAvatarChanges()">💾 Salva Avatar</button>
+                <button class="btn-cancel-avatar" onclick="cancelAvatarChange()">❌ Annulla</button>
+                <button class="btn-remove-avatar" onclick="removeAvatar()">🗑️ Rimuovi Avatar</button>
+            </div>
+            <div id="avatar-upload-progress" class="upload-progress" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Image Modal for fullscreen view -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+        <span class="close-modal">&times;</span>
+        <img id="modalImage" src="" alt="Immagine a schermo intero">
+    </div>
+
+    <!-- ======================================= -->
+    <!-- PRIMA carica i tuoi script esistenti   -->
+    <!-- ======================================= -->
+    <script src="script.js"></script>
+    <script src="username_handler.js"></script>
+    <script src="dashboard_js_clean.js"></script>
+    <script src="activity_tracker.js"></script>
+
+    <!-- ======================================= -->
+    <!-- POI carica il sistema di navigazione    -->
+    <!-- ======================================= -->
+    <script>
+        // Configurazione sistema di navigazione (DOPO che tutto è caricato)
+        window.navigationConfig = {
+            enableMobileFeatures: true,    // Abilita breadcrumb e gesti mobile
+            enableDebugMode: false,        // Abilita logging per debug (cambia in true se serve)
+            enableVibration: true,         // Vibrazione su mobile Android
+            enableGestures: true,          // Swipe da sinistra per tornare indietro
+            toastDuration: 3000,          // Durata toast in millisecondi
+            initDelay: 2000               // Ritardo maggiore per assicurarsi che tutto sia pronto
+        };
+    </script>
+    
+    <!-- Stili e script del sistema di navigazione - ALLA FINE -->
+    <link href="navigation-styles.css" rel="stylesheet">
+    <script src="browser-navigation.js"></script>
+    <script src="mobile-navigation.js"></script>
+    <script src="navigation-init.js"></script>
+</body>
+</html>

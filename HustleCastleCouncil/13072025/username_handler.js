@@ -415,21 +415,6 @@ class UsernameManager {
             }
             
             console.log('✅ Username salvato con successo');
-
-            const isFirstUser = userRole === (window.USER_ROLES?.SUPERUSER || 'superuser');
-            const newUserData = {
-                uid: this.pendingUser.uid,
-                username: username,
-                email: this.pendingUser.email,
-                clan: selectedClan === 'Nessuno' ? 'Nessuno' : selectedClan,
-                role: userRole,
-                provider: 'google'
-            };
-            
-            // Chiama il sistema di benvenuto
-            if (typeof window.handleNewUserComplete === 'function') {
-                await window.handleNewUserComplete(newUserData, isFirstUser);
-            }
             
             // Chiudi modal e continua login
             this.hideUsernameModal();
@@ -635,32 +620,3 @@ window.saveUsername = function() {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = UsernameManager;
 }
-
-
-window.testWelcomeSystem = function() {
-    const testUser = {
-        uid: 'test_welcome_' + Date.now(),
-        username: 'TestUser' + Math.floor(Math.random() * 1000),
-        email: 'test@example.com',
-        clan: 'Nessuno',
-        role: 'user',
-        provider: 'test'
-    };
-    
-    console.log('🧪 Testando sistema di benvenuto con utente:', testUser);
-    handleNewUserComplete(testUser, false);
-};
-
-window.testWelcomeSystemSuperuser = function() {
-    const testSuperUser = {
-        uid: 'test_super_' + Date.now(),
-        username: 'SuperTest' + Math.floor(Math.random() * 1000),
-        email: 'super@example.com',
-        clan: 'Nessuno',
-        role: 'superuser',
-        provider: 'test'
-    };
-    
-    console.log('🧪 Testando sistema di benvenuto SUPERUSER con utente:', testSuperUser);
-    handleNewUserComplete(testSuperUser, true);
-};

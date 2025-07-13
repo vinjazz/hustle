@@ -1,0 +1,295 @@
+<!-- Username Selection Modal -->
+<div id="usernameModal" class="username-modal" style="display: none;">
+    <div class="username-modal-content">
+        <div class="username-header">
+            <h2>🎯 Scegli il tuo Username</h2>
+            <p>Benvenuto! Per completare la registrazione, scegli un username univoco che ti rappresenterà nel forum.</p>
+        </div>
+        
+        <div class="username-form">
+            <div id="usernameError" class="error"></div>
+            <div id="usernameSuccess" class="success"></div>
+            
+            <div class="form-group">
+                <label for="usernameInput">Username *</label>
+                <input type="text" 
+                       id="usernameInput" 
+                       placeholder="Es: GuerrieroDelCastello"
+                       maxlength="20"
+                       autocomplete="off">
+                <div class="username-hints">
+                    <div class="hint-item">✓ Tra 3 e 20 caratteri</div>
+                    <div class="hint-item">✓ Solo lettere, numeri e underscore</div>
+                    <div class="hint-item">✓ Deve essere univoco</div>
+                </div>
+                <div id="usernameValidation" class="username-validation"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="clanSelect">Clan (opzionale)</label>
+                <select id="clanSelect">
+                    <option value="Nessuno">Nessun clan per ora</option>
+                </select>
+                <div class="form-help">
+                    💡 Puoi sempre unirti a un clan in seguito tramite la sezione "Associa Clan"
+                </div>
+            </div>
+            
+            <div class="username-actions">
+                <button id="saveUsernameBtn" class="btn-save-username" onclick="saveUsername()" disabled>
+                    Conferma Username
+                </button>
+                <div class="action-note">
+                    ⚠️ L'username non potrà essere modificato in seguito
+                </div>
+            </div>
+        </div>
+        
+        <div id="usernameLoading" class="loading username-loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <span>Salvando il tuo username...</span>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Username Modal Styles */
+.username-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    backdrop-filter: blur(10px);
+}
+
+.username-modal-content {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 500px;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.username-modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-secondary);
+}
+
+.username-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.username-header h2 {
+    color: var(--accent-4);
+    margin-bottom: 1rem;
+    font-size: 1.6rem;
+    background: var(--gradient-secondary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.username-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.username-form .form-group {
+    margin-bottom: 1.5rem;
+}
+
+.username-form label {
+    display: block;
+    margin-bottom: 0.6rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.username-form input,
+.username-form select {
+    width: 100%;
+    padding: 1rem;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.username-form input:focus,
+.username-form select:focus {
+    outline: none;
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 3px rgba(45, 130, 181, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.username-form input.valid {
+    border-color: var(--success);
+    box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.2);
+}
+
+.username-form input.invalid {
+    border-color: var(--error);
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2);
+}
+
+.username-hints {
+    margin-top: 0.8rem;
+    padding: 1rem;
+    background: rgba(45, 130, 181, 0.1);
+    border-radius: 10px;
+    border: 1px solid rgba(45, 130, 181, 0.2);
+}
+
+.hint-item {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.hint-item:last-child {
+    margin-bottom: 0;
+}
+
+.username-validation {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    min-height: 20px;
+}
+
+.username-validation.valid {
+    color: var(--success);
+}
+
+.username-validation.invalid {
+    color: var(--error);
+}
+
+.username-validation.checking {
+    color: var(--text-secondary);
+}
+
+.form-help {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.username-actions {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+.btn-save-username {
+    background: var(--gradient-secondary);
+    color: white;
+    border: none;
+    padding: 1rem 2.5rem;
+    border-radius: 25px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 20px rgba(45, 130, 181, 0.3);
+}
+
+.btn-save-username:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(45, 130, 181, 0.4);
+}
+
+.btn-save-username:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.action-note {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.username-loading {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.username-loading .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top: 3px solid var(--accent-3);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Animazioni */
+@keyframes usernameSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.username-modal-content {
+    animation: usernameSlideIn 0.4s ease-out;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+    .username-modal-content {
+        width: 95%;
+        padding: 1.5rem;
+        margin: 1rem;
+    }
+    
+    .username-header h2 {
+        font-size: 1.4rem;
+    }
+    
+    .username-header p {
+        font-size: 0.9rem;
+    }
+    
+    .btn-save-username {
+        width: 100%;
+        padding: 1.2rem;
+    }
+}
+</style>
