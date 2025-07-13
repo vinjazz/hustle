@@ -569,13 +569,11 @@ class UsernameManager {
         }
     }
 
-    // ✨ FUNZIONE CORRETTA: Controlla se un utente ha bisogno di scegliere username
+    // Controlla se un utente ha bisogno di scegliere username
     async checkUserNeedsUsername(user) {
         if (!user) return false;
         
         try {
-            console.log('🔍 Controllo se utente ha bisogno di username:', user.email);
-            
             if (window.useFirebase && window.firebaseDatabase && window.firebaseImports && 
                 typeof window.firebaseImports.ref === 'function' && 
                 typeof window.firebaseImports.get === 'function') {
@@ -586,122 +584,22 @@ class UsernameManager {
                 
                 if (snapshot.exists()) {
                     const userData = snapshot.val();
-                    console.log('📄 Dati utente esistenti:', userData);
-                    
-                    // CONTROLLO MIGLIORATO: Se l'utente ha un username valido, non serve sceglierlo
-                    if (userData.username && userData.username.trim() !== '' && userData.username !== 'undefined') {
-                        console.log('✅ Username già esistente:', userData.username);
-                        return false; // Non serve scegliere username
-                    }
-                    
-                    // Se provider è Google e non ha username, allora serve
-                    if (userData.provider === 'google') {
-                        console.log('🔍 Utente Google senza username, serve sceglierlo');
-                        return true;
-                    }
-                    
-                    // Se provider è email/password ma non ha username, errore nel sistema
-                    if (userData.provider === 'email') {
-                        console.warn('⚠️ Utente email/password senza username, questo non dovrebbe succedere');
-                        return false; // Non forzare per utenti email/password
-                    }
-                    
-                    // Fallback per provider non definiti
-                    console.log('🤔 Provider non definito, assumo che serva username');
-                    return true;
+                    return userData.needsUsername === true || !userData.username || userData.username.trim() === '';
                 }
-                
-                // Nuovo utente - controlla il provider
-                console.log('🆕 Nuovo utente, controllo provider...');
-                
-                // Se l'utente si è registrato con Google, serve username
-                if (user.providerData && user.providerData.length > 0) {
-                    const isGoogleUser = user.providerData.some(provider => provider.providerId === 'google.com');
-                    console.log('🔍 È utente Google?', isGoogleUser);
-                    return isGoogleUser;
-                }
-                
-                // Se non ci sono provider data ma l'utente ha displayName, probabilmente è Google
-                if (user.displayName && !user.displayName.includes('@')) {
-                    console.log('🔍 Ha displayName ma non email nel nome, probabilmente Google');
-                    return true;
-                }
-                
-                console.log('📧 Assumo sia registrazione email/password');
-                return false; // Default: non serve username per registrazioni normali
-                
+                return true; // Nuovo utente
             } else {
                 // Modalità locale
                 const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
                 const userData = users[user.email];
                 
                 if (userData) {
-                    console.log('📄 Dati utente locali:', userData);
-                    // Stesso controllo per modalità locale
-                    if (userData.username && userData.username.trim() !== '' && userData.username !== 'undefined') {
-                        console.log('✅ Username locale già esistente:', userData.username);
-                        return false;
-                    }
-                    return userData.provider === 'google';
+                    return userData.needsUsername === true || !userData.username || userData.username.trim() === '';
                 }
-                
-                console.log('🆕 Nuovo utente locale, assumo email/password');
-                return false; // Nuovo utente locale, probabilmente email/password
+                return true; // Nuovo utente
             }
         } catch (error) {
             console.error('Errore controllo needsUsername:', error);
-            return false; // In caso di errore, non forzare la scelta
-        }
-    }
-
-    // ✨ NUOVA FUNZIONE: Salva utente email/password con username già scelto
-    async saveEmailPasswordUser(user, username, email) {
-        try {
-            console.log('💾 Salvando utente email/password:', { email, username });
-            
-            // Determina il ruolo
-            const userRole = await this.determineUserRole();
-            
-            // Prepara dati utente
-            const timestamp = Date.now();
-            const userData = {
-                username: username,
-                email: email,
-                clan: 'Nessuno',
-                role: userRole,
-                createdAt: timestamp,
-                lastSeen: timestamp,
-                provider: 'email', // IMPORTANTE: marca come registrazione email
-                needsUsername: false // IMPORTANTE: già ha l'username
-            };
-            
-            console.log('📝 Dati utente email/password preparati:', userData);
-            
-            // Salva nel database
-            if (window.useFirebase && window.firebaseDatabase && window.firebaseImports) {
-                const { ref, set } = window.firebaseImports;
-                const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
-                await set(userRef, userData);
-                console.log('✅ Utente email/password salvato su Firebase');
-            } else {
-                // Modalità locale
-                const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-                users[email] = {
-                    uid: user.uid,
-                    ...userData
-                };
-                localStorage.setItem('hc_local_users', JSON.stringify(users));
-                console.log('✅ Utente email/password salvato localmente');
-            }
-            
-            // Aggiorna dati globali
-            window.currentUserData = userData;
-            
-            return userData;
-            
-        } catch (error) {
-            console.error('❌ Errore salvataggio utente email/password:', error);
-            throw error;
+            return false;
         }
     }
 }
