@@ -1240,42 +1240,51 @@ window.loadUsersList = async function() {
 
 // NUOVA FUNZIONE: Carica tutti gli utenti per admin (accesso diretto)
 async function loadAllUsersForAdmin() {
-    console.log('👑 Admin: caricamento di tutti gli utenti...');
+    console.log('👑 Admin: caricamento completo di tutti gli utenti...');
     
     if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) {
         console.log('📱 Modalità locale: carico da localStorage');
         const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-        return Object.values(users);
+        return Object.values(users).map(user => ({
+            ...user,
+            id: user.uid // Assicura che ci sia sempre un id
+        }));
     }
 
     try {
-        // Accesso diretto al nodo users per superuser
+        // ACCESSO DIRETTO per superuser - questo è quello che mancava!
         const usersRef = ref(window.firebaseDatabase, 'users');
         const snapshot = await get(usersRef);
         
         if (!snapshot.exists()) {
-            console.log('📭 Nessun utente trovato nel database');
+            console.log('📭 Nessun utente trovato nel database Firebase');
             return [];
         }
 
         const users = [];
         snapshot.forEach((childSnapshot) => {
+            const userData = childSnapshot.val();
             users.push({
                 id: childSnapshot.key,
                 uid: childSnapshot.key,
-                ...childSnapshot.val()
+                ...userData
             });
         });
 
-        console.log(`👑 Admin: caricati ${users.length} utenti completi`);
+        console.log(`👑 Admin: caricati ${users.length} utenti completi da Firebase`);
         return users;
 
     } catch (error) {
-        console.error('❌ Errore accesso admin agli utenti:', error);
-        console.log('🔄 Fallback: uso metodo standard');
+        console.error('❌ Errore accesso admin Firebase:', error);
         
-        // Fallback: usa il metodo standard
-        return await loadUsersList();
+        // Se fallisce l'accesso admin, mostra il motivo
+        if (error.code === 'PERMISSION_DENIED') {
+            console.error('🚫 PERMISSION_DENIED: Le regole Firebase bloccano l\'accesso');
+            console.error('💡 Verifica che il ruolo "superuser" sia configurato correttamente');
+        }
+        
+        console.log('🔄 Fallback: uso metodo standard limitato');
+        return await window.loadUsersList();
     }
 }
 
@@ -1292,67 +1301,90 @@ async function loadUsersGrid() {
     usersGrid.innerHTML = `
         <div style="text-align: center; padding: 20px;">
             <div>🔄 Caricamento utenti...</div>
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                Ruolo: ${getCurrentUserRole()}
+            </div>
         </div>
     `;
 
     try {
         let users = [];
+        const userRole = getCurrentUserRole();
+        const isSuperuser = userRole === USER_ROLES.SUPERUSER;
+
+        console.log(`👤 Caricamento utenti per ruolo: ${userRole} (isSuperuser: ${isSuperuser})`);
 
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // CORREZIONE: Accesso diverso per superuser vs utenti normali
-            if (getCurrentUserRole() === USER_ROLES.SUPERUSER) {
-                console.log('👑 Superuser: accesso completo agli utenti');
+            if (isSuperuser) {
+                console.log('👑 SUPERUSER: Tentativo accesso completo agli utenti...');
                 users = await loadAllUsersForAdmin();
+                
+                if (users.length === 0) {
+                    // Se non otteniamo utenti, potrebbe essere un problema di regole
+                    usersGrid.innerHTML = `
+                        <div style="text-align: center; padding: 20px; background: rgba(231, 76, 60, 0.1); border-radius: 8px; margin: 10px 0;">
+                            <div style="color: #c0392b; margin-bottom: 10px;">⚠️ Nessun utente caricato</div>
+                            <div style="font-size: 14px; color: #c0392b; margin-bottom: 15px;">
+                                Possibili cause:<br>
+                                • Regole Firebase non configurate correttamente<br>
+                                • Ruolo "superuser" non riconosciuto<br>
+                                • Database utenti vuoto
+                            </div>
+                            <button onclick="testAdminAccess()" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                🔍 Test Accesso Admin
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                console.log(`✅ Superuser: ${users.length} utenti caricati`);
             } else {
-                console.log('👤 Utente normale: usa lista utenti limitata');
-                users = await loadUsersList();
-                users = users.filter(user => user.email); // Solo utenti con email
-            }
-            
-            // Messaggio informativo per non-superuser
-            if (users.length < 5 && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
+                console.log('👤 Utente normale: uso lista limitata');
+                users = await window.loadUsersList();
+                users = users.filter(user => user.email);
+                
+                // Avviso per utenti non-admin
                 usersGrid.innerHTML = `
                     <div style="text-align: center; padding: 20px; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin: 10px 0;">
-                        <div style="color: #856404; margin-bottom: 10px;">⚠️ Lista utenti limitata</div>
+                        <div style="color: #856404; margin-bottom: 10px;">⚠️ Accesso limitato</div>
                         <div style="font-size: 14px; color: #856404;">
                             Solo i superuser possono vedere tutti gli utenti.<br>
-                            Questa lista mostra utenti attivi recentemente.
+                            La tua vista è limitata agli utenti attivi recentemente.
                         </div>
                     </div>
-                    <div style="margin-top: 20px;"></div>
                 `;
             }
         } else {
             // Modalità locale
             console.log('📱 Modalità locale attiva');
             const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            users = Object.values(localUsers);
+            users = Object.values(localUsers).map(user => ({
+                ...user,
+                id: user.uid
+            }));
         }
 
         // Mostra gli utenti se ce ne sono
         if (users.length > 0) {
-            // Se c'era già un messaggio, aggiungilo alla fine
-            const existingContent = usersGrid.innerHTML;
-            if (existingContent.includes('Lista utenti limitata')) {
-                // Mantieni il messaggio e aggiungi la lista sotto
-            } else {
-                usersGrid.innerHTML = ''; // Pulisci solo se non c'è messaggio
-            }
-            
             displayUsersList(users);
+            console.log(`📊 Mostrati ${users.length} utenti nel pannello admin`);
         } else {
-            // Nessun utente trovato
-            usersGrid.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: #666;">
-                    <div style="margin-bottom: 10px;">👥 Nessun utente trovato</div>
-                    <div style="font-size: 14px;">
-                        ${getCurrentUserRole() === USER_ROLES.SUPERUSER 
-                            ? 'Il database sembra vuoto.'
-                            : 'Prova a tornare più tardi quando altri utenti saranno attivi.'
-                        }
+            // Aggiorna messaggio se non ci sono utenti
+            const existingContent = usersGrid.innerHTML;
+            if (!existingContent.includes('Nessun utente caricato')) {
+                usersGrid.innerHTML += `
+                    <div style="text-align: center; padding: 20px; color: #666; border-top: 1px solid #333; margin-top: 20px;">
+                        <div style="margin-bottom: 10px;">👥 Nessun utente trovato</div>
+                        <div style="font-size: 14px;">
+                            ${isSuperuser 
+                                ? 'Il database sembra vuoto o ci sono problemi di connessione.'
+                                : 'Gli utenti non sono visibili con il tuo ruolo corrente.'
+                            }
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
         }
 
     } catch (error) {
@@ -1364,6 +1396,12 @@ async function loadUsersGrid() {
                 <div style="font-size: 14px; margin-bottom: 15px;">
                     ${error.message || 'Errore sconosciuto'}
                 </div>
+                <div style="margin-bottom: 15px;">
+                    <strong>Debug Info:</strong><br>
+                    • Ruolo: ${getCurrentUserRole()}<br>
+                    • Firebase attivo: ${window.useFirebase}<br>
+                    • Firebase ready: ${firebaseReady}
+                </div>
                 <button onclick="loadUsersGrid()" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
                     🔄 Riprova
                 </button>
@@ -1371,6 +1409,7 @@ async function loadUsersGrid() {
         `;
     }
 }
+
 
 // MIGLIORA displayUsersList per gestire il caso di lista limitata
 function displayUsersList(users) {
