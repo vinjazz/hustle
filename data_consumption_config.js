@@ -7,7 +7,7 @@ class DataConsumptionManager {
     constructor() {
         this.config = {
             // Modalità consumo dati
-            mode: 'ultra_low', // ultra_low, low, normal, unlimited
+            mode: 'normal', // ultra_low, low, normal, unlimited
             
             // Impostazioni auto-refresh
             autoRefreshEnabled: false,
