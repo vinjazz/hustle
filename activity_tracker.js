@@ -1,104 +1,76 @@
 // ===============================================
-// ACTIVITY TRACKER MODULE - Sistema Badge Novità
+// ACTIVITY TRACKER - VERSIONE DISATTIVATA
+// Riduce drasticamente il consumo dati Firebase
 // ===============================================
 
-class ActivityTracker {
+class ActivityTrackerDisabled {
     constructor() {
         this.lastLogoutTime = null;
         this.lastVisitTimes = {};
         this.unreadCounts = {};
         this.updateInterval = null;
         this.isTracking = false;
+        this.autoRefreshDisabled = true; // DISATTIVATO per ridurre consumi
+        this.realtimeListeners = {};
     }
 
-    // Inizializza il tracker
+    // Inizializza il tracker (VERSIONE DISATTIVATA)
     async init() {
-        console.log('🔔 Inizializzazione Activity Tracker...');
+        console.log('🔔 Inizializzazione Activity Tracker DISATTIVATO per ridurre consumi...');
         
         if (!currentUser) {
             console.log('⚠️ Nessun utente loggato, tracker non inizializzato');
             return;
         }
 
-        this.isTracking = true;
+        // NON avviare tracking automatico
+        this.isTracking = false;
         
-        // Carica ultimo logout e visite precedenti
-        await this.loadUserActivityData();
+        // Carica solo i dati base senza real-time
+        await this.loadUserActivityDataBasic();
         
-        // Calcola badge iniziali
-        await this.calculateAllBadges();
+        // NON calcolare badge automaticamente
+        // NON aggiornare UI automaticamente
+        // NON setup listeners real-time
+        // NON setup auto-refresh
         
-        // Aggiorna UI
-        this.updateAllBadges();
-        
-        // Setup listeners real-time
-        this.setupRealtimeListeners();
-        
-        // Setup auto-refresh ogni 30 secondi (come backup)
-        this.startAutoRefresh();
-        
-        // Mostra info modalità
-        if (!window.useFirebase || !window.firebaseDatabase || !window.getFirebaseReady()) {
-            console.log('✅ Activity Tracker inizializzato (modalità locale - refresh ogni 30s)');
-        } else {
-            console.log('✅ Activity Tracker inizializzato con real-time');
-        }
+        console.log('✅ Activity Tracker inizializzato in modalità DISATTIVATA');
+        console.log('🚫 Real-time listeners: DISATTIVATI');
+        console.log('🚫 Auto-refresh: DISATTIVATO');
+        console.log('🚫 Badge automatici: DISATTIVATI');
+        console.log('💾 Consumo dati: RIDOTTO DRASTICAMENTE');
     }
 
-    // Carica dati attività utente
-    async loadUserActivityData() {
+    // Carica dati attività utente (versione base)
+    async loadUserActivityDataBasic() {
         try {
-            if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
-                try {
-                    const { ref, get } = window.firebaseImports;
-                    // Prova prima a caricare da users/${userId}/activity (più sicuro)
-                    const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
-                    const snapshot = await get(userActivityRef);
-                    
-                    if (snapshot.exists()) {
-                        const data = snapshot.val();
-                        this.lastLogoutTime = data.lastLogout || Date.now();
-                        this.lastVisitTimes = data.lastVisitTimes || {};
-                    } else {
-                        // Prima volta, imposta timestamp corrente
-                        this.lastLogoutTime = Date.now();
-                        this.lastVisitTimes = {};
-                    }
-                } catch (firebaseError) {
-                    console.warn('⚠️ Accesso Firebase negato, uso fallback locale:', firebaseError.message);
-                    // Fallback to localStorage
-                    this.loadFromLocalStorage();
-                }
-            } else {
-                // Modalità locale
-                this.loadFromLocalStorage();
-            }
+            // Carica solo da localStorage per evitare chiamate Firebase
+            this.loadFromLocalStorage();
             
-            console.log('📊 Dati attività caricati:', {
-                lastLogout: new Date(this.lastLogoutTime).toLocaleString(),
-                visitedSections: Object.keys(this.lastVisitTimes)
-            });
+            console.log('📊 Dati attività caricati da localStorage (modalità risparmio)');
             
         } catch (error) {
             console.error('Errore caricamento dati attività:', error);
             // Fallback sicuro
             this.lastLogoutTime = Date.now();
             this.lastVisitTimes = {};
-            // Salva in locale come backup
-            this.saveToLocalStorage();
         }
     }
     
-    // Carica da localStorage
+    // Carica da localStorage (SEMPRE - non Firebase)
     loadFromLocalStorage() {
+        if (!currentUser) return;
+        
         const storageKey = `hc_activity_${currentUser.uid}`;
         const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
         this.lastLogoutTime = data.lastLogout || Date.now();
         this.lastVisitTimes = data.lastVisitTimes || {};
     }
     
-    // Salva in localStorage
+    // Salva in localStorage (SEMPRE - non Firebase)
     saveToLocalStorage() {
+        if (!currentUser) return;
+        
         const storageKey = `hc_activity_${currentUser.uid}`;
         const data = {
             lastLogout: this.lastLogoutTime,
@@ -107,34 +79,112 @@ class ActivityTracker {
         localStorage.setItem(storageKey, JSON.stringify(data));
     }
 
-    // Salva dati attività utente
+    // Salva dati attività utente (SOLO localStorage)
     async saveUserActivityData() {
         if (!currentUser || !this.isTracking) return;
         
-        const data = {
-            lastLogout: this.lastLogoutTime,
-            lastVisitTimes: this.lastVisitTimes
-        };
-        
-        // Salva sempre in localStorage come backup
+        // Salva SOLO in localStorage per ridurre consumo Firebase
         this.saveToLocalStorage();
         
-        // Prova anche Firebase se disponibile
-        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
-            try {
-                const { ref, set } = window.firebaseImports;
-                // Prova a salvare in users/${userId}/activity
-                const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
-                await set(userActivityRef, data);
-                console.log('✅ Attività salvata su Firebase');
-            } catch (firebaseError) {
-                console.warn('⚠️ Impossibile salvare su Firebase, usando solo localStorage:', firebaseError.message);
-            }
+        console.log('✅ Attività salvata solo in localStorage (modalità risparmio)');
+    }
+
+    // METODI DISATTIVATI per ridurre consumi
+
+    // Badge calculation DISATTIVATO
+    async calculateAllBadges() {
+        console.log('🚫 calculateAllBadges DISATTIVATO per ridurre consumi');
+        // Non calcolare badge automaticamente
+        this.unreadCounts = {};
+    }
+
+    async calculateSectionBadge(section) {
+        console.log('🚫 calculateSectionBadge DISATTIVATO per ridurre consumi');
+        return 0;
+    }
+
+    async countNewMessages(section, sinceTime) {
+        console.log('🚫 countNewMessages DISATTIVATO per ridurre consumi');
+        return 0;
+    }
+
+    async countNewThreads(section, sinceTime) {
+        console.log('🚫 countNewThreads DISATTIVATO per ridurre consumi');
+        return 0;
+    }
+
+    // UI Updates DISATTIVATI
+    updateAllBadges() {
+        console.log('🚫 updateAllBadges DISATTIVATO per ridurre consumi');
+        // Rimuovi tutti i badge per indicare che il sistema è disattivato
+        document.querySelectorAll('.section-badge').forEach(badge => badge.remove());
+    }
+
+    addBadgeToSection(section, count, isNewContent = false) {
+        console.log('🚫 addBadgeToSection DISATTIVATO per ridurre consumi');
+        // Non aggiungere badge
+    }
+
+    // Real-time listeners DISATTIVATI
+    setupRealtimeListeners() {
+        console.log('🚫 Real-time listeners DISATTIVATI per ridurre consumi Firebase');
+        // NON configurare listeners real-time
+    }
+
+    setupSectionListener(section) {
+        console.log('🚫 setupSectionListener DISATTIVATO per ridurre consumi');
+        // NON configurare listeners
+    }
+
+    checkForNewContent(section, snapshot) {
+        console.log('🚫 checkForNewContent DISATTIVATO per ridurre consumi');
+        // NON controllare nuovo contenuto in real-time
+    }
+
+    removeRealtimeListeners() {
+        console.log('🔧 removeRealtimeListeners (nessun listener da rimuovere)');
+        // Nessun listener da rimuovere perché non sono stati creati
+        this.realtimeListeners = {};
+    }
+
+    // Auto-refresh DISATTIVATO
+    startAutoRefresh() {
+        console.log('🚫 Auto-refresh DISATTIVATO per ridurre consumi Firebase');
+        // NON avviare auto-refresh ogni 30 secondi
+        
+        // Pulisci eventuali interval esistenti
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
         }
     }
 
-    // Calcola tutti i badge
-    async calculateAllBadges() {
+    async refreshBadges() {
+        console.log('🚫 refreshBadges DISATTIVATO per ridurre consumi');
+        // NON refreshare badge automaticamente
+    }
+
+    async updateSectionBadge(section) {
+        console.log('🚫 updateSectionBadge DISATTIVATO per ridurre consumi');
+        // NON aggiornare badge automaticamente
+    }
+
+    async handleNewContent(section, contentType) {
+        console.log('🚫 handleNewContent DISATTIVATO per ridurre consumi');
+        // NON gestire nuovo contenuto automaticamente
+    }
+
+    // METODI MANUALI per refresh su richiesta
+
+    // Calcola badge MANUALMENTE (solo quando richiesto)
+    async calculateBadgesManual() {
+        console.log('🔄 Calcolo manuale badge...');
+        
+        if (!currentUser) {
+            console.log('⚠️ Nessun utente per calcolo badge');
+            return;
+        }
+
         const sections = ['eventi', 'oggetti', 'novita', 'associa-clan', 'chat-generale'];
         const userClan = window.getCurrentUserClan();
         
@@ -145,19 +195,28 @@ class ActivityTracker {
         // Reset conteggi
         this.unreadCounts = {};
         
-        // Calcola per ogni sezione
+        // Calcola per ogni sezione (MANUALMENTE)
         for (const section of sections) {
-            const count = await this.calculateSectionBadge(section);
-            if (count > 0) {
-                this.unreadCounts[section] = count;
+            try {
+                const count = await this.calculateSectionBadgeManual(section);
+                if (count > 0) {
+                    this.unreadCounts[section] = count;
+                }
+            } catch (error) {
+                console.warn(`Errore calcolo badge ${section}:`, error);
             }
         }
         
-        console.log('📊 Badge calcolati:', this.unreadCounts);
+        console.log('📊 Badge calcolati manualmente:', this.unreadCounts);
+        
+        // Aggiorna UI
+        this.updateAllBadgesManual();
+        
+        return this.unreadCounts;
     }
 
-    // Calcola badge per una sezione specifica
-    async calculateSectionBadge(section) {
+    // Calcola badge per sezione (MANUALMENTE)
+    async calculateSectionBadgeManual(section) {
         try {
             const sectionConfig = window.sectionConfig[section];
             if (!sectionConfig) return 0;
@@ -167,10 +226,10 @@ class ActivityTracker {
             
             if (sectionConfig.type === 'chat') {
                 // Per le chat, conta i messaggi
-                return await this.countNewMessages(section, referenceTime);
+                return await this.countNewMessagesManual(section, referenceTime);
             } else if (sectionConfig.type === 'forum') {
                 // Per i forum, conta i thread
-                return await this.countNewThreads(section, referenceTime);
+                return await this.countNewThreadsManual(section, referenceTime);
             }
             
             return 0;
@@ -180,8 +239,8 @@ class ActivityTracker {
         }
     }
 
-    // Conta nuovi messaggi
-    async countNewMessages(section, sinceTime) {
+    // Conta nuovi messaggi (MANUALMENTE - single read)
+    async countNewMessagesManual(section, sinceTime) {
         const dataPath = window.getDataPath(section, 'messages');
         if (!dataPath) return 0;
         
@@ -191,6 +250,8 @@ class ActivityTracker {
             try {
                 const { ref, get } = window.firebaseImports;
                 const messagesRef = ref(window.firebaseDatabase, dataPath);
+                
+                // SINGLE READ - nessun listener
                 const snapshot = await get(messagesRef);
                 
                 if (snapshot.exists()) {
@@ -202,12 +263,10 @@ class ActivityTracker {
                         }
                     });
                 }
+                
+                console.log(`📖 Contati ${count} nuovi messaggi in ${section} (single read)`);
             } catch (error) {
-                if (error.code === 'PERMISSION_DENIED') {
-                    console.warn(`⚠️ Permessi negati per messaggi ${section}, uso cache locale`);
-                } else {
-                    console.error(`Errore conteggio messaggi ${section}:`, error);
-                }
+                console.warn(`⚠️ Errore conteggio messaggi ${section}:`, error);
                 // Fallback to localStorage
                 return this.countFromLocalStorage(section, 'messages', sinceTime);
             }
@@ -219,8 +278,8 @@ class ActivityTracker {
         return count;
     }
 
-    // Conta nuovi thread
-    async countNewThreads(section, sinceTime) {
+    // Conta nuovi thread (MANUALMENTE - single read)
+    async countNewThreadsManual(section, sinceTime) {
         const dataPath = window.getDataPath(section, 'threads');
         if (!dataPath) return 0;
         
@@ -230,6 +289,8 @@ class ActivityTracker {
             try {
                 const { ref, get } = window.firebaseImports;
                 const threadsRef = ref(window.firebaseDatabase, dataPath);
+                
+                // SINGLE READ - nessun listener
                 const snapshot = await get(threadsRef);
                 
                 if (snapshot.exists()) {
@@ -242,12 +303,10 @@ class ActivityTracker {
                         }
                     });
                 }
+                
+                console.log(`📖 Contati ${count} nuovi thread in ${section} (single read)`);
             } catch (error) {
-                if (error.code === 'PERMISSION_DENIED') {
-                    console.warn(`⚠️ Permessi negati per thread ${section}, uso cache locale`);
-                } else {
-                    console.error(`Errore conteggio thread ${section}:`, error);
-                }
+                console.warn(`⚠️ Errore conteggio thread ${section}:`, error);
                 // Fallback to localStorage
                 return this.countFromLocalStorage(section, 'threads', sinceTime);
             }
@@ -259,7 +318,7 @@ class ActivityTracker {
         return count;
     }
     
-    // Conta da localStorage
+    // Conta da localStorage (invariato)
     countFromLocalStorage(section, dataType, sinceTime) {
         const dataPath = window.getDataPath(section, dataType);
         if (!dataPath) return 0;
@@ -280,21 +339,25 @@ class ActivityTracker {
         }
     }
 
-    // Aggiorna tutti i badge nell'UI
-    updateAllBadges() {
+    // Aggiorna badge UI (MANUALMENTE)
+    updateAllBadgesManual() {
+        console.log('🔄 Aggiornamento manuale badge UI...');
+        
         // Rimuovi tutti i badge esistenti
         document.querySelectorAll('.section-badge').forEach(badge => badge.remove());
         
         // Aggiungi nuovi badge
         for (const [section, count] of Object.entries(this.unreadCounts)) {
             if (count > 0) {
-                this.addBadgeToSection(section, count);
+                this.addBadgeToSectionManual(section, count);
             }
         }
+        
+        console.log('✅ Badge UI aggiornati manualmente');
     }
 
-    // Aggiungi badge a una sezione
-    addBadgeToSection(section, count, isNewContent = false) {
+    // Aggiungi badge a sezione (MANUALMENTE)
+    addBadgeToSectionManual(section, count) {
         const navItem = document.querySelector(`[data-section="${section}"]`);
         if (!navItem) return;
         
@@ -306,24 +369,18 @@ class ActivityTracker {
         
         // Crea nuovo badge
         const badge = document.createElement('span');
-        badge.className = 'section-badge';
-        if (isNewContent) {
-            badge.classList.add('new-content');
-            // Rimuovi la classe dopo l'animazione
-            setTimeout(() => {
-                badge.classList.remove('new-content');
-            }, 1000);
-        }
+        badge.className = 'section-badge manual-badge';
         badge.textContent = count > 99 ? '99+' : count;
+        badge.title = 'Badge calcolato manualmente';
         
         // Aggiungi al nav item
         navItem.appendChild(badge);
     }
 
-    // Segna una sezione come visitata
+    // METODI FUNZIONANTI (non disattivati)
+
+    // Segna sezione come visitata (funziona)
     async markSectionAsVisited(section) {
-        if (!this.isTracking) return;
-        
         console.log(`✅ Sezione ${section} marcata come visitata`);
         
         // Aggiorna timestamp ultima visita
@@ -339,42 +396,11 @@ class ActivityTracker {
             }
         }
         
-        // Salva dati aggiornati
+        // Salva dati aggiornati (solo localStorage)
         await this.saveUserActivityData();
     }
 
-    // Aggiorna badge per una sezione specifica
-    async updateSectionBadge(section) {
-        if (!this.isTracking) return;
-        
-        const count = await this.calculateSectionBadge(section);
-        
-        if (count > 0) {
-            this.unreadCounts[section] = count;
-            this.addBadgeToSection(section, count);
-        } else {
-            delete this.unreadCounts[section];
-            const navItem = document.querySelector(`[data-section="${section}"]`);
-            if (navItem) {
-                const badge = navItem.querySelector('.section-badge');
-                if (badge) {
-                    badge.remove();
-                }
-            }
-        }
-    }
-
-    // Gestisci nuovo contenuto in tempo reale
-    async handleNewContent(section, contentType) {
-        if (!this.isTracking) return;
-        
-        // Se l'utente non è nella sezione, aggiorna il badge
-        if (window.getCurrentSection() !== section) {
-            await this.updateSectionBadge(section);
-        }
-    }
-
-    // Registra logout
+    // Registra logout (funziona)
     async recordLogout() {
         console.log('👋 Registrando logout...');
         
@@ -385,36 +411,7 @@ class ActivityTracker {
         this.stopTracking();
     }
 
-    // Avvia auto-refresh
-    startAutoRefresh() {
-        if (this.updateInterval) {
-            clearInterval(this.updateInterval);
-        }
-        
-        this.updateInterval = setInterval(() => {
-            if (this.isTracking && currentUser) {
-                this.refreshBadges();
-            }
-        }, 30000); // Ogni 30 secondi
-    }
-
-    // Refresh badge (per contenuti real-time)
-    async refreshBadges() {
-        console.log('🔄 Refresh badge...');
-        
-        // Ricalcola solo per sezioni non visitate recentemente
-        const sectionsToUpdate = Object.keys(window.sectionConfig).filter(section => {
-            return section !== window.getCurrentSection() && 
-                   (!this.lastVisitTimes[section] || 
-                    Date.now() - this.lastVisitTimes[section] > 60000); // Più di 1 minuto
-        });
-        
-        for (const section of sectionsToUpdate) {
-            await this.updateSectionBadge(section);
-        }
-    }
-
-    // Ferma tracking
+    // Ferma tracking (funziona)
     stopTracking() {
         this.isTracking = false;
         
@@ -423,16 +420,16 @@ class ActivityTracker {
             this.updateInterval = null;
         }
         
-        // Rimuovi listeners real-time
+        // Non ci sono real-time listeners da rimuovere
         this.removeRealtimeListeners();
         
         // Rimuovi tutti i badge
         document.querySelectorAll('.section-badge').forEach(badge => badge.remove());
         
-        console.log('🛑 Activity Tracker fermato');
+        console.log('🛑 Activity Tracker fermato (modalità risparmio)');
     }
 
-    // Pulisci tutto
+    // Pulisci tutto (funziona)
     cleanup() {
         this.stopTracking();
         this.lastLogoutTime = null;
@@ -440,146 +437,67 @@ class ActivityTracker {
         this.unreadCounts = {};
     }
 
-    // Setup listeners real-time per Firebase
-    setupRealtimeListeners() {
-        if (!window.useFirebase || !window.firebaseDatabase || !window.getFirebaseReady()) {
-            console.log('⚠️ Real-time non disponibile in modalità locale');
-            return;
-        }
-
-        console.log('🔥 Setup listeners real-time...');
-        
-        this.realtimeListeners = {};
-        
-        // Monitora tutte le sezioni
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan', 'chat-generale'];
-        const userClan = window.getCurrentUserClan();
-        
-        if (userClan !== 'Nessuno') {
-            sections.push('clan-chat', 'clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca');
-        }
-        
-        sections.forEach(section => {
-            this.setupSectionListener(section);
-        });
+    // Toast disattivato per ridurre UI clutter
+    showNewContentToast(section, count) {
+        console.log('🚫 Toast nuovo contenuto DISATTIVATO per ridurre distrazioni');
+        // NON mostrare toast automatici
     }
 
-    // Setup listener per una sezione specifica
-    setupSectionListener(section) {
-        const sectionConfig = window.sectionConfig[section];
-        if (!sectionConfig) return;
-        
-        const dataType = sectionConfig.type === 'chat' ? 'messages' : 'threads';
-        const dataPath = window.getDataPath(section, dataType);
-        if (!dataPath) return;
+    // METODI PUBBLICI per refresh manuale
+
+    // Refresh badge manuale (da chiamare nei bottoni)
+    async refreshBadgesManual() {
+        console.log('🔄 Refresh manuale badge richiesto...');
         
         try {
-            const { ref, onValue } = window.firebaseImports;
-            const dataRef = ref(window.firebaseDatabase, dataPath);
+            const badges = await this.calculateBadgesManual();
             
-            // Listener per nuovi contenuti con gestione errori
-            const callback = onValue(dataRef, 
-                (snapshot) => {
-                    // Se non siamo in questa sezione, controlla per nuovi contenuti
-                    if (window.getCurrentSection() !== section && this.isTracking) {
-                        this.checkForNewContent(section, snapshot);
-                    }
-                },
-                (error) => {
-                    if (error.code === 'PERMISSION_DENIED') {
-                        console.warn(`⚠️ Permessi negati per ${section}, listener disabilitato`);
-                    } else {
-                        console.error(`Errore listener ${section}:`, error);
-                    }
-                }
-            );
+            // Mostra risultato
+            const badgeCount = Object.keys(badges).length;
+            const totalUnread = Object.values(badges).reduce((sum, count) => sum + count, 0);
             
-            // Salva riferimento per pulizia
-            this.realtimeListeners[section] = { ref: dataRef, callback };
+            console.log(`✅ Badge refresh completato: ${badgeCount} sezioni con ${totalUnread} elementi non letti`);
             
-            console.log(`📡 Listener real-time attivo per ${section}`);
+            return {
+                success: true,
+                badges: badges,
+                sectionsWithBadges: badgeCount,
+                totalUnread: totalUnread
+            };
             
         } catch (error) {
-            console.error(`Errore setup listener ${section}:`, error);
+            console.error('❌ Errore refresh badge manuale:', error);
+            return {
+                success: false,
+                error: error.message
+            };
         }
     }
 
-    // Controlla per nuovi contenuti
-    checkForNewContent(section, snapshot) {
-        if (!snapshot.exists()) return;
-        
-        const referenceTime = this.lastVisitTimes[section] || this.lastLogoutTime;
-        let newCount = 0;
-        
-        snapshot.forEach((childSnapshot) => {
-            const item = childSnapshot.val();
-            
-            // Per messaggi
-            if (item.timestamp && item.timestamp > referenceTime && item.authorId !== currentUser.uid) {
-                newCount++;
-            }
-            // Per thread
-            else if (item.createdAt && item.createdAt > referenceTime && (!item.status || item.status === 'approved')) {
-                newCount++;
-            }
-        });
-        
-        // Aggiorna badge se ci sono novità
-        if (newCount > 0 && this.unreadCounts[section] !== newCount) {
-            console.log(`🆕 Nuovi contenuti in ${section}: ${newCount}`);
-            this.unreadCounts[section] = newCount;
-            this.addBadgeToSection(section, newCount, true); // true = nuovo contenuto real-time
-            
-            // Mostra notifica toast opzionale
-            this.showNewContentToast(section, newCount);
-        }
-    }
-
-    // Rimuovi listeners real-time
-    removeRealtimeListeners() {
-        if (!this.realtimeListeners) return;
-        
-        const { off } = window.firebaseImports || {};
-        if (!off) return;
-        
-        Object.entries(this.realtimeListeners).forEach(([section, listener]) => {
-            if (listener.ref && listener.callback) {
-                off(listener.ref, listener.callback);
-                console.log(`📡 Listener real-time rimosso per ${section}`);
-            }
-        });
-        
-        this.realtimeListeners = {};
-    }
-
-    // Mostra toast per nuovo contenuto (opzionale)
-    showNewContentToast(section, count) {
-        const sectionName = window.sectionConfig[section]?.title || section;
-        const message = count === 1 ? 
-            `Nuovo contenuto in ${sectionName}` : 
-            `${count} nuovi contenuti in ${sectionName}`;
-        
-        // Se esiste la funzione showToast del sistema notifiche
-        if (window.createToast && window.showToast) {
-            const toast = window.createToast({
-                type: 'info',
-                title: '🆕 Novità!',
-                message: message,
-                duration: 3000,
-                actions: [{
-                    text: 'Vai',
-                    action: () => window.switchSection(section)
-                }]
-            });
-            window.showToast(toast);
-        }
+    // Stato del tracker
+    getStatus() {
+        return {
+            isTracking: this.isTracking,
+            autoRefreshDisabled: this.autoRefreshDisabled,
+            realTimeDisabled: true,
+            consumptionReduced: true,
+            lastLogoutTime: this.lastLogoutTime,
+            visitedSections: Object.keys(this.lastVisitTimes).length,
+            activeBadges: Object.keys(this.unreadCounts).length
+        };
     }
 }
 
-// Istanza globale
-window.activityTracker = new ActivityTracker();
+// Sostituisci l'istanza globale con la versione disattivata
+if (window.activityTracker) {
+    // Pulisci il tracker precedente
+    window.activityTracker.cleanup();
+}
 
-// Esporta funzioni helper globali
+// Crea nuova istanza disattivata
+window.activityTracker = new ActivityTrackerDisabled();
+
+// Mantieni le funzioni helper globali
 window.markSectionAsVisited = async function(section) {
     if (window.activityTracker) {
         await window.activityTracker.markSectionAsVisited(section);
@@ -587,9 +505,29 @@ window.markSectionAsVisited = async function(section) {
 };
 
 window.handleNewContent = async function(section, contentType) {
-    if (window.activityTracker) {
-        await window.activityTracker.handleNewContent(section, contentType);
-    }
+    console.log(`🚫 handleNewContent DISATTIVATO per ${section}/${contentType} (riduzione consumi)`);
+    // NON gestire automaticamente
 };
 
-console.log('✅ Activity Tracker Module caricato');
+// Funzione per refresh manuale badge (da usare nei bottoni)
+window.refreshBadgesManual = async function() {
+    if (window.activityTracker && window.activityTracker.refreshBadgesManual) {
+        return await window.activityTracker.refreshBadgesManual();
+    }
+    return { success: false, error: 'Activity tracker non disponibile' };
+};
+
+// Funzione per ottenere stato tracker
+window.getActivityTrackerStatus = function() {
+    if (window.activityTracker && window.activityTracker.getStatus) {
+        return window.activityTracker.getStatus();
+    }
+    return { error: 'Activity tracker non disponibile' };
+};
+
+console.log('🚫 Activity Tracker DISATTIVATO caricato - Consumi Firebase ridotti drasticamente!');
+console.log('📊 Real-time listeners: DISATTIVATI');
+console.log('🔄 Auto-refresh: DISATTIVATO');
+console.log('🔔 Badge automatici: DISATTIVATI');
+console.log('💾 Modalità: Solo localStorage + refresh manuali');
+console.log('💡 Usa window.refreshBadgesManual() per aggiornare badge manualmente');
