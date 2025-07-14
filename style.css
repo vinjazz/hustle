@@ -3717,3 +3717,656 @@ button:disabled {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-3px); }
 }
+
+/* ===============================================
+   STILI CSS SISTEMA CARICAMENTO OTTIMIZZATO
+   Da aggiungere a style.css
+   =============================================== */
+
+/* ===============================================
+   1. BOTTONE REFRESH THREAD - AREA PRINCIPALE
+   =============================================== */
+
+.thread-refresh-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.thread-refresh-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+.refresh-threads-btn {
+    background: rgba(255, 255, 255, 0.95);
+    color: #667eea;
+    border: none;
+    border-radius: 12px;
+    padding: 15px 30px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 200px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 auto;
+}
+
+.refresh-threads-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    transition: width 0.3s ease;
+    z-index: 0;
+}
+
+.refresh-threads-btn:hover::before {
+    width: 100%;
+}
+
+.refresh-threads-btn:hover {
+    color: white;
+    transform: translateY(-3px);
+    box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+}
+
+.refresh-threads-btn:active {
+    transform: translateY(-1px);
+}
+
+.refresh-threads-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+}
+
+.refresh-threads-btn:disabled::before {
+    width: 0 !important;
+}
+
+.refresh-icon {
+    font-size: 18px;
+    animation: refreshSpin 2s linear infinite paused;
+    z-index: 1;
+    position: relative;
+}
+
+.refresh-threads-btn:disabled .refresh-icon {
+    animation-play-state: running;
+}
+
+@keyframes refreshSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.refresh-text {
+    z-index: 1;
+    position: relative;
+    font-weight: 700;
+}
+
+.refresh-counter {
+    background: #e74c3c;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+    z-index: 1;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.4);
+}
+
+.refresh-counter.hidden {
+    display: none;
+}
+
+.refresh-help {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    margin-top: 12px;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Effetto hover per il container */
+.thread-refresh-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+}
+
+/* ===============================================
+   2. BOTTONE BADGE REFRESH - SIDEBAR
+   =============================================== */
+
+.badge-refresh-container {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.25);
+    position: relative;
+    overflow: hidden;
+}
+
+.badge-refresh-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 12px 12px 0 0;
+}
+.refresh-badges-btn {
+    background: linear-gradient(135deg, #fff, #fdf1f1);
+    color: #ff4e42;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(6px);
+}
+
+.refresh-badges-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+    transition: width 0.4s ease;
+    z-index: 0;
+}
+
+.refresh-badges-btn:hover::before {
+    width: 100%;
+}
+
+.refresh-badges-btn:hover {
+    color: white;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(255, 107, 107, 0.5);
+}
+
+.refresh-badges-btn:active {
+    transform: translateY(-1px);
+}
+
+.refresh-badges-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.refresh-badges-btn:disabled::before {
+    width: 0 !important;
+}
+
+.refresh-badges-btn .badge-icon,
+.refresh-badges-btn .badge-text {
+    position: relative;
+    z-index: 1;
+}
+
+.refresh-badges-btn .badge-icon {
+    font-size: 18px;
+    transition: transform 0.3s ease;
+}
+
+.refresh-badges-btn:hover .badge-icon {
+    transform: scale(1.15) rotate(5deg);
+}
+
+.badge-text {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* ===============================================
+   3. HIGHLIGHTING NUOVO CONTENUTO
+   =============================================== */
+
+/* Highlight thread nuovi */
+.new-thread-highlight {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border: 2px solid rgba(102, 126, 234, 0.3);
+    animation: newContentPulse 3s ease-in-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.new-thread-highlight::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.2), transparent);
+    animation: slideHighlight 2s ease-in-out;
+}
+
+@keyframes newContentPulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+    }
+    50% { 
+        transform: scale(1.02);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+}
+
+@keyframes slideHighlight {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Badge "NUOVO!" */
+.new-badge {
+    background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    animation: badgeBounce 1s ease-in-out infinite;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes badgeBounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Highlight messaggi nuovi */
+.new-message-highlight {
+    animation: messageSlideIn 0.5s ease-out;
+}
+
+.new-message-highlight .message-bubble {
+    border: 2px solid rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+}
+
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* ===============================================
+   4. TOAST SEMPLICE PER FEEDBACK
+   =============================================== */
+
+.simple-toast {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    padding: 15px 25px;
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    z-index: 1000;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 300px;
+    word-wrap: break-word;
+}
+
+.simple-toast::before {
+    content: '';
+    font-size: 16px;
+}
+
+.toast-success {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+}
+
+.toast-success::before {
+    content: '✅';
+}
+
+.toast-info {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+}
+
+.toast-info::before {
+    content: '💡';
+}
+
+.toast-error {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.toast-error::before {
+    content: '❌';
+}
+
+/* ===============================================
+   5. INDICATORI MODALITÀ RISPARMIO DATI
+   =============================================== */
+
+/* Indicatore nella chat che mostra "ultimi 3 messaggi" */
+.chat-messages::before {
+    content: "💬 Ultimi 3 messaggi (real-time attivo per nuovi)";
+    display: block;
+    text-align: center;
+    padding: 10px;
+    background: rgba(52, 152, 219, 0.1);
+    color: #3498db;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(52, 152, 219, 0.2);
+}
+
+/* Indicatore per forum */
+.forum-layout::before {
+    content: "📊 Modalità risparmio dati attiva - Usa il bottone per cercare nuovi thread";
+    display: block;
+    text-align: center;
+    padding: 12px;
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+/* ===============================================
+   6. RESPONSIVE DESIGN
+   =============================================== */
+
+@media (max-width: 768px) {
+    .thread-refresh-container {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .refresh-threads-btn {
+        padding: 12px 20px;
+        font-size: 14px;
+        min-width: 180px;
+    }
+    
+    .refresh-help {
+        font-size: 12px;
+    }
+    
+    .badge-refresh-container {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+    
+    .refresh-badges-btn {
+        padding: 10px;
+        font-size: 12px;
+    }
+    
+    .simple-toast {
+        top: 130px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+        font-size: 13px;
+        padding: 12px 20px;
+    }
+    
+    .chat-messages::before,
+    .forum-layout::before {
+        font-size: 11px;
+        padding: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .thread-refresh-container {
+        padding: 12px;
+        border-radius: 12px;
+    }
+    
+    .refresh-threads-btn {
+        padding: 10px 15px;
+        font-size: 13px;
+        min-width: 160px;
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .refresh-icon {
+        font-size: 16px;
+    }
+    
+    .refresh-text {
+        font-size: 12px;
+    }
+    
+    .refresh-counter {
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+    }
+    
+    .refresh-help {
+        font-size: 11px;
+        margin-top: 8px;
+    }
+    
+    .badge-refresh-container {
+        padding: 10px;
+    }
+    
+    .refresh-badges-btn {
+        padding: 8px;
+        font-size: 11px;
+        gap: 6px;
+    }
+    
+    .badge-icon {
+        font-size: 14px;
+    }
+    
+    .badge-text {
+        font-size: 11px;
+    }
+    
+    .new-badge {
+        font-size: 9px;
+        padding: 2px 6px;
+        margin-left: 5px;
+    }
+    
+    .simple-toast {
+        font-size: 12px;
+        padding: 10px 15px;
+    }
+    
+    .chat-messages::before,
+    .forum-layout::before {
+        font-size: 10px;
+        padding: 6px;
+        margin-bottom: 10px;
+    }
+}
+
+/* ===============================================
+   7. ANIMAZIONI E TRANSIZIONI AVANZATE
+   =============================================== */
+
+/* Pulse animation per elementi importanti */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+}
+
+/* Glow effect per bottoni attivi */
+.refresh-threads-btn:focus,
+.refresh-badges-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+/* Effetto loading per bottoni */
+.refresh-threads-btn:disabled .refresh-icon,
+.refresh-badges-btn:disabled .badge-icon {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Smooth transitions per tutti gli elementi */
+.thread-refresh-container,
+.badge-refresh-container,
+.refresh-threads-btn,
+.refresh-badges-btn,
+.new-thread-highlight,
+.new-message-highlight {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Effetto glassmorphism */
+.thread-refresh-container,
+.badge-refresh-container {
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+}
+
+/* Hover effects migliorati */
+.thread-refresh-container:hover {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    filter: brightness(1.05);
+}
+
+.badge-refresh-container:hover {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+    filter: brightness(1.05);
+}
+
+/* Accessibilità - High contrast mode */
+@media (prefers-contrast: high) {
+    .refresh-threads-btn,
+    .refresh-badges-btn {
+        border: 2px solid currentColor;
+    }
+    
+    .new-badge {
+        border: 2px solid white;
+    }
+}
+
+/* Reduced motion per utenti sensibili */
+@media (prefers-reduced-motion: reduce) {
+    .refresh-icon,
+    .badge-icon,
+    .new-thread-highlight,
+    .new-message-highlight,
+    .new-badge {
+        animation: none !important;
+    }
+    
+    .thread-refresh-container::before,
+    .new-thread-highlight::before {
+        animation: none !important;
+    }
+}
+
+/* Dark mode specifico */
+@media (prefers-color-scheme: dark) {
+    .thread-refresh-container,
+    .badge-refresh-container {
+        border-color: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    }
+    
+    .refresh-threads-btn,
+    .refresh-badges-btn {
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+}
