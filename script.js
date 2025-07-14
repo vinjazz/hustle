@@ -1,3 +1,14 @@
+window.activityTrackerEnabled = false;
+
+// Override della funzione init
+window.addEventListener('load', () => {
+    if (window.activityTracker) {
+        window.activityTracker.init = function() {
+            console.log('🔕 Activity Tracker disabilitato');
+        };
+    }
+});
+
 // Aspetta che Firebase sia caricato
 window.addEventListener('load', async() => {
     // Attendi che i moduli Firebase siano pronti
@@ -5843,745 +5854,66 @@ async function handleNewUserComplete(newUser, isFirstUser = false) {
     }
 }
 
-// ===============================================
-// SISTEMA CARICAMENTO OTTIMIZZATO - RIDUZIONE TRAFFICO DATI
-// Sostituisce le parti di script.js per caricamento manuale
-// ===============================================
-
-// Variabili globali per timestamp tracking
-let sectionTimestamps = {};
-let lastLoadTime = {};
-let manualRefreshMode = true; // Modalità refresh manuale attiva
 
 // ===============================================
-// 1. SISTEMA THREAD MANUAL LOADING
+// DASHBOARD FALLBACK - AGGIUNGI ALLA FINE DI script.js
 // ===============================================
 
-// Carica thread iniziali (sostituisce loadThreads)
-async function loadThreadsInitial(sectionKey) {
-    const dataPath = getDataPath(sectionKey, 'threads');
-    if (!dataPath) return;
-
-    console.log(`📥 Caricamento iniziale thread per: ${sectionKey}`);
+// Funzione fallback per loadDashboard
+function loadDashboard() {
+    console.log('📊 Caricamento dashboard...');
     
-    // Disabilita il bottone durante il caricamento
-    const refreshBtn = document.getElementById('refresh-threads-btn');
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.innerHTML = '🔄 Caricando...';
-    }
-
-    try {
-        let threads = [];
-        
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
-            // Carica da Firebase con LIMITE per ridurre traffico
-            const threadsRef = ref(window.firebaseDatabase, dataPath);
-            
-            // USA QUERY CON LIMITE per ridurre dati
-            let limitedQuery;
-            if (query && orderByChild && limitToLast) {
-                limitedQuery = query(threadsRef, orderByChild('createdAt'), limitToLast(20));
-            } else {
-                limitedQuery = threadsRef; // Fallback
-            }
-            
-            const snapshot = await get(limitedQuery);
-            
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    threads.push({
-                        id: childSnapshot.key,
-                        ...childSnapshot.val()
-                    });
-                });
-                
-                console.log(`✅ Caricati ${threads.length} thread da Firebase`);
-            }
-        } else {
-            // Modalità locale
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            console.log(`✅ Caricati ${threads.length} thread da localStorage`);
-        }
-
-        // Salva timestamp ultimo caricamento
-        lastLoadTime[sectionKey] = Date.now();
-        
-        // Ordina per data (più recenti prima)
-        threads.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        
-        // Mostra thread
-        displayThreads(threads);
-        
-        // Aggiorna counter nel bottone
-        updateRefreshButtonCounter(sectionKey, 0);
-        
-    } catch (error) {
-        console.error(`❌ Errore caricamento thread ${sectionKey}:`, error);
-        
-        // Mostra errore nel bottone
-        if (refreshBtn) {
-            refreshBtn.innerHTML = '❌ Errore';
-            setTimeout(() => {
-                refreshBtn.innerHTML = '🔄 Aggiorna Thread';
-                refreshBtn.disabled = false;
-            }, 2000);
-        }
-    } finally {
-        // Riabilita bottone
-        if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '🔄 Cerca Nuovi Thread';
-        }
-    }
-}
-
-// Carica SOLO i nuovi thread (dopo l'ultimo caricamento)
-async function loadNewThreadsOnly(sectionKey) {
-    const dataPath = getDataPath(sectionKey, 'threads');
-    if (!dataPath) return;
-
-    const lastLoad = lastLoadTime[sectionKey] || 0;
-    if (lastLoad === 0) {
-        // Se non abbiamo mai caricato, fai caricamento iniziale
-        return await loadThreadsInitial(sectionKey);
-    }
-
-    console.log(`🔍 Cercando thread più recenti di: ${new Date(lastLoad).toLocaleString()}`);
-    
-    const refreshBtn = document.getElementById('refresh-threads-btn');
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.innerHTML = '🔍 Cercando...';
-    }
-
-    try {
-        let newThreads = [];
-        
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
-            // Query Firebase per thread più recenti del lastLoad
-            const threadsRef = ref(window.firebaseDatabase, dataPath);
-            
-            // Carica tutti e filtra lato client (più efficiente per piccoli dataset)
-            const snapshot = await get(threadsRef);
-            
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    const thread = childSnapshot.val();
-                    // Filtra solo thread più recenti
-                    if (thread.createdAt && thread.createdAt > lastLoad) {
-                        newThreads.push({
-                            id: childSnapshot.key,
-                            ...thread
-                        });
-                    }
-                });
-            }
-        } else {
-            // Modalità locale
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            const allThreads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            newThreads = allThreads.filter(t => (t.createdAt || 0) > lastLoad);
-        }
-
-        console.log(`🆕 Trovati ${newThreads.length} nuovi thread`);
-
-        if (newThreads.length > 0) {
-            // Ordina nuovi thread
-            newThreads.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            
-            // Aggiungi ai thread esistenti (in cima)
-            const existingThreadList = document.getElementById('thread-list');
-            const existingThreads = Array.from(existingThreadList.querySelectorAll('.thread-item')).map(item => {
-                // Estrai dati dal DOM (semplificato)
-                return {
-                    element: item
-                };
-            });
-
-            // Prependi i nuovi thread
-            prependNewThreadsToDOM(newThreads);
-            
-            // Aggiorna timestamp
-            lastLoadTime[sectionKey] = Date.now();
-            
-            // Mostra notifica
-            showNewContentToast(`Trovati ${newThreads.length} nuovi thread!`);
-            
-        } else {
-            // Nessun nuovo thread
-            showNewContentToast('Nessun nuovo thread trovato', 'info');
-        }
-        
-        // Reset counter
-        updateRefreshButtonCounter(sectionKey, 0);
-        
-    } catch (error) {
-        console.error(`❌ Errore ricerca nuovi thread:`, error);
-        showNewContentToast('Errore nella ricerca di nuovi thread', 'error');
-    } finally {
-        if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '🔄 Cerca Nuovi Thread';
-        }
-    }
-}
-
-// Prependi nuovi thread al DOM esistente
-function prependNewThreadsToDOM(newThreads) {
     const threadList = document.getElementById('thread-list');
-    const forumHeader = threadList.querySelector('.forum-header');
-    
-    newThreads.forEach((thread, index) => {
-        // Filtra thread approvati per utenti normali
-        if (!canModerateSection(currentSection)) {
-            if (thread.status && thread.status !== 'approved') {
-                return; // Salta thread non approvati
-            }
-        }
+    if (!threadList) return;
 
-        const statusClass = thread.status === 'pending' ? 'thread-pending' :
-            thread.status === 'rejected' ? 'thread-rejected' : '';
-        const statusIndicator = thread.status === 'pending' ? '<span class="pending-indicator">PENDING</span>' :
-            thread.status === 'rejected' ? '<span class="pending-indicator" style="background: rgba(231, 76, 60, 0.2); color: #e74c3c;">RIFIUTATO</span>' : '';
-
-        // Trova dati autore per clan
-        const author = allUsers.find(u => u.uid === thread.authorId) || {
-            username: thread.author,
-            clan: 'Nessuno'
-        };
-
-        const threadHTML = `
-            <div class="thread-item ${statusClass} new-thread-highlight">
-                <div class="thread-main">
-                    <div class="thread-title" onclick="openThread('${thread.id}', '${currentSection}')">
-                        ${thread.title}
-                        ${statusIndicator}
-                        <span class="new-badge">NUOVO!</span>
-                    </div>
-                    <div class="thread-author-info">
-                        <span class="thread-author-name">da ${thread.author}</span>
-                        ${createClanBadgeHTML(author.clan)}
-                    </div>
-                    <div class="thread-stats-mobile">
-                        <div class="stat">
-                            <span>💬</span>
-                            <span>${thread.replies || 0}</span>
-                        </div>
-                        <div class="stat">
-                            <span>👁️</span>
-                            <span>${thread.views || 0}</span>
-                        </div>
-                        <div class="stat">
-                            <span>🕐</span>
-                            <span>${formatTime(thread.createdAt)}</span>
-                        </div>
-                    </div>
-                    ${thread.status === 'pending' && canModerateSection(currentSection) ? `
-                        <div class="moderation-actions">
-                            <button class="approve-btn" onclick="approveThread('${thread.id}', '${currentSection}')">
-                                ✅ Approva
-                            </button>
-                            <button class="reject-btn" onclick="rejectThread('${thread.id}', '${currentSection}')">
-                                ❌ Rifiuta
-                            </button>
-                        </div>
-                    ` : ''}
+    threadList.innerHTML = `
+        <div class="dashboard-container">
+            <div class="welcome-section">
+                <h2>🏰 Benvenuto in Hustle Castle Council</h2>
+                <p>Il tuo centro di comando per strategie, clan e conquiste!</p>
+            </div>
+            
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <h3>👤 Profilo</h3>
+                    <p>Utente: <strong>${getCurrentUsername()}</strong></p>
+                    <p>Clan: <strong>${getCurrentUserClan()}</strong></p>
+                    <p>Ruolo: <strong>${getRoleDisplayName()}</strong></p>
                 </div>
-                <div class="thread-replies">${thread.replies || 0}</div>
-                <div class="thread-stats">${thread.views || 0}</div>
-                <div class="thread-last-post">
-                    <div>${formatTime(thread.createdAt)}</div>
-                    <div>da <strong>${thread.author}</strong></div>
+                
+                <div class="stat-card">
+                    <h3>🔥 Stato</h3>
+                    <p>Connessione: <strong>${isConnected ? '🟢 Online' : '🔴 Offline'}</strong></p>
+                    <p>Modalità: <strong>${window.useFirebase ? '🔥 Firebase' : '🏠 Locale'}</strong></p>
+                </div>
+                
+                <div class="stat-card">
+                    <h3>🚀 Azioni Rapide</h3>
+                    <button onclick="switchSection('eventi')" class="quick-btn">📅 Eventi</button>
+                    <button onclick="switchSection('chat-generale')" class="quick-btn">💬 Chat</button>
+                    <button onclick="switchSection('oggetti')" class="quick-btn">⚔️ Oggetti</button>
                 </div>
             </div>
-        `;
-
-        // Inserisci dopo l'header del forum
-        if (forumHeader && forumHeader.nextSibling) {
-            forumHeader.insertAdjacentHTML('afterend', threadHTML);
-        } else {
-            threadList.insertAdjacentHTML('beforeend', threadHTML);
-        }
-    });
-
-    // Rimuovi highlight dopo animazione
-    setTimeout(() => {
-        document.querySelectorAll('.new-thread-highlight').forEach(el => {
-            el.classList.remove('new-thread-highlight');
-            el.querySelector('.new-badge')?.remove();
-        });
-    }, 3000);
-}
-
-// ===============================================
-// 2. SISTEMA CHAT OTTIMIZZATO (SOLO ULTIMI 3 + REAL-TIME)
-// ===============================================
-
-// Carica solo gli ultimi 3 messaggi (sostituisce loadMessages)
-async function loadMessagesOptimized(sectionKey) {
-    const dataPath = getDataPath(sectionKey, 'messages');
-    if (!dataPath) return;
-
-    console.log(`💬 Caricamento ultimi 3 messaggi per: ${sectionKey}`);
-
-    try {
-        let messages = [];
-        
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
-            // Carica solo gli ultimi 3 messaggi da Firebase
-            const messagesRef = ref(window.firebaseDatabase, dataPath);
-            
-            let limitedQuery;
-            if (query && orderByChild && limitToLast) {
-                limitedQuery = query(messagesRef, orderByChild('timestamp'), limitToLast(3));
-            } else {
-                // Fallback: carica tutti e prendi gli ultimi 3
-                const snapshot = await get(messagesRef);
-                if (snapshot.exists()) {
-                    const allMessages = [];
-                    snapshot.forEach((childSnapshot) => {
-                        allMessages.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-                    // Prendi solo gli ultimi 3
-                    messages = allMessages
-                        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-                        .slice(-3);
-                }
-            }
-            
-            if (limitedQuery && limitedQuery !== messagesRef) {
-                const snapshot = await get(limitedQuery);
-                if (snapshot.exists()) {
-                    snapshot.forEach((childSnapshot) => {
-                        messages.push({
-                            id: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-                }
-            }
-            
-        } else {
-            // Modalità locale - solo ultimi 3
-            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-            const allMessages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            messages = allMessages
-                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-                .slice(-3);
-        }
-
-        // Ordina per timestamp
-        messages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        
-        console.log(`✅ Caricati ${messages.length} messaggi recenti`);
-        
-        // Mostra messaggi
-        displayMessages(messages);
-        updateMessageCounter(messages.length);
-        
-        // Salva timestamp ultimo messaggio per real-time
-        if (messages.length > 0) {
-            lastLoadTime[sectionKey] = Math.max(...messages.map(m => m.timestamp || 0));
-        }
-        
-        // Avvia listener real-time SOLO per nuovi messaggi
-        setupNewMessagesRealTime(sectionKey);
-        
-    } catch (error) {
-        console.error(`❌ Errore caricamento messaggi ottimizzato:`, error);
-    }
-}
-
-// Setup real-time SOLO per messaggi più recenti dell'ultimo caricato
-function setupNewMessagesRealTime(sectionKey) {
-    const dataPath = getDataPath(sectionKey, 'messages');
-    if (!dataPath) return;
-    
-    if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) return;
-    
-    // Cleanup listener precedente
-    if (messageListeners[sectionKey]) {
-        const oldRef = ref(window.firebaseDatabase, messageListeners[sectionKey].path);
-        off(oldRef, messageListeners[sectionKey].callback);
-    }
-    
-    const messagesRef = ref(window.firebaseDatabase, dataPath);
-    const lastTimestamp = lastLoadTime[sectionKey] || Date.now();
-    
-    console.log(`📡 Setup real-time per nuovi messaggi dopo: ${new Date(lastTimestamp).toLocaleString()}`);
-    
-    const callback = (snapshot) => {
-        const newMessages = [];
-        
-        snapshot.forEach((childSnapshot) => {
-            const message = childSnapshot.val();
-            // Solo messaggi più recenti dell'ultimo caricamento
-            if (message.timestamp && message.timestamp > lastTimestamp) {
-                newMessages.push({
-                    id: childSnapshot.key,
-                    ...message
-                });
-            }
-        });
-        
-        if (newMessages.length > 0) {
-            console.log(`🆕 ${newMessages.length} nuovi messaggi real-time`);
-            
-            // Ordina per timestamp
-            newMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-            
-            // Aggiungi ai messaggi esistenti
-            appendNewMessagesToChat(newMessages);
-            
-            // Aggiorna timestamp
-            lastLoadTime[sectionKey] = Math.max(...newMessages.map(m => m.timestamp || 0));
-        }
-    };
-    
-    messageListeners[sectionKey] = { path: dataPath, callback: callback };
-    onValue(messagesRef, callback);
-}
-
-// Aggiungi nuovi messaggi alla chat esistente
-function appendNewMessagesToChat(newMessages) {
-    const chatMessages = document.getElementById('chat-messages');
-    
-    newMessages.forEach(async (msg) => {
-        // Pre-carica dati utente se necessario
-        try {
-            if (msg.authorId && !allUsers.find(u => u.uid === msg.authorId)) {
-                await loadUserWithAvatar(msg.authorId);
-            }
-        } catch (error) {
-            console.warn('Errore pre-caricamento avatar nuovo messaggio:', error);
-        }
-        
-        // Trova dati utente
-        const user = allUsers.find(u => u.uid === msg.authorId) || {
-            uid: msg.authorId || 'unknown',
-            username: msg.author,
-            clan: 'Nessuno',
-            avatarUrl: null
-        };
-
-        const isOwnMessage = currentUser && msg.authorId === currentUser.uid;
-
-        // Controlla se è un messaggio di sistema
-        if (msg.isSystemMessage) {
-            const systemMessageHTML = `
-                <div class="message-bubble-container system-message">
-                    <div class="message-bubble system-bubble">
-                        <div class="message-text">${highlightMentions(processContent(msg.message, true), currentUser?.uid)}</div>
-                        <div class="message-meta">
-                            <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            chatMessages.insertAdjacentHTML('beforeend', systemMessageHTML);
-        } else {
-            // Messaggio normale
-            const processedMessage = processContent(msg.message, true);
-            const messageWithMentions = highlightMentions(processedMessage, currentUser?.uid);
-
-            const messageHTML = `
-                <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'} new-message-highlight">
-                    ${!isOwnMessage ? `
-                        <div class="message-avatar-small">
-                            ${createAvatarHTML(user, 'small')}
-                        </div>
-                    ` : `<div class="message-avatar-spacer"></div>`}
-                    
-                    <div class="message-bubble ${isOwnMessage ? 'own-bubble' : 'other-bubble'}">
-                        ${!isOwnMessage ? `
-                            <div class="message-author-header">
-                                <span class="message-author-name">${msg.author}</span>
-                                ${createClanBadgeHTML(user.clan)}
-                            </div>
-                        ` : ''}
-                        
-                        <div class="message-text">${messageWithMentions}</div>
-                        
-                        <div class="message-meta">
-                            <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
-                            ${isOwnMessage ? '<span class="message-status">✓</span>' : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            chatMessages.insertAdjacentHTML('beforeend', messageHTML);
-        }
-    });
-
-    // Scroll automatico
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-    // Rimuovi highlight
-    setTimeout(() => {
-        document.querySelectorAll('.new-message-highlight').forEach(el => {
-            el.classList.remove('new-message-highlight');
-        });
-    }, 2000);
-    
-    // Aggiorna counter
-    const totalMessages = chatMessages.querySelectorAll('.message-bubble-container').length;
-    updateMessageCounter(totalMessages);
-}
-
-// ===============================================
-// 3. BOTTONE REFRESH E UI
-// ===============================================
-
-// Crea bottone refresh thread
-function createThreadRefreshButton() {
-    // Verifica se esiste già
-    if (document.getElementById('refresh-threads-btn')) return;
-    
-    const contentArea = document.querySelector('.content-area');
-    if (!contentArea) return;
-    
-    const refreshButton = document.createElement('div');
-    refreshButton.className = 'thread-refresh-container';
-    refreshButton.innerHTML = `
-        <button id="refresh-threads-btn" class="refresh-threads-btn" onclick="handleThreadRefresh()">
-            <span class="refresh-icon">🔄</span>
-            <span class="refresh-text">Cerca Nuovi Thread</span>
-            <span id="refresh-counter" class="refresh-counter hidden">0</span>
-        </button>
-        <div class="refresh-help">
-            💡 I thread non si aggiornano automaticamente per risparmiare dati
         </div>
     `;
-    
-    // Inserisci all'inizio dell'area contenuto
-    contentArea.insertAdjacentElement('afterbegin', refreshButton);
 }
 
-// Gestisci click bottone refresh
-async function handleThreadRefresh() {
-    if (!currentSection || !currentUser) return;
-    
-    const sectionConfig = window.sectionConfig[currentSection];
-    if (!sectionConfig || sectionConfig.type !== 'forum') return;
-    
-    console.log(`🔄 Refresh manuale thread per: ${currentSection}`);
-    
-    // Se è il primo caricamento, fai caricamento iniziale
-    if (!lastLoadTime[currentSection]) {
-        await loadThreadsInitial(currentSection);
-    } else {
-        await loadNewThreadsOnly(currentSection);
+// Funzioni helper
+function getCurrentUsername() {
+    const usernameEl = document.getElementById('currentUsername');
+    return usernameEl ? usernameEl.textContent : 'Ospite';
+}
+
+function getRoleDisplayName() {
+    const role = getCurrentUserRole();
+    switch (role) {
+        case USER_ROLES.SUPERUSER: return 'Super Admin';
+        case USER_ROLES.CLAN_MOD: return 'Clan Moderator';
+        default: return 'Utente';
     }
 }
 
-// Aggiorna counter nel bottone
-function updateRefreshButtonCounter(sectionKey, count) {
-    const counter = document.getElementById('refresh-counter');
-    const refreshText = document.querySelector('.refresh-text');
-    
-    if (!counter || !refreshText) return;
-    
-    if (count > 0) {
-        counter.textContent = count;
-        counter.classList.remove('hidden');
-        refreshText.textContent = `Cerca Nuovi Thread (${count})`;
-    } else {
-        counter.classList.add('hidden');
-        refreshText.textContent = 'Cerca Nuovi Thread';
-    }
-}
+// Esporta globalmente
+window.loadDashboard = loadDashboard;
 
-// ===============================================
-// 4. BADGE ON-DEMAND
-// ===============================================
-
-// Crea bottone per caricare badge
-function createBadgeRefreshButton() {
-    // Verifica se esiste già
-    if (document.getElementById('refresh-badges-btn')) return;
-    
-    const sidebar = document.querySelector('.sidebar');
-    if (!sidebar) return;
-    
-    const badgeButton = document.createElement('div');
-    badgeButton.className = 'badge-refresh-container';
-    badgeButton.innerHTML = `
-        <button id="refresh-badges-btn" class="refresh-badges-btn" onclick="handleBadgeRefresh()">
-            <span class="badge-icon">🔔</span>
-            <span class="badge-text">Aggiorna Badge</span>
-        </button>
-    `;
-    
-    // Inserisci prima delle sezioni navigation
-    const firstNavSection = sidebar.querySelector('.nav-section');
-    if (firstNavSection) {
-        firstNavSection.parentNode.insertBefore(badgeButton, firstNavSection);
-    }
-}
-
-// Gestisci click bottone badge
-async function handleBadgeRefresh() {
-    if (!currentUser || !window.activityTracker) return;
-    
-    const badgeBtn = document.getElementById('refresh-badges-btn');
-    if (!badgeBtn) return;
-    
-    // Disabilita bottone durante caricamento
-    badgeBtn.disabled = true;
-    badgeBtn.innerHTML = `
-        <span class="badge-icon">⏳</span>
-        <span class="badge-text">Caricando...</span>
-    `;
-    
-    try {
-        console.log('🔔 Refresh manuale badge...');
-        
-        // Calcola badge tramite activity tracker
-        await window.activityTracker.calculateAllBadges();
-        window.activityTracker.updateAllBadges();
-        
-        console.log('✅ Badge aggiornati');
-        
-        // Feedback visivo
-        badgeBtn.innerHTML = `
-            <span class="badge-icon">✅</span>
-            <span class="badge-text">Aggiornati!</span>
-        `;
-        
-        setTimeout(() => {
-            badgeBtn.innerHTML = `
-                <span class="badge-icon">🔔</span>
-                <span class="badge-text">Aggiorna Badge</span>
-            `;
-            badgeBtn.disabled = false;
-        }, 2000);
-        
-    } catch (error) {
-        console.error('❌ Errore refresh badge:', error);
-        
-        badgeBtn.innerHTML = `
-            <span class="badge-icon">❌</span>
-            <span class="badge-text">Errore</span>
-        `;
-        
-        setTimeout(() => {
-            badgeBtn.innerHTML = `
-                <span class="badge-icon">🔔</span>
-                <span class="badge-text">Aggiorna Badge</span>
-            `;
-            badgeBtn.disabled = false;
-        }, 2000);
-    }
-}
-
-// ===============================================
-// 5. TOAST NOTIFICATIONS PER FEEDBACK
-// ===============================================
-
-function showNewContentToast(message, type = 'success') {
-    // Usa il sistema toast esistente se disponibile
-    if (window.createToast && window.showToast) {
-        const toast = window.createToast({
-            type: type,
-            title: type === 'success' ? '✅ Aggiornamento' : type === 'info' ? '💡 Info' : '❌ Errore',
-            message: message,
-            duration: 3000
-        });
-        window.showToast(toast);
-        return;
-    }
-    
-    // Fallback: notifica semplice
-    const notification = document.createElement('div');
-    notification.className = `simple-toast toast-${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 100px;
-        right: 20px;
-        background: ${type === 'success' ? '#27ae60' : type === 'info' ? '#3498db' : '#e74c3c'};
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        z-index: 1000;
-        font-weight: 600;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        transform: translateX(400px);
-        transition: transform 0.3s ease;
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Animazione entrata
-    setTimeout(() => {
-        notification.style.transform = 'translateX(0)';
-    }, 100);
-    
-    // Rimozione automatica
-    setTimeout(() => {
-        notification.style.transform = 'translateX(400px)';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 3000);
-}
-
-// ===============================================
-// 6. SOSTITUZIONE FUNZIONI ESISTENTI
-// ===============================================
-
-// Sostituisci la funzione loadThreads originale
-window.loadThreads = function(sectionKey) {
-    console.log(`🔄 Caricamento thread ottimizzato per: ${sectionKey}`);
-    return loadThreadsInitial(sectionKey);
-};
-
-// Sostituisci la funzione loadMessages originale
-window.loadMessages = function(sectionKey) {
-    console.log(`💬 Caricamento messaggi ottimizzato per: ${sectionKey}`);
-    return loadMessagesOptimized(sectionKey);
-};
-
-// Funzione per switchSection modificata
-const originalSwitchSection = window.switchSection;
-window.switchSection = function(sectionKey) {
-    // Chiama la funzione originale
-    originalSwitchSection.call(this, sectionKey);
-    
-    // Aggiungi i bottoni se necessario
-    setTimeout(() => {
-        const section = window.sectionConfig[sectionKey];
-        if (section && section.type === 'forum') {
-            createThreadRefreshButton();
-        }
-    }, 100);
-};
-
-// Inizializzazione al caricamento
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        // Crea bottone badge nella sidebar
-        createBadgeRefreshButton();
-        
-        console.log('🚀 Sistema caricamento ottimizzato inizializzato');
-        console.log('💡 Usa i bottoni per aggiornare contenuti e risparmiare dati');
-    }, 2000);
-});
-
-// Esporta funzioni per uso globale
-window.loadThreadsInitial = loadThreadsInitial;
-window.loadNewThreadsOnly = loadNewThreadsOnly;
-window.loadMessagesOptimized = loadMessagesOptimized;
-window.handleThreadRefresh = handleThreadRefresh;
-window.handleBadgeRefresh = handleBadgeRefresh;
-window.showNewContentToast = showNewContentToast;
-
-console.log('📦 Sistema caricamento ottimizzato caricato - Traffico dati ridotto!');
+console.log('✅ Dashboard fallback caricata');

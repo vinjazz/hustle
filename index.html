@@ -473,6 +473,69 @@
     <!-- CSS Files -->
     <link href="style.css" rel="stylesheet">
     <link href="dashboard_css_clean.css" rel="stylesheet">
+    <link href="optimization_styles.css" rel="stylesheet">
+    
+    <!-- O includi inline: -->
+    <style>
+        /* Copia qui tutti gli stili dal file "Stili CSS per Bottoni Ottimizzazione" */
+        .refresh-threads-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 1rem 1.5rem;
+            margin: 0 0 1.5rem 0;
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3), 0 2px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            min-height: 56px;
+            width: 100%;
+            max-width: 280px;
+        }
+        
+        .refresh-badges-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.8rem 1rem;
+            margin: 0.8rem 0 0 0;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 12px rgba(52, 152, 219, 0.3), 0 1px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            min-height: 42px;
+        }
+        
+        .refresh-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid #ffffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Aggiungi altre animazioni necessarie */
+    </style>
     
     <!-- Username Modal Styles -->
     <style>
@@ -982,23 +1045,30 @@
         
         <!-- User Info con Avatar Enhanced -->
         <div class="user-info">
-            <div class="user-avatar" id="userAvatar">
-                <img id="userAvatarImg" src="" alt="Avatar" style="display: none; width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
-                <div id="userAvatarDefault" class="user-avatar-default">👤</div>
-            </div>
-            <div style="display: inline-block; vertical-align: middle;">
-                <div class="user-name">
-                    <span id="currentUsername">Ospite</span>
-                    <span id="userStatus" class="offline-indicator"></span>
-                </div>
-                <div class="user-clan">Clan: <span id="currentClan">Nessuno</span></div>
-                <div class="avatar-controls" id="avatarControls" style="margin-top: 8px; display: none;">
-                    <label for="avatar-upload" class="avatar-upload-btn">📷 Cambia Avatar</label>
-                    <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
-                </div>
-                <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
-            </div>
+        <div class="user-avatar" id="userAvatar">
+            <img id="userAvatarImg" src="" alt="Avatar" style="display: none; width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+            <div id="userAvatarDefault" class="user-avatar-default">👤</div>
         </div>
+        <div style="display: inline-block; vertical-align: middle;">
+            <div class="user-name">
+                <span id="currentUsername">Ospite</span>
+                <span id="userStatus" class="offline-indicator"></span>
+            </div>
+            <div class="user-clan">Clan: <span id="currentClan">Nessuno</span></div>
+            <div class="avatar-controls" id="avatarControls" style="margin-top: 8px; display: none;">
+                <label for="avatar-upload" class="avatar-upload-btn">📷 Cambia Avatar</label>
+                <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+            </div>
+            
+            <!-- NUOVO: Bottone refresh badge -->
+            <button id="refresh-badges-btn" class="refresh-badges-btn" style="display: none;" onclick="refreshBadgesManually()">
+                <span class="refresh-icon">🔔</span>
+                <span>Aggiorna Badge</span>
+            </button>
+            
+            <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
+        </div>
+    </div>
 
         <div class="nav-section">
             <div class="nav-title">🏠 Comando</div>
@@ -1031,6 +1101,7 @@
                 <span>🏠 Associa Clan</span>
             </div>
         </div>
+        
 
         <div class="nav-section" id="adminSection" style="display: none;">
             <div class="nav-title">⚙️ Amministrazione</div>
@@ -1066,6 +1137,7 @@
     </div>
 
     <div class="main-content">
+        
         <!-- Banner Hero Enhanced -->
         <div class="banner">
             <div class="banner-content">
@@ -1078,14 +1150,29 @@
             <h2 id="section-title">🏰 Dashboard</h2>
             <p id="section-description">Il tuo centro di comando per gestire strategie, clan e conquiste</p>
         </div>
+        <div class="forum-layout" id="forum-content">
+            <div class="thread-list" id="thread-list">
+                <!-- NUOVO: Container per bottone refresh thread -->
+                <!-- Questo sarà aggiunto dinamicamente dal JavaScript -->
+                <div id="thread-refresh-container" class="refresh-section" style="display: none;">
+                    <button id="refresh-threads-btn" class="refresh-threads-btn" onclick="handleRefreshThreadsClick()">
+                        <span class="refresh-icon">🔄</span>
+                        <span>Nuovi Thread</span>
+                    </button>
+                </div>
+                
+                <!-- I contenuti dei thread verranno generati dinamicamente qui -->
+            </div>
+        </div>
 
-        <div class="content-area">
             <!-- Forum Layout -->
             <div class="forum-layout" id="forum-content">
                 <div class="thread-list" id="thread-list">
                     <!-- I contenuti verranno generati dinamicamente -->
                 </div>
             </div>
+
+
 
             <!-- Chat Layout -->
             <div class="chat-mode" id="chat-content">
@@ -1263,14 +1350,111 @@
         <span class="close-modal">&times;</span>
         <img id="modalImage" src="" alt="Immagine a schermo intero">
     </div>
+    <script>
+    // ===============================================
+    // INIZIALIZZAZIONE SISTEMA OTTIMIZZATO
+    // ===============================================
+    
+    // Funzione per mostrare/nascondere i bottoni ottimizzazione
+    window.showOptimizationControls = function() {
+        const refreshBadgeBtn = document.getElementById('refresh-badges-btn');
+        const statusContainer = document.getElementById('optimization-status-container');
+        
+        if (currentUser && refreshBadgeBtn) {
+            refreshBadgeBtn.style.display = 'flex';
+        }
+        
+        if (statusContainer) {
+            statusContainer.style.display = 'block';
+        }
+    };
+    
+    // Funzione per nascondere i controlli
+    window.hideOptimizationControls = function() {
+        const refreshBadgeBtn = document.getElementById('refresh-badges-btn');
+        const statusContainer = document.getElementById('optimization-status-container');
+        
+        if (refreshBadgeBtn) {
+            refreshBadgeBtn.style.display = 'none';
+        }
+        
+        if (statusContainer) {
+            statusContainer.style.display = 'none';
+        }
+    };
+    
+    // Funzione debug
+    window.debugOptimization = function() {
+        console.log('🔍 DEBUG SISTEMA OTTIMIZZATO:');
+        console.log('- Cache thread:', window.threadCache?.cache || 'Non disponibile');
+        console.log('- Listener messaggi attivi:', Object.keys(messageListeners || {}));
+        console.log('- Sezione corrente:', currentSection);
+        console.log('- Utente loggato:', !!currentUser);
+        
+        // Mostra statistiche nel UI
+        if (window.threadCache) {
+            const stats = [];
+            window.threadCache.cache.forEach((data, section) => {
+                stats.push(`${section}: ${data.threads.length} thread`);
+            });
+            
+            alert('📊 Statistiche Cache:\n' + stats.join('\n') + 
+                  '\n\n💾 Listener messaggi: ' + Object.keys(messageListeners || {}).length +
+                  '\n⚡ Sistema ottimizzato: Attivo');
+        }
+    };
+    
+    // Inizializzazione quando il DOM è pronto
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 Inizializzazione controlli ottimizzazione...');
+        
+        // Mostra controlli se l'utente è già loggato
+        if (currentUser) {
+            showOptimizationControls();
+        }
+        
+        // Ascolta i cambiamenti di login
+        const originalHandleUserLogin = window.handleUserLogin;
+        window.handleUserLogin = function(user) {
+            originalHandleUserLogin.call(this, user);
+            setTimeout(() => {
+                showOptimizationControls();
+            }, 1000);
+        };
+        
+        const originalHandleUserLogout = window.handleUserLogout;
+        window.handleUserLogout = function() {
+            hideOptimizationControls();
+            originalHandleUserLogout.call(this);
+        };
+    });
+    
+    // Override delle funzioni esistenti per integrazione
+    if (typeof switchSection === 'function') {
+        const originalSwitchSection = switchSection;
+        switchSection = function(sectionKey) {
+            originalSwitchSection.call(this, sectionKey);
+            
+            // Aggiungi bottone refresh thread per sezioni forum
+            setTimeout(() => {
+                if (addOptimizationButtons) {
+                    addOptimizationButtons();
+                }
+            }, 500);
+        };
+    }
+</script>
+
 
     <!-- ======================================= -->
     <!-- PRIMA carica i tuoi script esistenti   -->
     <!-- ======================================= -->
     <script src="script.js"></script>
+    <script src="optimized_script.js"></script> 
     <script src="username_handler.js"></script>
     <script src="dashboard_js_clean.js"></script>
     <script src="activity_tracker.js"></script>
+
 
     <!-- ======================================= -->
     <!-- POI carica il sistema di navigazione    -->
@@ -1294,5 +1478,6 @@
     <script src="navigation-init.js"></script>
     <script src="optimizations.js"></script>
     <script src="firebase-deduplication.js"></script> 
+
 </body>
 </html>
