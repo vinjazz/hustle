@@ -1,9 +1,9 @@
 // ===============================================
-// FIREBASE DEDUPLICATION FIX - COMPATIBILITÀ SNAPSHOT
-// Sostituisci il contenuto di firebase-deduplication.js
+// FIREBASE DEDUPLICATION - PREVIENI LETTURE MULTIPLE
+// Salva come: firebase-deduplication.js
 // ===============================================
 
-// 1. SISTEMA DI DEDUPLICAZIONE RICHIESTE CON MOCK SNAPSHOT
+// 1. SISTEMA DI DEDUPLICAZIONE RICHIESTE
 class FirebaseRequestDeduplicator {
     constructor() {
         this.pendingRequests = new Map();
@@ -17,9 +17,10 @@ class FirebaseRequestDeduplicator {
         if (cached !== null) {
             console.log(`💾 CACHE HIT: ${path}`);
             window.dataMonitor?.logCacheHit(path);
-            
-            // ✅ CORREZIONE: Restituisci un oggetto che simula Firebase snapshot
-            return this.createMockSnapshot(cached);
+            return {
+                val: () => cached,
+                exists: () => true
+            };
         }
 
         // Controlla se c'è già una richiesta pendente
@@ -51,56 +52,6 @@ class FirebaseRequestDeduplicator {
         this.pendingRequests.set(path, promise);
         
         return promise;
-    }
-
-    // ✅ NUOVA FUNZIONE: Crea un mock snapshot compatibile con Firebase
-    createMockSnapshot(data) {
-        const mockSnapshot = {
-            val: () => data,
-            exists: () => data !== null && data !== undefined,
-            
-            // ✅ CORREZIONE PRINCIPALE: Implementa forEach per compatibilità
-            forEach: (callback) => {
-                if (!data || typeof data !== 'object') {
-                    return false;
-                }
-                
-                // Simula il comportamento di Firebase snapshot.forEach
-                Object.keys(data).forEach(key => {
-                    const childData = data[key];
-                    
-                    // Crea un mock child snapshot
-                    const childSnapshot = {
-                        key: key,
-                        val: () => childData,
-                        exists: () => childData !== null && childData !== undefined
-                    };
-                    
-                    // Chiama il callback con il child snapshot
-                    callback(childSnapshot);
-                });
-                
-                return true;
-            },
-            
-            // ✅ AGGIUNGI: Altri metodi che potrebbero essere necessari
-            hasChild: (path) => {
-                return data && typeof data === 'object' && data.hasOwnProperty(path);
-            },
-            
-            child: (path) => {
-                const childData = data && typeof data === 'object' ? data[path] : null;
-                return this.createMockSnapshot(childData);
-            },
-            
-            size: data && typeof data === 'object' ? Object.keys(data).length : 0,
-            
-            // Proprietà per debug
-            _isMockSnapshot: true,
-            _cachedData: data
-        };
-        
-        return mockSnapshot;
     }
 
     getFromCache(path) {
@@ -138,7 +89,7 @@ class FirebaseRequestDeduplicator {
 // 2. INIZIALIZZA DEDUPLICATORE
 window.firebaseDeduplicator = new FirebaseRequestDeduplicator();
 
-// 3. OVERRIDE GET() CON DEDUPLICAZIONE CORRETTA
+// 3. OVERRIDE GET() CON DEDUPLICAZIONE
 function installDeduplication() {
     if (!window.firebaseImports || !window.firebaseImports.get) {
         console.error('❌ Firebase imports non disponibili per deduplicazione');
@@ -150,7 +101,7 @@ function installDeduplication() {
     window.firebaseImports.get = async function(reference) {
         const path = reference._path?.pieces_?.join('/') || 'unknown';
         
-        // Usa il deduplicatore con mock snapshot
+        // Usa il deduplicatore
         const result = await window.firebaseDeduplicator.dedupedGet(
             path, 
             originalGet, 
@@ -165,20 +116,13 @@ function installDeduplication() {
             window.dataMonitor?.logRead(path, 0);
         }
         
-        // ✅ DEBUG: Log del tipo di snapshot
-        if (result._isMockSnapshot) {
-            console.log(`📦 Restituito mock snapshot per: ${path}`);
-        } else {
-            console.log(`🔥 Restituito snapshot Firebase reale per: ${path}`);
-        }
-        
         return result;
     };
 
-    console.log('✅ Deduplicazione Firebase installata con supporto snapshot');
+    console.log('✅ Deduplicazione Firebase installata');
 }
 
-// 4. FIX PER DASHBOARD - PREVIENI CARICAMENTI MULTIPLI (AGGIORNATO)
+// 4. FIX PER DASHBOARD - PREVIENI CARICAMENTI MULTIPLI
 window.fixDashboardMultipleLoads = function() {
     console.log('🔧 Fix caricamenti multipli dashboard...');
     
@@ -199,9 +143,7 @@ window.fixDashboardMultipleLoads = function() {
                 const cached = window.firebaseDeduplicator.getFromCache('dashboard_threads');
                 if (cached) {
                     console.log('💾 Uso cache per latest threads');
-                    // ✅ CORREZIONE: Crea mock snapshot per cache
-                    const mockSnapshot = window.firebaseDeduplicator.createMockSnapshot(cached);
-                    this.displayLatestThreads(mockSnapshot);
+                    this.displayLatestThreads(cached);
                     return;
                 }
                 
@@ -215,114 +157,7 @@ window.fixDashboardMultipleLoads = function() {
     }
 };
 
-// 5. FIX SPECIFICO PER ACTIVITY TRACKER
-window.fixActivityTrackerCompatibility = function() {
-    console.log('🔧 Fix compatibilità Activity Tracker...');
-    
-    if (!window.activityTracker) {
-        console.warn('⚠️ Activity Tracker non trovato');
-        return;
-    }
-    
-    // Override delle funzioni che usano snapshot.forEach
-    const originalCountNewMessages = window.activityTracker.countNewMessages;
-    const originalCountNewThreads = window.activityTracker.countNewThreads;
-    
-    // ✅ CORREZIONE: countNewMessages con verifica mock snapshot
-    window.activityTracker.countNewMessages = async function(section, sinceTime) {
-        const dataPath = window.getDataPath(section, 'messages');
-        if (!dataPath) return 0;
-        
-        let count = 0;
-        
-        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
-            try {
-                const { ref, get } = window.firebaseImports;
-                const messagesRef = ref(window.firebaseDatabase, dataPath);
-                const snapshot = await get(messagesRef);
-                
-                if (snapshot.exists()) {
-                    // ✅ VERIFICA: Se è un mock snapshot o uno reale
-                    if (snapshot._isMockSnapshot) {
-                        console.log(`📦 Usando mock snapshot per messaggi ${section}`);
-                    }
-                    
-                    // Entrambi i tipi supportano forEach ora
-                    snapshot.forEach((childSnapshot) => {
-                        const message = childSnapshot.val();
-                        // Non contare i propri messaggi
-                        if (message.timestamp > sinceTime && message.authorId !== currentUser.uid) {
-                            count++;
-                        }
-                    });
-                }
-            } catch (error) {
-                if (error.code === 'PERMISSION_DENIED') {
-                    console.warn(`⚠️ Permessi negati per messaggi ${section}, uso cache locale`);
-                } else {
-                    console.error(`Errore conteggio messaggi ${section}:`, error);
-                }
-                // Fallback to localStorage
-                return this.countFromLocalStorage(section, 'messages', sinceTime);
-            }
-        } else {
-            // Modalità locale
-            return this.countFromLocalStorage(section, 'messages', sinceTime);
-        }
-        
-        return count;
-    };
-    
-    // ✅ CORREZIONE: countNewThreads con verifica mock snapshot
-    window.activityTracker.countNewThreads = async function(section, sinceTime) {
-        const dataPath = window.getDataPath(section, 'threads');
-        if (!dataPath) return 0;
-        
-        let count = 0;
-        
-        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
-            try {
-                const { ref, get } = window.firebaseImports;
-                const threadsRef = ref(window.firebaseDatabase, dataPath);
-                const snapshot = await get(threadsRef);
-                
-                if (snapshot.exists()) {
-                    // ✅ VERIFICA: Se è un mock snapshot o uno reale
-                    if (snapshot._isMockSnapshot) {
-                        console.log(`📦 Usando mock snapshot per thread ${section}`);
-                    }
-                    
-                    // Entrambi i tipi supportano forEach ora
-                    snapshot.forEach((childSnapshot) => {
-                        const thread = childSnapshot.val();
-                        // Conta solo thread approvati creati dopo il riferimento
-                        if (thread.createdAt > sinceTime && 
-                            (!thread.status || thread.status === 'approved')) {
-                            count++;
-                        }
-                    });
-                }
-            } catch (error) {
-                if (error.code === 'PERMISSION_DENIED') {
-                    console.warn(`⚠️ Permessi negati per thread ${section}, uso cache locale`);
-                } else {
-                    console.error(`Errore conteggio thread ${section}:`, error);
-                }
-                // Fallback to localStorage
-                return this.countFromLocalStorage(section, 'threads', sinceTime);
-            }
-        } else {
-            // Modalità locale
-            return this.countFromLocalStorage(section, 'threads', sinceTime);
-        }
-        
-        return count;
-    };
-    
-    console.log('✅ Activity Tracker compatibilità fix applicato');
-};
-
-// 6. FIX PER LISTENERS DUPLICATI (AGGIORNATO)
+// 5. FIX PER LISTENERS DUPLICATI
 window.cleanupDuplicateListeners = function() {
     console.log('🧹 Pulizia listeners duplicati...');
     
@@ -370,7 +205,45 @@ window.cleanupDuplicateListeners = function() {
     console.log(`✅ Listeners attivi ora: ${activeListeners.size}`);
 };
 
-// 7. REPORT DETTAGLIATO (AGGIORNATO)
+// 6. MONITORA CHIAMATE DUPLICATE
+window.monitorDuplicateCalls = function() {
+    const callLog = new Map();
+    const checkInterval = 1000; // 1 secondo
+    
+    // Override temporaneo per monitoraggio
+    const originalGet = window.firebaseImports.get;
+    
+    window.firebaseImports.get = function(reference) {
+        const path = reference._path?.pieces_?.join('/') || 'unknown';
+        const now = Date.now();
+        
+        // Controlla se è una chiamata duplicata
+        if (callLog.has(path)) {
+            const lastCall = callLog.get(path);
+            if (now - lastCall < checkInterval) {
+                console.warn(`⚠️ CHIAMATA DUPLICATA RILEVATA: ${path} (${now - lastCall}ms dall'ultima)`);
+            }
+        }
+        
+        callLog.set(path, now);
+        
+        // Pulisci vecchie entries
+        if (callLog.size > 100) {
+            const oldestAllowed = now - 60000; // 1 minuto
+            for (const [key, time] of callLog) {
+                if (time < oldestAllowed) {
+                    callLog.delete(key);
+                }
+            }
+        }
+        
+        return originalGet.apply(this, arguments);
+    };
+    
+    console.log('👁️ Monitoraggio chiamate duplicate attivato');
+};
+
+// 7. REPORT DETTAGLIATO
 window.deduplicationReport = function() {
     const stats = window.firebaseDeduplicator.getCacheStats();
     const report = window.dataMonitor?.getReport() || {};
@@ -386,23 +259,15 @@ window.deduplicationReport = function() {
         console.log(`💰 Risparmio banda: ${saved}%`);
     }
     
-    // ✅ NUOVO: Report mock snapshots
-    let mockSnapshots = 0;
-    window.firebaseDeduplicator.cache.forEach((item) => {
-        if (item.data) mockSnapshots++;
-    });
-    console.log(`📦 Mock snapshots in cache: ${mockSnapshots}`);
-    
     return {
         cache: stats,
-        monitor: report,
-        mockSnapshots: mockSnapshots
+        monitor: report
     };
 };
 
-// 8. ATTIVAZIONE AUTOMATICA (AGGIORNATA)
+// 8. ATTIVAZIONE AUTOMATICA
 setTimeout(() => {
-    console.log('🚀 Attivazione sistema anti-duplicazione con fix snapshot...');
+    console.log('🚀 Attivazione sistema anti-duplicazione...');
     
     // Installa deduplicazione
     installDeduplication();
@@ -410,42 +275,17 @@ setTimeout(() => {
     // Fix dashboard
     window.fixDashboardMultipleLoads();
     
-    // ✅ NUOVO: Fix Activity Tracker
-    window.fixActivityTrackerCompatibility();
-    
     // Pulisci listeners duplicati
     window.cleanupDuplicateListeners();
     
-    console.log('✅ Sistema anti-duplicazione attivo con supporto completo snapshot!');
+    // Attiva monitoraggio (opzionale, solo per debug)
+    // window.monitorDuplicateCalls();
+    
+    console.log('✅ Sistema anti-duplicazione attivo!');
     console.log('📊 Usa window.deduplicationReport() per statistiche');
 }, 2000);
 
-// 9. FUNZIONI DI TEST
-window.testMockSnapshot = function() {
-    console.log('🧪 Test Mock Snapshot...');
-    
-    const testData = {
-        'item1': { name: 'Test 1', value: 123 },
-        'item2': { name: 'Test 2', value: 456 }
-    };
-    
-    const mockSnapshot = window.firebaseDeduplicator.createMockSnapshot(testData);
-    
-    console.log('✅ Mock snapshot creato:', mockSnapshot);
-    console.log('📄 Val():', mockSnapshot.val());
-    console.log('✅ Exists():', mockSnapshot.exists());
-    console.log('📏 Size:', mockSnapshot.size);
-    
-    // Test forEach
-    console.log('🔄 Test forEach:');
-    mockSnapshot.forEach((childSnapshot) => {
-        console.log(`  - ${childSnapshot.key}:`, childSnapshot.val());
-    });
-    
-    console.log('✅ Test completato!');
-};
-
-// 10. FUNZIONE DI EMERGENZA (AGGIORNATA)
+// 9. FUNZIONE DI EMERGENZA
 window.emergencyStopAll = function() {
     console.log('🚨 STOP EMERGENZA ATTIVATO!');
     
@@ -462,13 +302,7 @@ window.emergencyStopAll = function() {
         window.dashboardManager.cleanup();
     }
     
-    // Ripristina funzioni Activity Tracker originali
-    if (window.activityTracker) {
-        console.log('🔄 Ripristino Activity Tracker...');
-        window.location.reload(); // Modo più sicuro per ripristinare
-    }
-    
     console.log('✅ Tutto fermato. Ricarica la pagina per ripartire.');
 };
 
-console.log('✅ firebase-deduplication.js FIXED caricato con supporto snapshot!');
+console.log('✅ firebase-deduplication.js caricato!');

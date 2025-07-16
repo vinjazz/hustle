@@ -1,5 +1,6 @@
 // ===============================================
-// ACTIVITY TRACKER MODULE - Sistema Badge Novità
+// ACTIVITY TRACKER MODULE - Migrato a Supabase
+// Firebase Auth + Supabase Data + Polling per Real-time
 // ===============================================
 
 class ActivityTracker {
@@ -9,6 +10,19 @@ class ActivityTracker {
         this.unreadCounts = {};
         this.updateInterval = null;
         this.isTracking = false;
+        this.supabaseClient = null;
+        this.pollingInterval = null;
+        this.lastPollingUpdate = 0;
+    }
+
+    // Inizializza Supabase client
+    async initializeSupabase() {
+        if (window.supabase && window.supabaseUrl && window.supabaseKey) {
+            this.supabaseClient = window.supabase.createClient(window.supabaseUrl, window.supabaseKey);
+            console.log('✅ ActivityTracker Supabase inizializzato');
+        } else {
+            console.warn('⚠️ ActivityTracker: Supabase non disponibile, modalità locale');
+        }
     }
 
     // Inizializza il tracker
@@ -18,6 +32,11 @@ class ActivityTracker {
         if (!currentUser) {
             console.log('⚠️ Nessun utente loggato, tracker non inizializzato');
             return;
+        }
+
+        // Inizializza Supabase se non già fatto
+        if (!this.supabaseClient) {
+            await this.initializeSupabase();
         }
 
         this.isTracking = true;
@@ -31,60 +50,86 @@ class ActivityTracker {
         // Aggiorna UI
         this.updateAllBadges();
         
-        // Setup listeners real-time
-        this.setupRealtimeListeners();
+        // Setup polling per real-time (sostituisce listener Firebase)
+        this.startPolling();
         
-        // Setup auto-refresh ogni 30 secondi (come backup)
+        // Setup auto-refresh come backup
         this.startAutoRefresh();
         
-        // Mostra info modalità
-        if (!window.useFirebase || !window.firebaseDatabase || !window.getFirebaseReady()) {
-            console.log('✅ Activity Tracker inizializzato (modalità locale - refresh ogni 30s)');
-        } else {
-            console.log('✅ Activity Tracker inizializzato con real-time');
-        }
+        console.log('✅ Activity Tracker inizializzato (modalità Supabase + polling)');
     }
 
-    // Carica dati attività utente
+    // Carica dati attività utente - MIGRATO A SUPABASE
     async loadUserActivityData() {
         try {
-            if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
+            // PRIMA: Prova con Supabase
+            if (this.supabaseClient) {
                 try {
-                    const { ref, get } = window.firebaseImports;
-                    // Prova prima a caricare da users/${userId}/activity (più sicuro)
-                    const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
-                    const snapshot = await get(userActivityRef);
-                    
-                    if (snapshot.exists()) {
-                        const data = snapshot.val();
-                        this.lastLogoutTime = data.lastLogout || Date.now();
-                        this.lastVisitTimes = data.lastVisitTimes || {};
-                    } else {
-                        // Prima volta, imposta timestamp corrente
-                        this.lastLogoutTime = Date.now();
-                        this.lastVisitTimes = {};
+                    const { data, error } = await this.supabaseClient
+                        .from('user_activity')
+                        .select('*')
+                        .eq('user_id', currentUser.uid)
+                        .limit(1)
+                        .single();
+
+                    if (error) {
+                        if (error.code === 'PGRST116') {
+                            // Nessun record = primo accesso
+                            console.log('🆕 Primo accesso, creando dati attività...');
+                            await this.createInitialActivityData();
+                            return;
+                        }
+                        throw error;
                     }
-                } catch (firebaseError) {
-                    console.warn('⚠️ Accesso Firebase negato, uso fallback locale:', firebaseError.message);
-                    // Fallback to localStorage
-                    this.loadFromLocalStorage();
+                    
+                    if (data) {
+                        this.lastLogoutTime = new Date(data.last_logout).getTime();
+                        this.lastVisitTimes = data.last_visit_times || {};
+                        console.log('✅ Dati attività caricati da Supabase');
+                        return;
+                    }
+                } catch (supabaseError) {
+                    console.warn('⚠️ Errore Supabase attività:', supabaseError);
+                    // Fallback a localStorage
                 }
-            } else {
-                // Modalità locale
-                this.loadFromLocalStorage();
             }
-            
-            console.log('📊 Dati attività caricati:', {
-                lastLogout: new Date(this.lastLogoutTime).toLocaleString(),
-                visitedSections: Object.keys(this.lastVisitTimes)
-            });
+
+            // FALLBACK: localStorage
+            this.loadFromLocalStorage();
             
         } catch (error) {
             console.error('Errore caricamento dati attività:', error);
             // Fallback sicuro
             this.lastLogoutTime = Date.now();
             this.lastVisitTimes = {};
-            // Salva in locale come backup
+            this.saveToLocalStorage();
+        }
+    }
+
+    // Crea dati attività iniziali in Supabase
+    async createInitialActivityData() {
+        if (!this.supabaseClient) return;
+
+        try {
+            this.lastLogoutTime = Date.now();
+            this.lastVisitTimes = {};
+
+            const { data, error } = await this.supabaseClient
+                .from('user_activity')
+                .insert([{
+                    user_id: currentUser.uid,
+                    last_logout: new Date(this.lastLogoutTime).toISOString(),
+                    last_visit_times: this.lastVisitTimes
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            console.log('✅ Dati attività iniziali creati');
+        } catch (error) {
+            console.error('Errore creazione dati attività:', error);
+            // Salva in localStorage come backup
             this.saveToLocalStorage();
         }
     }
@@ -95,6 +140,7 @@ class ActivityTracker {
         const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
         this.lastLogoutTime = data.lastLogout || Date.now();
         this.lastVisitTimes = data.lastVisitTimes || {};
+        console.log('✅ Dati attività caricati da localStorage');
     }
     
     // Salva in localStorage
@@ -107,7 +153,7 @@ class ActivityTracker {
         localStorage.setItem(storageKey, JSON.stringify(data));
     }
 
-    // Salva dati attività utente
+    // Salva dati attività utente - MIGRATO A SUPABASE
     async saveUserActivityData() {
         if (!currentUser || !this.isTracking) return;
         
@@ -119,16 +165,22 @@ class ActivityTracker {
         // Salva sempre in localStorage come backup
         this.saveToLocalStorage();
         
-        // Prova anche Firebase se disponibile
-        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
+        // Prova anche Supabase se disponibile
+        if (this.supabaseClient) {
             try {
-                const { ref, set } = window.firebaseImports;
-                // Prova a salvare in users/${userId}/activity
-                const userActivityRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/activity`);
-                await set(userActivityRef, data);
-                console.log('✅ Attività salvata su Firebase');
-            } catch (firebaseError) {
-                console.warn('⚠️ Impossibile salvare su Firebase, usando solo localStorage:', firebaseError.message);
+                const { error } = await this.supabaseClient
+                    .from('user_activity')
+                    .upsert([{
+                        user_id: currentUser.uid,
+                        last_logout: new Date(this.lastLogoutTime).toISOString(),
+                        last_visit_times: this.lastVisitTimes
+                    }], { onConflict: 'user_id' });
+
+                if (error) throw error;
+                
+                console.log('✅ Attività salvata su Supabase');
+            } catch (supabaseError) {
+                console.warn('⚠️ Impossibile salvare su Supabase:', supabaseError);
             }
         }
     }
@@ -180,12 +232,34 @@ class ActivityTracker {
         }
     }
 
-    // Conta nuovi messaggi
+    // Conta nuovi messaggi - MIGRATO A SUPABASE
     async countNewMessages(section, sinceTime) {
+        let count = 0;
+        
+        // PRIMA: Prova con Supabase
+        if (this.supabaseClient) {
+            try {
+                const { data, error } = await this.supabaseClient
+                    .from('messages')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('section', section)
+                    .gte('created_at', new Date(sinceTime).toISOString())
+                    .neq('author_id', currentUser.uid); // Non contare i propri messaggi
+
+                if (error) throw error;
+                
+                count = data?.length || 0;
+                console.log(`📊 Nuovi messaggi ${section} (Supabase): ${count}`);
+                return count;
+            } catch (supabaseError) {
+                console.warn(`⚠️ Errore Supabase messaggi ${section}:`, supabaseError);
+                // Fallback a Firebase/localStorage
+            }
+        }
+
+        // FALLBACK: Firebase o localStorage
         const dataPath = window.getDataPath(section, 'messages');
         if (!dataPath) return 0;
-        
-        let count = 0;
         
         if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
             try {
@@ -196,35 +270,52 @@ class ActivityTracker {
                 if (snapshot.exists()) {
                     snapshot.forEach((childSnapshot) => {
                         const message = childSnapshot.val();
-                        // Non contare i propri messaggi
                         if (message.timestamp > sinceTime && message.authorId !== currentUser.uid) {
                             count++;
                         }
                     });
                 }
+                
+                console.log(`📊 Nuovi messaggi ${section} (Firebase): ${count}`);
             } catch (error) {
-                if (error.code === 'PERMISSION_DENIED') {
-                    console.warn(`⚠️ Permessi negati per messaggi ${section}, uso cache locale`);
-                } else {
-                    console.error(`Errore conteggio messaggi ${section}:`, error);
-                }
-                // Fallback to localStorage
-                return this.countFromLocalStorage(section, 'messages', sinceTime);
+                console.warn(`Errore conteggio messaggi ${section}:`, error);
+                count = this.countFromLocalStorage(section, 'messages', sinceTime);
             }
         } else {
-            // Modalità locale
-            return this.countFromLocalStorage(section, 'messages', sinceTime);
+            count = this.countFromLocalStorage(section, 'messages', sinceTime);
         }
         
         return count;
     }
 
-    // Conta nuovi thread
+    // Conta nuovi thread - MIGRATO A SUPABASE
     async countNewThreads(section, sinceTime) {
+        let count = 0;
+        
+        // PRIMA: Prova con Supabase
+        if (this.supabaseClient) {
+            try {
+                const { data, error } = await this.supabaseClient
+                    .from('threads')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('section', section)
+                    .gte('created_at', new Date(sinceTime).toISOString())
+                    .in('status', ['approved', null]);
+
+                if (error) throw error;
+                
+                count = data?.length || 0;
+                console.log(`📊 Nuovi thread ${section} (Supabase): ${count}`);
+                return count;
+            } catch (supabaseError) {
+                console.warn(`⚠️ Errore Supabase thread ${section}:`, supabaseError);
+                // Fallback a Firebase/localStorage
+            }
+        }
+
+        // FALLBACK: Firebase o localStorage
         const dataPath = window.getDataPath(section, 'threads');
         if (!dataPath) return 0;
-        
-        let count = 0;
         
         if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
             try {
@@ -235,25 +326,20 @@ class ActivityTracker {
                 if (snapshot.exists()) {
                     snapshot.forEach((childSnapshot) => {
                         const thread = childSnapshot.val();
-                        // Conta solo thread approvati creati dopo il riferimento
                         if (thread.createdAt > sinceTime && 
                             (!thread.status || thread.status === 'approved')) {
                             count++;
                         }
                     });
                 }
+                
+                console.log(`📊 Nuovi thread ${section} (Firebase): ${count}`);
             } catch (error) {
-                if (error.code === 'PERMISSION_DENIED') {
-                    console.warn(`⚠️ Permessi negati per thread ${section}, uso cache locale`);
-                } else {
-                    console.error(`Errore conteggio thread ${section}:`, error);
-                }
-                // Fallback to localStorage
-                return this.countFromLocalStorage(section, 'threads', sinceTime);
+                console.warn(`Errore conteggio thread ${section}:`, error);
+                count = this.countFromLocalStorage(section, 'threads', sinceTime);
             }
         } else {
-            // Modalità locale
-            return this.countFromLocalStorage(section, 'threads', sinceTime);
+            count = this.countFromLocalStorage(section, 'threads', sinceTime);
         }
         
         return count;
@@ -277,6 +363,74 @@ class ActivityTracker {
                 thread.createdAt > sinceTime && 
                 (!thread.status || thread.status === 'approved')
             ).length;
+        }
+    }
+
+    // Avvia polling per simulare real-time
+    startPolling() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+        }
+        
+        // Polling ogni 30 secondi (molto più efficiente dei listener Firebase)
+        this.pollingInterval = setInterval(() => {
+            if (this.isTracking && currentUser) {
+                this.pollForUpdates();
+            }
+        }, 30000);
+        
+        console.log('📡 Polling avviato (30s interval)');
+    }
+
+    // Polling per aggiornamenti
+    async pollForUpdates() {
+        const now = Date.now();
+        
+        // Evita polling troppo frequente
+        if (now - this.lastPollingUpdate < 25000) {
+            return;
+        }
+        
+        this.lastPollingUpdate = now;
+        
+        try {
+            // Aggiorna solo sezioni non correnti
+            const sectionsToUpdate = Object.keys(window.sectionConfig).filter(section => {
+                return section !== window.getCurrentSection() && 
+                       (!this.lastVisitTimes[section] || 
+                        Date.now() - this.lastVisitTimes[section] > 60000);
+            });
+            
+            let hasUpdates = false;
+            
+            for (const section of sectionsToUpdate) {
+                const oldCount = this.unreadCounts[section] || 0;
+                const newCount = await this.calculateSectionBadge(section);
+                
+                if (newCount !== oldCount) {
+                    hasUpdates = true;
+                    
+                    if (newCount > 0) {
+                        this.unreadCounts[section] = newCount;
+                        this.addBadgeToSection(section, newCount, true);
+                        
+                        // Mostra notifica solo se il conteggio è aumentato
+                        if (newCount > oldCount) {
+                            this.showNewContentToast(section, newCount - oldCount);
+                        }
+                    } else {
+                        delete this.unreadCounts[section];
+                        this.removeBadgeFromSection(section);
+                    }
+                }
+            }
+            
+            if (hasUpdates) {
+                console.log('🔄 Aggiornamenti rilevati dal polling');
+            }
+            
+        } catch (error) {
+            console.error('Errore polling aggiornamenti:', error);
         }
     }
 
@@ -320,6 +474,17 @@ class ActivityTracker {
         navItem.appendChild(badge);
     }
 
+    // Rimuovi badge da una sezione
+    removeBadgeFromSection(section) {
+        const navItem = document.querySelector(`[data-section="${section}"]`);
+        if (!navItem) return;
+        
+        const badge = navItem.querySelector('.section-badge');
+        if (badge) {
+            badge.remove();
+        }
+    }
+
     // Segna una sezione come visitata
     async markSectionAsVisited(section) {
         if (!this.isTracking) return;
@@ -331,13 +496,7 @@ class ActivityTracker {
         
         // Rimuovi badge per questa sezione
         delete this.unreadCounts[section];
-        const navItem = document.querySelector(`[data-section="${section}"]`);
-        if (navItem) {
-            const badge = navItem.querySelector('.section-badge');
-            if (badge) {
-                badge.remove();
-            }
-        }
+        this.removeBadgeFromSection(section);
         
         // Salva dati aggiornati
         await this.saveUserActivityData();
@@ -354,17 +513,11 @@ class ActivityTracker {
             this.addBadgeToSection(section, count);
         } else {
             delete this.unreadCounts[section];
-            const navItem = document.querySelector(`[data-section="${section}"]`);
-            if (navItem) {
-                const badge = navItem.querySelector('.section-badge');
-                if (badge) {
-                    badge.remove();
-                }
-            }
+            this.removeBadgeFromSection(section);
         }
     }
 
-    // Gestisci nuovo contenuto in tempo reale
+    // Gestisci nuovo contenuto
     async handleNewContent(section, contentType) {
         if (!this.isTracking) return;
         
@@ -395,18 +548,18 @@ class ActivityTracker {
             if (this.isTracking && currentUser) {
                 this.refreshBadges();
             }
-        }, 30000); // Ogni 30 secondi
+        }, 60000); // Ogni minuto (ridotto da 30s)
     }
 
-    // Refresh badge (per contenuti real-time)
+    // Refresh badge
     async refreshBadges() {
         console.log('🔄 Refresh badge...');
         
-        // Ricalcola solo per sezioni non visitate recentemente
+        // Ricalcola per sezioni non correnti
         const sectionsToUpdate = Object.keys(window.sectionConfig).filter(section => {
             return section !== window.getCurrentSection() && 
                    (!this.lastVisitTimes[section] || 
-                    Date.now() - this.lastVisitTimes[section] > 60000); // Più di 1 minuto
+                    Date.now() - this.lastVisitTimes[section] > 120000); // 2 minuti
         });
         
         for (const section of sectionsToUpdate) {
@@ -423,8 +576,10 @@ class ActivityTracker {
             this.updateInterval = null;
         }
         
-        // Rimuovi listeners real-time
-        this.removeRealtimeListeners();
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+        }
         
         // Rimuovi tutti i badge
         document.querySelectorAll('.section-badge').forEach(badge => badge.remove());
@@ -438,121 +593,10 @@ class ActivityTracker {
         this.lastLogoutTime = null;
         this.lastVisitTimes = {};
         this.unreadCounts = {};
+        this.lastPollingUpdate = 0;
     }
 
-    // Setup listeners real-time per Firebase
-    setupRealtimeListeners() {
-        if (!window.useFirebase || !window.firebaseDatabase || !window.getFirebaseReady()) {
-            console.log('⚠️ Real-time non disponibile in modalità locale');
-            return;
-        }
-
-        console.log('🔥 Setup listeners real-time...');
-        
-        this.realtimeListeners = {};
-        
-        // Monitora tutte le sezioni
-        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan', 'chat-generale'];
-        const userClan = window.getCurrentUserClan();
-        
-        if (userClan !== 'Nessuno') {
-            sections.push('clan-chat', 'clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca');
-        }
-        
-        sections.forEach(section => {
-            this.setupSectionListener(section);
-        });
-    }
-
-    // Setup listener per una sezione specifica
-    setupSectionListener(section) {
-        const sectionConfig = window.sectionConfig[section];
-        if (!sectionConfig) return;
-        
-        const dataType = sectionConfig.type === 'chat' ? 'messages' : 'threads';
-        const dataPath = window.getDataPath(section, dataType);
-        if (!dataPath) return;
-        
-        try {
-            const { ref, onValue } = window.firebaseImports;
-            const dataRef = ref(window.firebaseDatabase, dataPath);
-            
-            // Listener per nuovi contenuti con gestione errori
-            const callback = onValue(dataRef, 
-                (snapshot) => {
-                    // Se non siamo in questa sezione, controlla per nuovi contenuti
-                    if (window.getCurrentSection() !== section && this.isTracking) {
-                        this.checkForNewContent(section, snapshot);
-                    }
-                },
-                (error) => {
-                    if (error.code === 'PERMISSION_DENIED') {
-                        console.warn(`⚠️ Permessi negati per ${section}, listener disabilitato`);
-                    } else {
-                        console.error(`Errore listener ${section}:`, error);
-                    }
-                }
-            );
-            
-            // Salva riferimento per pulizia
-            this.realtimeListeners[section] = { ref: dataRef, callback };
-            
-            console.log(`📡 Listener real-time attivo per ${section}`);
-            
-        } catch (error) {
-            console.error(`Errore setup listener ${section}:`, error);
-        }
-    }
-
-    // Controlla per nuovi contenuti
-    checkForNewContent(section, snapshot) {
-        if (!snapshot.exists()) return;
-        
-        const referenceTime = this.lastVisitTimes[section] || this.lastLogoutTime;
-        let newCount = 0;
-        
-        snapshot.forEach((childSnapshot) => {
-            const item = childSnapshot.val();
-            
-            // Per messaggi
-            if (item.timestamp && item.timestamp > referenceTime && item.authorId !== currentUser.uid) {
-                newCount++;
-            }
-            // Per thread
-            else if (item.createdAt && item.createdAt > referenceTime && (!item.status || item.status === 'approved')) {
-                newCount++;
-            }
-        });
-        
-        // Aggiorna badge se ci sono novità
-        if (newCount > 0 && this.unreadCounts[section] !== newCount) {
-            console.log(`🆕 Nuovi contenuti in ${section}: ${newCount}`);
-            this.unreadCounts[section] = newCount;
-            this.addBadgeToSection(section, newCount, true); // true = nuovo contenuto real-time
-            
-            // Mostra notifica toast opzionale
-            this.showNewContentToast(section, newCount);
-        }
-    }
-
-    // Rimuovi listeners real-time
-    removeRealtimeListeners() {
-        if (!this.realtimeListeners) return;
-        
-        const { off } = window.firebaseImports || {};
-        if (!off) return;
-        
-        Object.entries(this.realtimeListeners).forEach(([section, listener]) => {
-            if (listener.ref && listener.callback) {
-                off(listener.ref, listener.callback);
-                console.log(`📡 Listener real-time rimosso per ${section}`);
-            }
-        });
-        
-        this.realtimeListeners = {};
-    }
-
-    // Mostra toast per nuovo contenuto (opzionale)
+    // Mostra toast per nuovo contenuto
     showNewContentToast(section, count) {
         const sectionName = window.sectionConfig[section]?.title || section;
         const message = count === 1 ? 
@@ -574,6 +618,17 @@ class ActivityTracker {
             window.showToast(toast);
         }
     }
+
+    // Funzione per debug
+    debugStatus() {
+        console.log('🔍 Activity Tracker Status:');
+        console.log('- Tracking attivo:', this.isTracking);
+        console.log('- Supabase disponibile:', !!this.supabaseClient);
+        console.log('- Polling attivo:', !!this.pollingInterval);
+        console.log('- Badge attuali:', this.unreadCounts);
+        console.log('- Ultimo polling:', new Date(this.lastPollingUpdate).toLocaleString());
+        console.log('- Ultime visite:', this.lastVisitTimes);
+    }
 }
 
 // Istanza globale
@@ -592,4 +647,42 @@ window.handleNewContent = async function(section, contentType) {
     }
 };
 
-console.log('✅ Activity Tracker Module caricato');
+// Funzione per refresh manuale badge
+window.refreshBadgesManually = async function() {
+    if (window.activityTracker && window.activityTracker.isTracking) {
+        const btn = document.getElementById('refresh-badges-btn');
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<div class="refresh-spinner"></div><span>Aggiornando...</span>';
+            btn.disabled = true;
+            
+            try {
+                await window.activityTracker.calculateAllBadges();
+                window.activityTracker.updateAllBadges();
+                
+                // Feedback positivo
+                btn.innerHTML = '<span class="refresh-icon">✅</span><span>Aggiornati</span>';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }, 1500);
+            } catch (error) {
+                console.error('Errore refresh badge:', error);
+                btn.innerHTML = '<span class="refresh-icon">❌</span><span>Errore</span>';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }, 1500);
+            }
+        }
+    }
+};
+
+// Debug globale
+window.debugActivityTracker = function() {
+    if (window.activityTracker) {
+        window.activityTracker.debugStatus();
+    }
+};
+
+console.log('✅ Activity Tracker con Supabase caricato!');

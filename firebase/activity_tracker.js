@@ -593,3 +593,383 @@ window.handleNewContent = async function(section, contentType) {
 };
 
 console.log('✅ Activity Tracker Module caricato');
+
+
+if (window.activityTracker) {
+    console.log('🔧 Applicando patch compatibilità Activity Tracker...');
+    
+    // Salva le funzioni originali
+    const originalCountNewMessages = window.activityTracker.countNewMessages;
+    const originalCountNewThreads = window.activityTracker.countNewThreads;
+    const originalCalculateAllBadges = window.activityTracker.calculateAllBadges;
+    
+    // ✅ PATCH: countNewMessages con gestione errori migliorata
+    window.activityTracker.countNewMessages = async function(section, sinceTime) {
+        const dataPath = window.getDataPath(section, 'messages');
+        if (!dataPath) return 0;
+        
+        let count = 0;
+        
+        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
+            try {
+                const { ref, get } = window.firebaseImports;
+                const messagesRef = ref(window.firebaseDatabase, dataPath);
+                const snapshot = await get(messagesRef);
+                
+                if (snapshot && snapshot.exists()) {
+                    // ✅ VERIFICA: Controlla se snapshot ha forEach
+                    if (typeof snapshot.forEach === 'function') {
+                        snapshot.forEach((childSnapshot) => {
+                            try {
+                                const message = childSnapshot.val();
+                                if (message && message.timestamp > sinceTime && message.authorId !== currentUser?.uid) {
+                                    count++;
+                                }
+                            } catch (childError) {
+                                console.warn(`⚠️ Errore processing messaggio child in ${section}:`, childError);
+                            }
+                        });
+                    } else {
+                        // ✅ FALLBACK: Se forEach non è disponibile, lavora sui dati direttamente
+                        console.warn(`⚠️ Snapshot per ${section} non ha forEach, usando fallback`);
+                        const data = snapshot.val();
+                        if (data && typeof data === 'object') {
+                            Object.keys(data).forEach(key => {
+                                try {
+                                    const message = data[key];
+                                    if (message && message.timestamp > sinceTime && message.authorId !== currentUser?.uid) {
+                                        count++;
+                                    }
+                                } catch (itemError) {
+                                    console.warn(`⚠️ Errore processing messaggio ${key}:`, itemError);
+                                }
+                            });
+                        }
+                    }
+                }
+                
+                console.log(`💬 Contati ${count} nuovi messaggi in ${section}`);
+                
+            } catch (error) {
+                if (error.code === 'PERMISSION_DENIED') {
+                    console.warn(`⚠️ Permessi negati per messaggi ${section}, uso cache locale`);
+                } else {
+                    console.error(`❌ Errore conteggio messaggi ${section}:`, error);
+                }
+                // Fallback to localStorage
+                return this.countFromLocalStorage(section, 'messages', sinceTime);
+            }
+        } else {
+            // Modalità locale
+            return this.countFromLocalStorage(section, 'messages', sinceTime);
+        }
+        
+        return count;
+    };
+    
+    // ✅ PATCH: countNewThreads con gestione errori migliorata
+    window.activityTracker.countNewThreads = async function(section, sinceTime) {
+        const dataPath = window.getDataPath(section, 'threads');
+        if (!dataPath) return 0;
+        
+        let count = 0;
+        
+        if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady()) {
+            try {
+                const { ref, get } = window.firebaseImports;
+                const threadsRef = ref(window.firebaseDatabase, dataPath);
+                const snapshot = await get(threadsRef);
+                
+                if (snapshot && snapshot.exists()) {
+                    // ✅ VERIFICA: Controlla se snapshot ha forEach
+                    if (typeof snapshot.forEach === 'function') {
+                        snapshot.forEach((childSnapshot) => {
+                            try {
+                                const thread = childSnapshot.val();
+                                if (thread && thread.createdAt > sinceTime && 
+                                    (!thread.status || thread.status === 'approved')) {
+                                    count++;
+                                }
+                            } catch (childError) {
+                                console.warn(`⚠️ Errore processing thread child in ${section}:`, childError);
+                            }
+                        });
+                    } else {
+                        // ✅ FALLBACK: Se forEach non è disponibile, lavora sui dati direttamente
+                        console.warn(`⚠️ Snapshot per ${section} non ha forEach, usando fallback`);
+                        const data = snapshot.val();
+                        if (data && typeof data === 'object') {
+                            Object.keys(data).forEach(key => {
+                                try {
+                                    const thread = data[key];
+                                    if (thread && thread.createdAt > sinceTime && 
+                                        (!thread.status || thread.status === 'approved')) {
+                                        count++;
+                                    }
+                                } catch (itemError) {
+                                    console.warn(`⚠️ Errore processing thread ${key}:`, itemError);
+                                }
+                            });
+                        }
+                    }
+                }
+                
+                console.log(`📝 Contati ${count} nuovi thread in ${section}`);
+                
+            } catch (error) {
+                if (error.code === 'PERMISSION_DENIED') {
+                    console.warn(`⚠️ Permessi negati per thread ${section}, uso cache locale`);
+                } else {
+                    console.error(`❌ Errore conteggio thread ${section}:`, error);
+                }
+                // Fallback to localStorage
+                return this.countFromLocalStorage(section, 'threads', sinceTime);
+            }
+        } else {
+            // Modalità locale
+            return this.countFromLocalStorage(section, 'threads', sinceTime);
+        }
+        
+        return count;
+    };
+    
+    // ✅ PATCH: calculateAllBadges con gestione errori globale
+    window.activityTracker.calculateAllBadges = async function() {
+        console.log('🔔 Calcolo badge con patch compatibilità...');
+        
+        const sections = ['eventi', 'oggetti', 'novita', 'associa-clan', 'chat-generale'];
+        const userClan = window.getCurrentUserClan();
+        
+        if (userClan !== 'Nessuno') {
+            sections.push('clan-chat', 'clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca');
+        }
+        
+        // Reset conteggi
+        this.unreadCounts = {};
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Calcola per ogni sezione con gestione errori individuale
+        for (const section of sections) {
+            try {
+                const count = await this.calculateSectionBadge(section);
+                if (count > 0) {
+                    this.unreadCounts[section] = count;
+                }
+                successCount++;
+                console.log(`✅ Badge ${section}: ${count}`);
+            } catch (error) {
+                errorCount++;
+                console.error(`❌ Errore calcolo badge ${section}:`, error);
+                // Continua con la sezione successiva invece di fermarsi
+            }
+        }
+        
+        console.log(`📊 Badge calcolati: ${successCount} successi, ${errorCount} errori`);
+        console.log('📊 Badge risultanti:', this.unreadCounts);
+        
+        // Anche se ci sono errori, aggiorna quello che è riuscito
+        return this.unreadCounts;
+    };
+    
+    // ✅ NUOVA FUNZIONE: Ripristina funzioni originali
+    window.activityTracker.restoreOriginalFunctions = function() {
+        console.log('🔄 Ripristino funzioni Activity Tracker originali...');
+        this.countNewMessages = originalCountNewMessages;
+        this.countNewThreads = originalCountNewThreads;
+        this.calculateAllBadges = originalCalculateAllBadges;
+        console.log('✅ Funzioni originali ripristinate');
+    };
+    
+    // ✅ NUOVA FUNZIONE: Test compatibilità
+    window.activityTracker.testCompatibility = async function() {
+        console.log('🧪 Test compatibilità Activity Tracker...');
+        
+        const testSections = ['eventi', 'chat-generale'];
+        let allPassed = true;
+        
+        for (const section of testSections) {
+            try {
+                console.log(`🔍 Test sezione: ${section}`);
+                
+                // Test conteggio messaggi
+                if (section.includes('chat')) {
+                    const count = await this.countNewMessages(section, Date.now() - 86400000); // 24h fa
+                    console.log(`✅ ${section} messaggi: ${count}`);
+                } else {
+                    const count = await this.countNewThreads(section, Date.now() - 86400000); // 24h fa
+                    console.log(`✅ ${section} thread: ${count}`);
+                }
+                
+            } catch (error) {
+                console.error(`❌ Test fallito per ${section}:`, error);
+                allPassed = false;
+            }
+        }
+        
+        if (allPassed) {
+            console.log('✅ Tutti i test di compatibilità passati!');
+        } else {
+            console.warn('⚠️ Alcuni test di compatibilità falliti, verifica la configurazione');
+        }
+        
+        return allPassed;
+    };
+    
+    console.log('✅ Patch Activity Tracker applicata con successo!');
+    
+    // ✅ ESEGUI TEST AUTOMATICO
+    setTimeout(() => {
+        if (currentUser && window.activityTracker.testCompatibility) {
+            window.activityTracker.testCompatibility();
+        }
+    }, 3000);
+    
+} else {
+    console.warn('⚠️ Activity Tracker non trovato, patch non applicata');
+}
+
+// ===============================================
+// FUNZIONI DI UTILITY E DEBUG
+// ===============================================
+
+// Funzione per debug snapshot
+window.debugSnapshot = function(snapshot, label = 'Snapshot') {
+    console.log(`🔍 DEBUG ${label}:`, {
+        hasForEach: typeof snapshot?.forEach === 'function',
+        hasVal: typeof snapshot?.val === 'function',
+        hasExists: typeof snapshot?.exists === 'function',
+        isMock: snapshot?._isMockSnapshot || false,
+        type: typeof snapshot,
+        value: snapshot?.val ? snapshot.val() : snapshot
+    });
+};
+
+// Funzione per testare manualmente il sistema badge
+window.testBadgeSystem = async function() {
+    if (!currentUser) {
+        console.log('❌ Utente non loggato, impossibile testare badge');
+        return;
+    }
+    
+    if (!window.activityTracker) {
+        console.log('❌ Activity Tracker non disponibile');
+        return;
+    }
+    
+    console.log('🧪 Test sistema badge iniziato...');
+    
+    try {
+        // Test calcolo badge
+        const badges = await window.activityTracker.calculateAllBadges();
+        console.log('✅ Badge calcolati:', badges);
+        
+        // Test aggiornamento UI
+        window.activityTracker.updateAllBadges();
+        console.log('✅ Badge UI aggiornati');
+        
+        // Mostra notifica successo
+        if (typeof createToast === 'function' && typeof showToast === 'function') {
+            const toast = createToast({
+                type: 'success',
+                title: '🔔 Test Badge Completato',
+                message: `Badge calcolati: ${Object.keys(badges).length}`,
+                duration: 3000
+            });
+            showToast(toast);
+        }
+        
+        return badges;
+        
+    } catch (error) {
+        console.error('❌ Test badge fallito:', error);
+        
+        if (typeof createToast === 'function' && typeof showToast === 'function') {
+            const toast = createToast({
+                type: 'error',
+                title: '❌ Test Badge Fallito',
+                message: error.message || 'Errore sconosciuto',
+                duration: 4000
+            });
+            showToast(toast);
+        }
+        
+        return null;
+    }
+};
+
+// Funzione per verificare lo stato del sistema cache
+window.checkCacheSystem = function() {
+    console.log('🔍 === STATO SISTEMA CACHE ===');
+    
+    // Check deduplicatore
+    if (window.firebaseDeduplicator) {
+        const stats = window.firebaseDeduplicator.getCacheStats();
+        console.log('💾 Deduplicatore:', stats);
+        
+        // Mostra contenuti cache
+        console.log('📦 Contenuti cache:');
+        window.firebaseDeduplicator.cache.forEach((item, key) => {
+            const age = Date.now() - item.timestamp;
+            console.log(`  - ${key}: ${age}ms fa`);
+        });
+    } else {
+        console.log('❌ Deduplicatore non trovato');
+    }
+    
+    // Check thread cache
+    if (window.threadCache) {
+        console.log('🧵 Thread Cache:', {
+            sections: window.threadCache.cache.size,
+            loading: window.threadCache.isLoading.size
+        });
+    } else {
+        console.log('❌ Thread Cache non trovato');
+    }
+    
+    // Check activity tracker
+    if (window.activityTracker) {
+        console.log('🔔 Activity Tracker:', {
+            tracking: window.activityTracker.isTracking,
+            unreadCounts: Object.keys(window.activityTracker.unreadCounts || {}).length
+        });
+    } else {
+        console.log('❌ Activity Tracker non trovato');
+    }
+};
+
+// Funzione di emergenza per il solo Activity Tracker
+window.emergencyFixActivityTracker = function() {
+    console.log('🚨 EMERGENCY FIX ACTIVITY TRACKER');
+    
+    if (!window.activityTracker) {
+        console.log('❌ Activity Tracker non trovato');
+        return;
+    }
+    
+    try {
+        // Ferma il tracker
+        window.activityTracker.stopTracking();
+        
+        // Pulisci i badge
+        document.querySelectorAll('.section-badge').forEach(badge => badge.remove());
+        
+        // Ripristina funzioni originali se disponibili
+        if (window.activityTracker.restoreOriginalFunctions) {
+            window.activityTracker.restoreOriginalFunctions();
+        }
+        
+        // Riavvia
+        setTimeout(() => {
+            window.activityTracker.init();
+        }, 1000);
+        
+        console.log('✅ Activity Tracker reimpostato');
+        
+    } catch (error) {
+        console.error('❌ Errore emergency fix:', error);
+        console.log('💡 Prova a ricaricare la pagina');
+    }
+};
+
+console.log('✅ Activity Tracker Patch caricato!');

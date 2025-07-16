@@ -1,4 +1,4 @@
-window.activityTrackerEnabled = false;
+window.activityTrackerEnabled = true;
 
 // Override della funzione init
 window.addEventListener('load', () => {
@@ -27,7 +27,6 @@ window.addEventListener('load', async() => {
     initializeApp();
 });
 
-
 // Variabili globali
 let currentUser = null;
 let currentSection = 'home';
@@ -36,22 +35,25 @@ let threadListeners = {};
 let messageCount = 0;
 let isConnected = false;
 let firebaseReady = false;
-let isLoginMode = true; // true = login, false = register
-let currentUserData = null; // Dati completi dell'utente corrente
+let isLoginMode = true;
+let currentUserData = null;
 let currentThread = null;
 let currentThreadId = null;
 let currentThreadSection = null;
-// Flag per evitare listener multipli
 let commentImageUploadInitialized = false;
 let notificationsData = [];
 let unreadNotificationsCount = 0;
-let allUsers = []; // Cache degli utenti per autocomplete
+let allUsers = [];
 let mentionAutocompleteVisible = false;
 let currentMentionInput = null;
 let currentMentionPosition = 0;
 let currentAvatarFile = null;
 let isAvatarUploading = false;
-// Ruoli utente - DEVE essere definito prima di tutto
+
+// Supabase client
+let supabase = null;
+
+// Ruoli utente
 const USER_ROLES = {
     SUPERUSER: 'superuser',
     CLAN_MOD: 'clan_mod',
@@ -60,8 +62,22 @@ const USER_ROLES = {
 
 let signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged,
 signOut, updateProfile, GoogleAuthProvider, signInWithPopup, ref, push, set, get, onValue, off, serverTimestamp,
-onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject,
-query, orderByChild, limitToLast, orderByKey, endBefore; // <-- AGGIUNGI QUESTI
+onDisconnect, child, update, storageRef, uploadBytes, getDownloadURL, deleteObject;
+
+// Inizializza Supabase
+async function initializeSupabase() {
+    try {
+        // Assumendo che Supabase sia già caricato globalmente
+        if (window.supabase && window.supabaseUrl && window.supabaseKey) {
+            supabase = window.supabase.createClient(window.supabaseUrl, window.supabaseKey);
+            console.log('✅ Supabase inizializzato');
+        } else {
+            console.warn('⚠️ Supabase non disponibile, modalità locale');
+        }
+    } catch (error) {
+        console.error('❌ Errore inizializzazione Supabase:', error);
+    }
+}
 
 // Rendi le funzioni globali per gli onclick
 window.switchToLogin = switchToLogin;
@@ -114,38 +130,30 @@ window.sendMessage = sendMessage;
 window.createThread = createThread;
 window.addComment = addComment;
 window.getUserDisplayName = getUserDisplayName;
-// Esporta currentSection globalmente per activity_tracker
+
+// Esporta funzioni globali
 window.getCurrentSection = () => currentSection;
-// Esporta getDataPath globalmente per activity_tracker
 window.getDataPath = getDataPath;
-// Esporta getCurrentUserClan globalmente per activity_tracker
 window.getCurrentUserClan = getCurrentUserClan;
-// Esporta firebaseReady globalmente per activity_tracker
 window.getFirebaseReady = () => firebaseReady;
 
 if (typeof allUsers === 'undefined') {
     window.allUsers = [];
 }
-// ===============================================
-// AVATAR SYSTEM - FUNZIONI NUOVE
-// ===============================================
 
-// Enhanced user data loading with avatar support - DEVE ESSERE DEFINITA PRIMA
+// Enhanced user data loading with avatar support
 async function loadUserWithAvatar(userId) {
     if (!userId) return null;
     
-    // Cerca prima nella cache
     let user = allUsers.find(u => u.uid === userId);
     if (user) return user;
     
-    // Se non trovato, carica dal database
     try {
         if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
             const userRef = ref(window.firebaseDatabase, `users/${userId}`);
             const snapshot = await get(userRef);
             if (snapshot.exists()) {
                 user = { uid: userId, ...snapshot.val() };
-                // Aggiungi alla cache
                 const existingIndex = allUsers.findIndex(u => u.uid === userId);
                 if (existingIndex >= 0) {
                     allUsers[existingIndex] = user;
@@ -155,12 +163,10 @@ async function loadUserWithAvatar(userId) {
                 return user;
             }
         } else {
-            // Modalità locale
             const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
             for (const email in users) {
                 if (users[email].uid === userId) {
                     user = users[email];
-                    // Aggiungi alla cache
                     const existingIndex = allUsers.findIndex(u => u.uid === userId);
                     if (existingIndex >= 0) {
                         allUsers[existingIndex] = user;
@@ -178,7 +184,7 @@ async function loadUserWithAvatar(userId) {
     return null;
 }
 
-// Formato orario breve per chat (stile WhatsApp)
+// Formato orario breve per chat
 function formatTimeShort(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -212,11 +218,9 @@ function updateUserAvatarInCache(userId, avatarUrl) {
     const userIndex = allUsers.findIndex(u => u.uid === userId);
     if (userIndex >= 0) {
         allUsers[userIndex].avatarUrl = avatarUrl;
-        console.log(`📷 Avatar aggiornato nella cache per ${allUsers[userIndex].username}`);
     }
 }
 
-console.log('✅ Patch Username Google applicata con successo!');
 // Funzioni per la gestione dei ruoli
 function getCurrentUserRole() {
     return currentUserData?.role || USER_ROLES.USER;
@@ -263,12 +267,10 @@ function canAccessSection(sectionKey) {
     if (!section)
         return false;
 
-    // Controllo accesso clan
     if (sectionKey.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
         return false;
     }
 
-    // Controllo accesso admin (solo superuser)
     if (section.requiredRole === USER_ROLES.SUPERUSER && getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
         return false;
     }
@@ -276,14 +278,14 @@ function canAccessSection(sectionKey) {
     return true;
 }
 
-// Configurazione sezioni - DEVE essere definito dopo USER_ROLES
+// Configurazione sezioni
 const sectionConfig = {
     'home': {
         title: '🏠 Dashboard',
         description: 'Benvenuto nel Forum di Hustle Castle Council! Ecco le ultime novità',
         type: 'dashboard'
     },
- 'salotto': {
+    'salotto': {
         title: '🛋️ Salotto',
         description: 'Dove rilassarsi e parlare del più e del meno',
         type: 'forum'
@@ -364,72 +366,31 @@ const sectionConfig = {
 
 window.sectionConfig = sectionConfig;
 
-function ensureNotificationsBellExists() {
+// Inizializza sistema notifiche
+function initializeNotifications() {
     let bell = document.getElementById('notificationsBell');
-
     if (!bell) {
-        console.log('🚨 Campanella non trovata, creando elemento di emergenza...');
-
-        // Crea l'elemento
         bell = document.createElement('button');
         bell.id = 'notificationsBell';
         bell.className = 'notifications-bell';
         bell.innerHTML = '🔔<span id="notificationBadge" class="notification-badge hidden">0</span>';
         bell.onclick = toggleNotificationsPanel;
-
-        // Aggiungi al body
         document.body.appendChild(bell);
-
-        console.log('✅ Campanella di emergenza creata!');
     }
 
-    return bell;
-}
-
-function initializeNotifications() {
-    console.log('🔔 Inizializzazione sistema notifiche...');
-
-    // Assicurati che la campanella esista
-    ensureNotificationsBellExists();
-
-    // Forza visibilità della campanella
-    const notificationsBell = document.getElementById('notificationsBell');
-    if (notificationsBell) {
-        notificationsBell.style.display = 'flex';
-        notificationsBell.style.visibility = 'visible';
-        notificationsBell.style.opacity = '1';
-        notificationsBell.style.position = 'fixed';
-        notificationsBell.style.top = '20px';
-        notificationsBell.style.right = '180px';
-        notificationsBell.style.zIndex = '9999';
-        console.log('🔔 Campanella notifiche forzata visibile');
-    } else {
-        console.error('❌ Elemento notificationsBell non trovato anche dopo creazione di emergenza!');
-    }
-
-    // Carica notifiche esistenti
     loadNotifications();
-
-    // Setup listeners per le menzioni
     setupMentionListeners();
-
-    // CORREZIONE: Carica lista utenti in modo sicuro e asincrono
+    
     setTimeout(async () => {
         try {
             if (typeof loadUsersList === 'function') {
                 await loadUsersList();
-                console.log('👥 Lista utenti caricata per autocomplete');
             } else {
-                console.warn('⚠️ loadUsersList non ancora definita, caricamento ritardato');
-                // Ritenta dopo 2 secondi
                 setTimeout(async () => {
                     try {
                         if (typeof loadUsersList === 'function') {
                             await loadUsersList();
-                            console.log('👥 Lista utenti caricata (secondo tentativo)');
                         } else {
-                            console.error('❌ loadUsersList non disponibile');
-                            // Fallback: inizializza array vuoto
                             if (typeof allUsers === 'undefined') {
                                 window.allUsers = [];
                             }
@@ -442,34 +403,27 @@ function initializeNotifications() {
             }
         } catch (error) {
             console.error('Errore caricamento utenti:', error);
-            // Fallback: assicurati che allUsers esista
             window.allUsers = window.allUsers || [];
         }
-    }, 500); // Delay di 500ms per permettere il caricamento completo
+    }, 500);
 
-    // Setup click outside per chiudere pannelli
     document.addEventListener('click', handleClickOutside);
-
-    console.log('✅ Sistema notifiche inizializzato');
 }
 
+// Rileva menzioni nel testo
 function detectMentions(text) {
-    // CORREZIONE: Verifica che allUsers sia definito
     if (!Array.isArray(allUsers)) {
-        console.warn('⚠️ allUsers non definito per detectMentions');
         return [];
     }
 
-    // Regex per trovare @username
     const mentionRegex = /@([a-zA-Z0-9_]+)/g;
     const mentions = [];
     let match;
 
     while ((match = mentionRegex.exec(text)) !== null) {
         const username = match[1];
-        // Verifica che l'utente esista
         const user = allUsers.find(u => u && u.username && u.username.toLowerCase() === username.toLowerCase());
-        if (user && user.uid !== currentUser?.uid) { // Non taggare se stesso
+        if (user && user.uid !== currentUser?.uid) {
             mentions.push({
                 username: username,
                 userId: user.uid,
@@ -483,7 +437,6 @@ function detectMentions(text) {
 }
 
 function handleClickOutside(event) {
-    // Chiudi notifications panel
     const notifPanel = document.getElementById('notificationsPanel');
     const notifBell = document.getElementById('notificationsBell');
 
@@ -491,7 +444,6 @@ function handleClickOutside(event) {
         notifPanel.classList.remove('show');
     }
 
-    // Chiudi mention autocomplete
     const mentionAutocomplete = document.getElementById('mentionAutocomplete');
     const isInputFocused = ['message-input', 'comment-text', 'thread-content-input'].includes(event.target.id);
 
@@ -503,13 +455,10 @@ function handleClickOutside(event) {
 function highlightMentions(html, currentUserId = null) {
     if (!html || typeof html !== 'string') return '';
     
-    // CORREZIONE: Verifica che allUsers sia definito
     if (!Array.isArray(allUsers)) {
-        console.warn('⚠️ allUsers non definito per highlightMentions');
-        return html; // Restituisci HTML originale senza highlighting
+        return html;
     }
     
-    // Regex per trovare @username, ma non all'interno di tag HTML
     const mentionRegex = /@([a-zA-Z0-9_]+)(?![^<]*>)/g;
 
     return html.replace(mentionRegex, (match, username) => {
@@ -522,56 +471,39 @@ function highlightMentions(html, currentUserId = null) {
         return match;
     });
 }
-// ==============================================
-// AUTOCOMPLETE MENZIONI
-// ==============================================
+
+// Setup mention listeners
 function setupMentionListeners() {
-    console.log('🎯 Setup listeners per menzioni...');
-    
-    try {
-        // Chat input
-        const messageInput = document.getElementById('message-input');
-        if (messageInput) {
-            messageInput.addEventListener('input', handleMentionInput);
-            messageInput.addEventListener('keydown', handleMentionKeydown);
-            console.log('✅ Listener chat input configurati');
-        }
+    const messageInput = document.getElementById('message-input');
+    if (messageInput) {
+        messageInput.addEventListener('input', handleMentionInput);
+        messageInput.addEventListener('keydown', handleMentionKeydown);
+    }
 
-        // Comment textarea
-        const commentTextarea = document.getElementById('comment-text');
-        if (commentTextarea) {
-            commentTextarea.addEventListener('input', handleMentionInput);
-            commentTextarea.addEventListener('keydown', handleMentionKeydown);
-            console.log('✅ Listener comment textarea configurati');
-        }
+    const commentTextarea = document.getElementById('comment-text');
+    if (commentTextarea) {
+        commentTextarea.addEventListener('input', handleMentionInput);
+        commentTextarea.addEventListener('keydown', handleMentionKeydown);
+    }
 
-        // Thread content textarea
-        const threadTextarea = document.getElementById('thread-content-input');
-        if (threadTextarea) {
-            threadTextarea.addEventListener('input', handleMentionInput);
-            threadTextarea.addEventListener('keydown', handleMentionKeydown);
-            console.log('✅ Listener thread textarea configurati');
-        }
-        
-        console.log('✅ Setup mention listeners completato');
-    } catch (error) {
-        console.error('❌ Errore setup mention listeners:', error);
+    const threadTextarea = document.getElementById('thread-content-input');
+    if (threadTextarea) {
+        threadTextarea.addEventListener('input', handleMentionInput);
+        threadTextarea.addEventListener('keydown', handleMentionKeydown);
     }
 }
+
 function handleMentionInput(event) {
     const input = event.target;
     const text = input.value;
     const cursorPos = input.selectionStart;
 
-    // Trova l'ultima @ prima del cursore
     const textBeforeCursor = text.substring(0, cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
     if (lastAtIndex !== -1) {
-        // Verifica che non ci sia uno spazio tra @ e cursore
         const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
         if (!textAfterAt.includes(' ') && textAfterAt.length <= 20) {
-            // Mostra autocomplete
             currentMentionInput = input;
             currentMentionPosition = lastAtIndex;
             showMentionAutocomplete(textAfterAt, input);
@@ -579,7 +511,6 @@ function handleMentionInput(event) {
         }
     }
 
-    // Nascondi autocomplete
     hideMentionAutocomplete();
 }
 
@@ -592,41 +523,39 @@ function handleMentionKeydown(event) {
     let selectedIndex = Array.from(suggestions).findIndex(s => s.classList.contains('selected'));
 
     switch (event.key) {
-    case 'ArrowDown':
-        event.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
-        updateAutocompleteSelection(suggestions, selectedIndex);
-        break;
+        case 'ArrowDown':
+            event.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+            updateAutocompleteSelection(suggestions, selectedIndex);
+            break;
 
-    case 'ArrowUp':
-        event.preventDefault();
-        selectedIndex = Math.max(selectedIndex - 1, 0);
-        updateAutocompleteSelection(suggestions, selectedIndex);
-        break;
+        case 'ArrowUp':
+            event.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, 0);
+            updateAutocompleteSelection(suggestions, selectedIndex);
+            break;
 
-    case 'Enter':
-    case 'Tab':
-        event.preventDefault();
-        if (selectedIndex >= 0 && suggestions[selectedIndex]) {
-            selectMentionSuggestion(suggestions[selectedIndex]);
-        }
-        break;
+        case 'Enter':
+        case 'Tab':
+            event.preventDefault();
+            if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                selectMentionSuggestion(suggestions[selectedIndex]);
+            }
+            break;
 
-    case 'Escape':
-        hideMentionAutocomplete();
-        break;
+        case 'Escape':
+            hideMentionAutocomplete();
+            break;
     }
 }
+
 function showMentionAutocomplete(query, inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
 
-    // CORREZIONE: Verifica che allUsers sia definito
     if (!Array.isArray(allUsers)) {
-        console.warn('⚠️ allUsers non definito, inizializzando array vuoto');
         window.allUsers = [];
     }
 
-    // Filtra utenti in base alla query
     const filteredUsers = allUsers.filter(user =>
         user && 
         user.username && 
@@ -639,7 +568,6 @@ function showMentionAutocomplete(query, inputElement) {
         return;
     }
 
-    // Genera HTML suggerimenti con avatar
     autocomplete.innerHTML = filteredUsers.map((user, index) => `
         <div class="mention-suggestion ${index === 0 ? 'selected' : ''}" 
              data-username="${user.username}" 
@@ -661,9 +589,7 @@ function showMentionAutocomplete(query, inputElement) {
         </div>
     `).join('');
 
-    // Posiziona autocomplete
     positionAutocomplete(inputElement);
-
     autocomplete.classList.add('show');
     mentionAutocompleteVisible = true;
 }
@@ -672,19 +598,16 @@ function positionAutocomplete(inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
     const rect = inputElement.getBoundingClientRect();
     
-    // Calcola posizione ottimale
     let top = rect.bottom + 5;
     let left = rect.left;
     
-    // Verifica se c'è spazio sotto, altrimenti metti sopra
     const viewportHeight = window.innerHeight;
-    const autocompleteHeight = 200; // altezza massima stimata
+    const autocompleteHeight = 200;
     
     if (top + autocompleteHeight > viewportHeight) {
         top = rect.top - autocompleteHeight - 5;
     }
     
-    // Verifica che non esca dai bordi laterali
     const viewportWidth = window.innerWidth;
     const autocompleteWidth = 250;
     
@@ -702,6 +625,7 @@ function positionAutocomplete(inputElement) {
     autocomplete.style.width = Math.min(300, rect.width) + 'px';
     autocomplete.style.maxWidth = '300px';
 }
+
 function updateAutocompleteSelection(suggestions, selectedIndex) {
     suggestions.forEach((s, i) => {
         s.classList.toggle('selected', i === selectedIndex);
@@ -720,7 +644,6 @@ function selectMentionSuggestion(suggestion) {
         const newText = beforeMention + '@' + username + ' ' + afterCursor;
         input.value = newText;
 
-        // Posiziona cursore dopo la menzione
         const newCursorPos = beforeMention.length + username.length + 2;
         input.setSelectionRange(newCursorPos, newCursorPos);
         input.focus();
@@ -736,163 +659,169 @@ function hideMentionAutocomplete() {
     currentMentionInput = null;
 }
 
-// ==============================================
-// GESTIONE NOTIFICHE - CREAZIONE E INVIO
-// ==============================================
+// Gestione notifiche
 async function createNotification(type, targetUserId, data) {
     if (!currentUser || targetUserId === currentUser.uid)
         return;
 
     const notification = {
-        id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
         type: type,
-        fromUser: currentUser.displayName || 'Utente',
-        fromUserId: currentUser.uid,
-        targetUserId: targetUserId,
-        timestamp: window.useFirebase ? serverTimestamp() : Date.now(),
+        from_user: currentUser.displayName || getUserDisplayName() || 'Utente',
+        from_user_id: currentUser.uid,
+        user_id: targetUserId,
         read: false,
         ...data
     };
 
     try {
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // Salva su Firebase - usa timestamp locale per compatibilità
-            const notificationData = {
-                ...notification,
-                timestamp: Date.now() // Usa timestamp locale invece di serverTimestamp per evitare problemi
-            };
-            const notifRef = ref(window.firebaseDatabase, `notifications/${targetUserId}/${notification.id}`);
-            await set(notifRef, notificationData);
-            console.log('📨 Notifica salvata su Firebase:', notificationData);
+        // PRIMA: Prova con Supabase
+        if (supabase) {
+            const { data: result, error } = await supabase
+                .from('notifications')
+                .insert([notification])
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            console.log('✅ Notifica creata su Supabase');
+            
+            // Se è per l'utente corrente, mostra toast immediato
+            if (targetUserId === currentUser.uid) {
+                showMentionToast(result);
+            }
+            
+            return result;
         } else {
-            // Salva in localStorage
+            // FALLBACK: localStorage
             saveLocalNotification(targetUserId, notification);
-        }
-
-        console.log('📨 Notifica creata:', notification);
-
-        // Mostra toast se è per l'utente corrente (per test)
-        if (targetUserId === currentUser.uid) {
-            showMentionToast(notification);
         }
 
     } catch (error) {
         console.error('Errore creazione notifica:', error);
-    }
-}
-function saveLocalNotification(targetUserId, notification) {
-    const storageKey = `hc_notifications_${targetUserId}`;
-    const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    notifications.unshift(notification); // Aggiungi in cima
-
-    // Mantieni solo le ultime 50 notifiche
-    if (notifications.length > 50) {
-        notifications.splice(50);
-    }
-
-    localStorage.setItem(storageKey, JSON.stringify(notifications));
-
-    // Se è l'utente corrente, aggiorna la UI
-    if (targetUserId === currentUser?.uid) {
-        loadNotifications();
+        // Fallback locale in caso di errore
+        saveLocalNotification(targetUserId, notification);
     }
 }
 
-// ==============================================
-// GESTIONE NOTIFICHE - CARICAMENTO E DISPLAY
-// ==============================================
 
 function loadNotifications() {
-    console.log('🚀 CHIAMATA loadNotifications()');
-
     if (!currentUser) {
-        console.log('⚠️ currentUser è nullo');
         return;
     }
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
-        console.log('✅ Firebase attivo, in ascolto su notifications/' + currentUser.uid);
-      
-        
-        
-        
-        // ✅ FALLBACK: USA onValue SEMPLICE
-        console.log('📊 Usando onValue semplice per notifiche (fallback)');
-        const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}`);
-
-        onValue(notifRef, (snapshot) => {
-            const notifications = [];
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    notifications.push({
-                        id: childSnapshot.key,
-                        ...childSnapshot.val()
-                    });
-                });
-            } else {
-                console.log('📭 Nessuna notifica trovata su Firebase');
-            }
-
-            // Ordina e limita manualmente
-            notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            notificationsData = notifications.slice(0, 20); // Limit manuale
-
-            console.log('📥 Notifiche caricate con fallback:', notificationsData.length);
-            updateNotificationsUI();
-        });
-        
+    // PRIMA: Prova con Supabase + Real-time
+    if (supabase) {
+        loadNotificationsFromSupabase();
     } else {
-        console.log('⚠️ Firebase non attivo, fallback su localStorage');
-        // Fallback localStorage
-        const storageKey = `hc_notifications_${currentUser.uid}`;
-        const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        notificationsData = notifications.slice(0, 20);
-        updateNotificationsUI();
+        // FALLBACK: localStorage
+        loadNotificationsFromLocalStorage();
     }
 }
 
-// 6. CLEANUP MIGLIORATO - Aggiungi a script.js
-function forceCleanupAllListeners() {
-    console.log('🧹 Pulizia forzata di tutti i listeners Firebase');
-    
-    // Pulisci listeners messaggi
-    Object.keys(messageListeners).forEach(section => {
-        const listener = messageListeners[section];
-        if (listener && listener.path && listener.callback) {
-            try {
-                const messagesRef = ref(window.firebaseDatabase, listener.path);
-                off(messagesRef, listener.callback);
-                console.log(`✅ Listener messaggi ${section} pulito`);
-            } catch (error) {
-                console.warn(`⚠️ Errore pulizia listener ${section}:`, error);
-            }
-        }
-    });
-    messageListeners = {};
+// AGGIUNGERE queste nuove funzioni dopo loadNotifications:
+// Carica notifiche da Supabase con listener real-time
+async function loadNotificationsFromSupabase() {
+    try {
+        // Imposta contesto utente per RLS
+        await supabase.rpc('set_current_user_context', { user_uid: currentUser.uid });
+        
+        // Carica notifiche iniziali
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', currentUser.uid)
+            .order('created_at', { ascending: false })
+            .limit(20);
 
-    // Pulisci listeners thread
-    Object.keys(threadListeners).forEach(section => {
-        const listener = threadListeners[section];
-        if (listener && listener.path && listener.callback) {
-            try {
-                const threadsRef = ref(window.firebaseDatabase, listener.path);
-                off(threadsRef, listener.callback);
-                console.log(`✅ Listener thread ${section} pulito`);
-            } catch (error) {
-                console.warn(`⚠️ Errore pulizia listener ${section}:`, error);
-            }
+        if (error) {
+            console.error('Errore caricamento notifiche Supabase:', error);
+            loadNotificationsFromLocalStorage();
+            return;
         }
-    });
-    threadListeners = {};
 
-    console.log('✅ Cleanup completato - consumo dati ridotto');
+        notificationsData = data || [];
+        updateNotificationsUI();
+        
+        console.log('✅ Notifiche caricate da Supabase:', notificationsData.length);
+
+        // Setup listener real-time per nuove notifiche
+        setupNotificationsRealTimeListener();
+
+    } catch (error) {
+        console.error('Errore setup notifiche Supabase:', error);
+        loadNotificationsFromLocalStorage();
+    }
+}
+
+// Setup listener real-time per notifiche
+function setupNotificationsRealTimeListener() {
+    if (window.notificationsSubscription) {
+        window.notificationsSubscription.unsubscribe();
+    }
+
+    window.notificationsSubscription = supabase
+        .channel(`notifications_${currentUser.uid}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `user_id=eq.${currentUser.uid}`
+            },
+            (payload) => {
+                console.log('🔔 Nuova notifica ricevuta:', payload.new);
+                
+                // Aggiungi la nuova notifica
+                notificationsData.unshift(payload.new);
+                
+                // Mantieni solo le ultime 20
+                if (notificationsData.length > 20) {
+                    notificationsData = notificationsData.slice(0, 20);
+                }
+                
+                updateNotificationsUI();
+                showMentionToast(payload.new);
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'notifications',
+                filter: `user_id=eq.${currentUser.uid}`
+            },
+            (payload) => {
+                console.log('🔄 Notifica aggiornata:', payload.new);
+                
+                // Aggiorna la notifica esistente
+                const index = notificationsData.findIndex(n => n.id === payload.new.id);
+                if (index !== -1) {
+                    notificationsData[index] = payload.new;
+                    updateNotificationsUI();
+                }
+            }
+        )
+        .subscribe();
+
+    console.log('✅ Listener real-time notifiche attivato');
+}
+
+// Carica notifiche da localStorage (fallback)
+function loadNotificationsFromLocalStorage() {
+    const storageKey = `hc_notifications_${currentUser.uid}`;
+    const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    notificationsData = notifications.slice(0, 20);
+    updateNotificationsUI();
+    console.log('✅ Notifiche caricate da localStorage:', notificationsData.length);
 }
 
 function updateNotificationsUI() {
     const unreadCount = notificationsData.filter(n => !n.read).length;
     unreadNotificationsCount = unreadCount;
 
-    // Aggiorna badge
     const badge = document.getElementById('notificationBadge');
     if (badge) {
         if (unreadCount > 0) {
@@ -903,7 +832,6 @@ function updateNotificationsUI() {
         }
     }
 
-    // Aggiorna lista se pannello è aperto
     const panel = document.getElementById('notificationsPanel');
     if (panel && panel.classList.contains('show')) {
         displayNotificationsList();
@@ -931,10 +859,10 @@ function displayNotificationsList() {
                     ${getNotificationIcon(notification.type)}
                 </div>
                 <div class="notification-text">
-                    <div class="notification-user">${notification.fromUser}</div>
+                    <div class="notification-user">${notification.from_user}</div>
                     <div class="notification-message">${getNotificationMessage(notification)}</div>
                     ${notification.threadTitle ? `<div class="notification-thread">in "${notification.threadTitle}"</div>` : ''}
-                    <div class="notification-time">${formatTime(notification.timestamp)}</div>
+                    <div class="notification-time">${formatTime(notification.created_at)}</div>
                 </div>
             </div>
         </div>
@@ -943,16 +871,16 @@ function displayNotificationsList() {
 
 function getNotificationIcon(type) {
     switch (type) {
-    case 'mention':
-        return '💬';
-    case 'reply':
-        return '↩️';
-    case 'like':
-        return '❤️';
-    case 'new_user':  // 🆕 NUOVO
+        case 'mention':
+            return '💬';
+        case 'reply':
+            return '↩️';
+        case 'like':
+            return '❤️';
+        case 'new_user':
             return '🆕';
-    default:
-        return '🔔';
+        default:
+            return '🔔';
     }
 }
 
@@ -962,16 +890,12 @@ function getNotificationMessage(notification) {
             return `ti ha menzionato: "${notification.message || 'Messaggio'}"`;
         case 'reply':
             return `ha risposto al tuo thread: "${notification.message || 'Risposta'}"`;
-        case 'new_user':  // 🆕 NUOVO
+        case 'new_user':
             return notification.message || 'Nuovo utente registrato';
         default:
             return notification.message || 'Nuova notifica';
     }
 }
-
-// ==============================================
-// GESTIONE NOTIFICHE - INTERAZIONI UI
-// ==============================================
 
 function toggleNotificationsPanel() {
     const panel = document.getElementById('notificationsPanel');
@@ -983,7 +907,6 @@ function toggleNotificationsPanel() {
         panel.classList.add('show');
         displayNotificationsList();
 
-        // Segna come lette quelle visibili dopo un delay
         setTimeout(() => {
             markVisibleNotificationsAsRead();
         }, 1000);
@@ -995,28 +918,20 @@ async function handleNotificationClick(notificationId) {
     if (!notification)
         return;
 
-    // Segna come letta
     await markNotificationAsRead(notificationId);
-
-    // Naviga al contenuto
     navigateToNotificationContent(notification);
-
-    // Chiudi pannello
     document.getElementById('notificationsPanel').classList.remove('show');
 }
 
 function navigateToNotificationContent(notification) {
-    // Chiudi menu mobile se aperto
     closeMobileMenu();
 
     if (notification.threadId && notification.section) {
-        // Vai al thread
         switchSection(notification.section);
         setTimeout(() => {
             openThread(notification.threadId, notification.section);
         }, 500);
     } else if (notification.section) {
-        // Vai alla sezione
         switchSection(notification.section);
     }
 }
@@ -1027,19 +942,26 @@ async function markNotificationAsRead(notificationId) {
         return;
 
     try {
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // Aggiorna su Firebase
-            const notifRef = ref(window.firebaseDatabase, `notifications/${currentUser.uid}/${notificationId}/read`);
-            await set(notifRef, true);
+        // PRIMA: Prova con Supabase
+        if (supabase) {
+            const { error } = await supabase
+                .from('notifications')
+                .update({ read: true })
+                .eq('id', notificationId)
+                .eq('user_id', currentUser.uid);
+
+            if (error) throw error;
+            
+            console.log('✅ Notifica marcata come letta su Supabase');
         } else {
-            // Aggiorna localStorage
+            // FALLBACK: localStorage
             const storageKey = `hc_notifications_${currentUser.uid}`;
             const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
             const index = notifications.findIndex(n => n.id === notificationId);
             if (index !== -1) {
                 notifications[index].read = true;
                 localStorage.setItem(storageKey, JSON.stringify(notifications));
-                loadNotifications(); // Ricarica per aggiornare UI
+                loadNotifications();
             }
         }
     } catch (error) {
@@ -1049,9 +971,31 @@ async function markNotificationAsRead(notificationId) {
 
 async function markAllNotificationsAsRead() {
     const unreadNotifications = notificationsData.filter(n => !n.read);
+    
+    if (unreadNotifications.length === 0) return;
 
-    for (const notification of unreadNotifications) {
-        await markNotificationAsRead(notification.id);
+    try {
+        // PRIMA: Prova con Supabase  
+        if (supabase) {
+            const unreadIds = unreadNotifications.map(n => n.id);
+            
+            const { error } = await supabase
+                .from('notifications')
+                .update({ read: true })
+                .in('id', unreadIds)
+                .eq('user_id', currentUser.uid);
+
+            if (error) throw error;
+            
+            console.log('✅ Tutte le notifiche marcate come lette su Supabase');
+        } else {
+            // FALLBACK: localStorage
+            for (const notification of unreadNotifications) {
+                await markNotificationAsRead(notification.id);
+            }
+        }
+    } catch (error) {
+        console.error('Errore marcatura notifiche:', error);
     }
 }
 
@@ -1063,19 +1007,15 @@ function markVisibleNotificationsAsRead() {
     });
 }
 
-// ==============================================
-// TOAST NOTIFICATIONS
-// ==============================================
-
+// Toast notifications
 function showMentionToast(notification) {
-    // Mostra toast solo se l'utente target è quello corrente (simulazione)
-    if (notification.targetUserId !== currentUser?.uid)
+    if (notification.user_id !== currentUser?.uid)
         return;
 
     const toast = createToast({
         type: 'mention',
         title: 'Nuova menzione',
-        message: `${notification.fromUser} ti ha menzionato`,
+        message: `${notification.from_user} ti ha menzionato`,
         duration: 5000,
         actions: [{
                 text: 'Vai al messaggio',
@@ -1119,9 +1059,7 @@ function createToast(options) {
         ` : ''}
     `;
 
-    // Salva azioni per riferimento
     toast._actions = options.actions || [];
-
     return toast;
 }
 
@@ -1129,13 +1067,11 @@ function showToast(toastElement) {
     const container = document.getElementById('toastContainer');
     container.appendChild(toastElement);
 
-    // Trigger animation
     setTimeout(() => {
         toastElement.classList.add('show');
     }, 100);
 
-    // Auto dismiss dopo durata specificata
-    const duration = 5000; // Default 5 secondi
+    const duration = 5000;
     setTimeout(() => {
         dismissToast(toastElement.id);
     }, duration);
@@ -1161,190 +1097,13 @@ function handleToastAction(toastId, actionIndex) {
     }
 }
 
-// ==============================================
-// CARICAMENTO UTENTI PER AUTOCOMPLETE
-// ==============================================
-
-// Carica lista utenti per autocomplete con avatar
-let usersCache = null;
-let usersCacheTime = 0;
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minuti
-
-async function buildUsersListFromAccessibleData() {
-    const users = new Map(); // Usa Map per evitare duplicati
-    const sectionsToCheck = ['chat-generale'];
-    
-    // Aggiungi sempre l'utente corrente
-    if (currentUser && currentUserData) {
-        users.set(currentUser.uid, {
-            uid: currentUser.uid,
-            username: currentUserData.username || currentUser.displayName || currentUser.email,
-            clan: currentUserData.clan || 'Nessuno',
-            avatarUrl: currentUserData.avatarUrl || null,
-            email: currentUser.email
-        });
-    }
-    
-    // Aggiungi sezioni clan se l'utente appartiene a un clan
-    const userClan = getCurrentUserClan();
-    if (userClan !== 'Nessuno') {
-        sectionsToCheck.push('clan-chat');
-    }
-    
-    // Estrai utenti dai messaggi recenti
-    for (const section of sectionsToCheck) {
-        try {
-            const messages = await getRecentMessagesForUserList(section);
-            
-            messages.forEach(msg => {
-                if (msg.authorId && msg.author && !users.has(msg.authorId)) {
-                    // Crea utente con dati disponibili
-                    users.set(msg.authorId, {
-                        uid: msg.authorId,
-                        username: msg.author,
-                        clan: extractClanFromMessage(msg) || 'Nessuno',
-                        avatarUrl: null, // Non disponibile da messaggi
-                        email: null // Non disponibile da messaggi
-                    });
-                }
-            });
-            
-        } catch (error) {
-            console.warn(`Errore estrazione utenti da ${section}:`, error);
-        }
-    }
-    
-    // Estrai utenti dai thread recenti (autori)
-    try {
-        const threads = await getRecentThreadsForUserList();
-        threads.forEach(thread => {
-            if (thread.authorId && thread.author && !users.has(thread.authorId)) {
-                users.set(thread.authorId, {
-                    uid: thread.authorId,
-                    username: thread.author,
-                    clan: 'Nessuno', // Non disponibile da thread
-                    avatarUrl: null,
-                    email: null
-                });
-            }
-        });
-    } catch (error) {
-        console.warn('Errore estrazione utenti da thread:', error);
-    }
-    
-    // Aggiungi alcuni utenti di esempio se la lista è troppo vuota
-    if (users.size < 3) {
-        addExampleUsers(users);
-    }
-    
-    return Array.from(users.values());
-}
-
-// NUOVA FUNZIONE: Ottiene messaggi recenti per costruire lista utenti
-async function getRecentMessagesForUserList(section) {
-    const dataPath = getDataPath(section, 'messages');
-    if (!dataPath) return [];
-    
-    try {
-        const messagesRef = ref(window.firebaseDatabase, dataPath);
-        const snapshot = await get(messagesRef);
-        
-        if (!snapshot.exists()) return [];
-        
-        const messages = [];
-        snapshot.forEach((childSnapshot) => {
-            messages.push(childSnapshot.val());
-        });
-        
-        // Ordina per timestamp e prendi solo gli ultimi 50
-        messages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        return messages.slice(0, 50);
-        
-    } catch (error) {
-        console.warn(`Errore lettura messaggi ${section}:`, error);
-        return [];
-    }
-}
-
-// NUOVA FUNZIONE: Ottiene thread recenti per estrarre autori
-async function getRecentThreadsForUserList() {
-    const sections = ['eventi', 'oggetti', 'novita', 'salotto', 'segnalazioni'];
-    const allThreads = [];
-    
-    for (const section of sections) {
-        try {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath) continue;
-            
-            const threadsRef = ref(window.firebaseDatabase, dataPath);
-            const snapshot = await get(threadsRef);
-            
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    const thread = childSnapshot.val();
-                    if (thread.status !== 'rejected') { // Solo thread approvati/pending
-                        allThreads.push(thread);
-                    }
-                });
-            }
-        } catch (error) {
-            console.warn(`Errore lettura thread ${section}:`, error);
-        }
-    }
-    
-    // Ordina per data e prendi i più recenti
-    allThreads.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    return allThreads.slice(0, 20);
-}
-
-// NUOVA FUNZIONE: Estrae clan da un messaggio (euristica)
-function extractClanFromMessage(message) {
-    // Cerca pattern comuni di clan nei messaggi
-    // Questo è un fallback - i dati clan non sono disponibili nei messaggi
-    return null;
-}
-
-// NUOVA FUNZIONE: Aggiunge utenti di esempio se la lista è vuota
-function addExampleUsers(usersMap) {
-    const exampleUsers = [
-        {
-            uid: 'example_admin',
-            username: 'Admin',
-            clan: 'Staff',
-            avatarUrl: null,
-            email: null
-        },
-        {
-            uid: 'example_mod',
-            username: 'Moderatore',
-            clan: 'Staff',
-            avatarUrl: null,
-            email: null
-        },
-        {
-            uid: 'example_player',
-            username: 'Giocatore',
-            clan: 'Guerrieri',
-            avatarUrl: null,
-            email: null
-        }
-    ];
-    
-    exampleUsers.forEach(user => {
-        if (!usersMap.has(user.uid)) {
-            usersMap.set(user.uid, user);
-        }
-    });
-    
-    console.log('👥 Aggiunti utenti di esempio alla lista');
-}
-// ==============================================
-
-
 // Inizializza l'applicazione
-function initializeApp() {
+async function initializeApp() {
     console.log('🔥 Inizializzazione applicazione...');
-    setTimeout(safeInitializeFirebaseQueries, 2000);
+    
+    // Inizializza Supabase
+    await initializeSupabase();
+    
     // Assegna funzioni Firebase se disponibili
     if (window.firebaseImports) {
         ({
@@ -1368,11 +1127,7 @@ function initializeApp() {
             storageRef,
             uploadBytes,
             getDownloadURL,
-            deleteObject, query,           // <-- AGGIUNGI
-    orderByChild,    // <-- AGGIUNGI
-    limitToLast,     // <-- AGGIUNGI
-    orderByKey,      // <-- AGGIUNGI
-    endBefore    
+            deleteObject
         } = window.firebaseImports);
         firebaseReady = true;
     }
@@ -1382,19 +1137,15 @@ function initializeApp() {
     const hintEl = document.getElementById('demo-hint');
 
     if (window.useFirebase && window.firebaseAuth && firebaseReady) {
-        console.log('✅ Modalità Firebase attiva');
         statusEl.style.background = 'rgba(0, 255, 0, 0.1)';
         statusEl.style.color = '#008800';
 
         if (window.appCheckEnabled) {
-            statusEl.textContent = '🔥 Sistema inizializzato correttamente';
+            statusEl.textContent = '🔥 Firebase + 🗄️ Supabase - Sistema inizializzato correttamente';
         } else {
-            statusEl.textContent = '🔥 Firebase attivo - App Check disabilitato (funzionalità ridotte)';
+            statusEl.textContent = '🔥 Firebase + 🗄️ Supabase - App Check disabilitato';
         }
 
-        
-
-        // Monitora stato autenticazione
         onAuthStateChanged(window.firebaseAuth, (user) => {
             if (user) {
                 currentUser = user;
@@ -1405,127 +1156,112 @@ function initializeApp() {
             }
         });
 
-        // Monitora connessione
         const connectedRef = ref(window.firebaseDatabase, '.info/connected');
         onValue(connectedRef, (snapshot) => {
             isConnected = snapshot.val() === true;
             updateConnectionStatus();
         });
     } else {
-        console.log('⚠️ Modalità locale attiva');
         statusEl.style.background = 'rgba(255, 165, 0, 0.1)';
         statusEl.style.color = '#ff8800';
         statusEl.textContent = '⚠️ Modalità Demo - Login Google non disponibile';
         hintEl.textContent = '💡 Demo: SuperUser (admin@hustlecastle.com / admin123), Clan Mod (mod@draghi.com / mod123), User (player@leoni.com / player123)';
 
-        // Nascondi pulsante Google e reCAPTCHA in modalità demo
         document.getElementById('googleLoginBtn').style.display = 'none';
         document.getElementById('recaptcha-container').style.display = 'none';
 
-        // Inizializza dati di esempio per la demo
         initializeLocalData();
-        // In modalità locale, mostra sempre il login
         handleUserLogout();
-        // Simula connessione locale
         isConnected = true;
         updateConnectionStatus();
     }
 
-    // Setup UI
     setupEventListeners();
     initializeNotifications();
     switchSection('home');
 }
 
 // Gestione login utente
-function handleUserLogin(user) {
-    console.log('👤 Utente loggato:', user.email);
-
-    // Nascondi modal login
+async function handleUserLogin(user) {
     document.getElementById('loginModal').style.display = 'none';
-	
-	 const notificationsBell = document.getElementById('notificationsBell');
+    
+    const notificationsBell = document.getElementById('notificationsBell');
     if (notificationsBell) {
         notificationsBell.classList.add('user-logged-in');
     }
 
-    // Aggiorna UI
     updateUserInterface();
-
-    // Setup presenza utente
     setupUserPresence();
-
-    // Carica dati utente
+    
+    // 🆕 AGGIUNTO: Sincronizzare con Supabase
+    await syncUserWithSupabase(user);
+    
     loadUserProfile();
-	
-	initializeNotifications(); 
+    initializeNotifications();
 
-    // Carica lista utenti e notifiche dopo il login
     setTimeout(() => {
         setupAvatarUpload();
         if (currentUserData && currentUserData.avatarUrl) {
             updateUserAvatarDisplay(currentUserData.avatarUrl);
         }
+        if (window.activityTracker) {
+        await window.activityTracker.init();
+    }
     }, 100);
 
-    // Aggiorna dashboard se è la sezione corrente
     if (currentSection === 'home') {
         setTimeout(() => {
             loadDashboard();
-        }, 500); // Piccolo delay per permettere il caricamento dei dati utente
+        }, 500);
     }
-};
+}
 
 // Gestione logout utente
 function handleUserLogout() {
-    console.log('👤 Utente disconnesso');
-	// CORREZIONE: Nascondi campanella notifiche
     const notificationsBell = document.getElementById('notificationsBell');
     if (notificationsBell) {
         notificationsBell.classList.remove('user-logged-in');
     }
 
-    // Pulisci listeners
     cleanupListeners();
-
-    // Reset dati utente
     currentUserData = null;
 
-    // Reset UI
     document.getElementById('currentUsername').textContent = 'Ospite';
     document.getElementById('currentClan').textContent = 'Nessuno';
     document.getElementById('sidebarClan').textContent = 'Nessuno';
     document.getElementById('userStatus').className = 'offline-indicator';
     document.getElementById('logoutBtn').style.display = 'none';
 
-    // Rimuovi badge ruolo
     const userNameElement = document.getElementById('currentUsername');
     const existingBadge = userNameElement.querySelector('.user-role');
     if (existingBadge) {
         existingBadge.remove();
     }
 
-    // Aggiorna accesso clan e admin
     updateClanSectionsAccess();
     updateAdminSectionsAccess();
 
-    // Se si è in una sezione clan o admin, torna alla home
     if (currentSection.startsWith('clan-') || currentSection.startsWith('admin-')) {
         switchSection('home');
     }
 
-    // Torna al forum se si è in vista thread
     if (document.getElementById('thread-view').style.display === 'flex') {
         backToForum();
     }
 
-    // Mostra modal login
+     // Ferma Activity Tracker
+    if (window.activityTracker) {
+        window.activityTracker.recordLogout();
+    }
+
+    // Chiudi subscriptions notifiche
+    if (window.notificationsSubscription) {
+        window.notificationsSubscription.unsubscribe();
+        window.notificationsSubscription = null;
+    }
+
     document.getElementById('loginModal').style.display = 'flex';
 }
-
-// Carica profilo utente
-// The main issue is in the loadUserProfile function and subsequent code
-// Here's the corrected section that was causing the syntax error:
 
 // Carica profilo utente
 async function loadUserProfile() {
@@ -1542,48 +1278,68 @@ async function loadUserProfile() {
             if (snapshot.exists()) {
                 currentUserData = snapshot.val();
                 
-                // USA SEMPRE USERNAME dal database, mai displayName
+                // 🆕 AGGIUNTO: Sincronizzare con Supabase ogni volta
+                await syncUserWithSupabase(currentUser, currentUserData);
+                
                 const displayUsername = currentUserData.username || 'Utente';
                 
                 document.getElementById('currentUsername').textContent = displayUsername;
                 document.getElementById('currentClan').textContent = currentUserData.clan || 'Nessuno';
                 document.getElementById('sidebarClan').textContent = currentUserData.clan || 'Nessuno';
 
-                // Aggiorna badge ruolo
                 updateUserRoleBadge();
 
-                // Aggiorna dashboard se è la sezione corrente
                 if (currentSection === 'home') {
                     loadDashboard();
                 }
-                
-                console.log('✅ Profilo utente caricato:', displayUsername);
-            } else {
-                console.warn('⚠️ Dati utente non trovati nel database');
             }
         } catch (error) {
             console.error('Errore caricamento profilo:', error);
         }
     } else {
-        // Modalità locale - carica da localStorage
         loadLocalUserProfile();
+        
+        // 🆕 AGGIUNTO: Sincronizzare anche in modalità locale
+        if (currentUserData) {
+            await syncUserWithSupabase(currentUser, currentUserData);
+        }
     }
 
     setupAvatarUpload();
 
-    // Update avatar display
     if (currentUserData && currentUserData.avatarUrl) {
         updateUserAvatarDisplay(currentUserData.avatarUrl);
     }
 
-    // Aggiorna accesso clan e admin in ogni caso
     updateClanSectionsAccess();
     updateAdminSectionsAccess();
 }
 
-// ✅ AGGIUNGI QUESTA FUNZIONE HELPER
+async function ensureUserSyncedWithSupabase() {
+    if (!currentUser || !supabase) return false;
+
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('uid')
+            .eq('uid', currentUser.uid)
+            .single();
+
+        if (error || !data) {
+            console.log('🔄 Utente non sincronizzato, sincronizzazione in corso...');
+            await syncUserWithSupabase(currentUser, currentUserData);
+            return true;
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Errore verifica sincronizzazione:', error);
+        return false;
+    }
+}
+
+
 function getUserDisplayName() {
-    // Priorità: username dal database > displayName > email
     if (currentUserData && currentUserData.username) {
         return currentUserData.username;
     }
@@ -1593,36 +1349,27 @@ function getUserDisplayName() {
     }
     
     if (currentUser && currentUser.email) {
-        return currentUser.email.split('@')[0]; // usa parte prima della @
+        return currentUser.email.split('@')[0];
     }
     
     return 'Utente';
 }
 
-// Carica profilo locale
 function loadLocalUserProfile() {
     const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
     const userData = users[currentUser.email];
 
     if (userData) {
-        // Controlla se questo utente dovrebbe essere superuser
         const realUsers = Object.values(users).filter(user =>
                 !user.uid.startsWith('super_admin_') &&
                 !user.uid.startsWith('clan_mod_') &&
                 !user.uid.startsWith('user_'));
 
-        // Se è il primo utente reale e non ha ruolo superuser, assegnaglielo
         if (realUsers.length > 0 && realUsers[0].uid === userData.uid) {
             if (!userData.role || userData.role === USER_ROLES.USER) {
                 userData.role = USER_ROLES.SUPERUSER;
                 users[currentUser.email] = userData;
                 localStorage.setItem('hc_local_users', JSON.stringify(users));
-                console.log('🎉 Utente promosso a SUPERUSER:', currentUser.email);
-
-                // Mostra notifica
-                setTimeout(() => {
-                    alert('🎉 Congratulazioni! Sei stato promosso a SUPERUSER come primo utente registrato!');
-                }, 1000);
             }
         }
 
@@ -1632,54 +1379,12 @@ function loadLocalUserProfile() {
         document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
         updateUserRoleBadge();
 
-        // Aggiorna dashboard se è la sezione corrente
         if (currentSection === 'home') {
             loadDashboard();
         }
     }
 }
 
-// Carica profilo locale
-function loadLocalUserProfile() {
-    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-    const userData = users[currentUser.email];
-
-    if (userData) {
-        // Controlla se questo utente dovrebbe essere superuser
-        const realUsers = Object.values(users).filter(user =>
-                !user.uid.startsWith('super_admin_') &&
-                !user.uid.startsWith('clan_mod_') &&
-                !user.uid.startsWith('user_'));
-
-        // Se è il primo utente reale e non ha ruolo superuser, assegnaglielo
-        if (realUsers.length > 0 && realUsers[0].uid === userData.uid) {
-            if (!userData.role || userData.role === USER_ROLES.USER) {
-                userData.role = USER_ROLES.SUPERUSER;
-                users[currentUser.email] = userData;
-                localStorage.setItem('hc_local_users', JSON.stringify(users));
-                console.log('🎉 Utente promosso a SUPERUSER:', currentUser.email);
-
-                // Mostra notifica
-                setTimeout(() => {
-                    alert('🎉 Congratulazioni! Sei stato promosso a SUPERUSER come primo utente registrato!');
-                }, 1000);
-            }
-        }
-
-        currentUserData = userData;
-        document.getElementById('currentUsername').textContent = userData.username;
-        document.getElementById('currentClan').textContent = userData.clan || 'Nessuno';
-        document.getElementById('sidebarClan').textContent = userData.clan || 'Nessuno';
-        updateUserRoleBadge();
-
-        // Aggiorna dashboard se è la sezione corrente
-        if (currentSection === 'home') {
-            loadDashboard();
-        }
-    }
-}
-
-// Aggiorna badge ruolo utente
 function updateUserRoleBadge() {
     const userNameElement = document.getElementById('currentUsername');
     const existingBadge = userNameElement.querySelector('.user-role');
@@ -1693,56 +1398,50 @@ function updateUserRoleBadge() {
     badge.className = `user-role role-${role.replace('_', '-')}`;
 
     switch (role) {
-    case USER_ROLES.SUPERUSER:
-        badge.textContent = 'SUPER';
-        badge.className = 'user-role role-superuser';
-        break;
-    case USER_ROLES.CLAN_MOD:
-        badge.textContent = 'MOD';
-        badge.className = 'user-role role-moderator';
-        break;
-    default:
-        badge.textContent = 'USER';
-        badge.className = 'user-role role-user';
-        break;
+        case USER_ROLES.SUPERUSER:
+            badge.textContent = 'SUPER';
+            badge.className = 'user-role role-superuser';
+            break;
+        case USER_ROLES.CLAN_MOD:
+            badge.textContent = 'MOD';
+            badge.className = 'user-role role-moderator';
+            break;
+        default:
+            badge.textContent = 'USER';
+            badge.className = 'user-role role-user';
+            break;
     }
 
     userNameElement.appendChild(badge);
 }
 
-// Aggiorna accesso alle sezioni admin
 function updateAdminSectionsAccess() {
     const adminSection = document.getElementById('adminSection');
     const clanModerationItem = document.getElementById('clanModerationItem');
 
-    // Mostra sezioni admin globali solo al superuser
     const canAccessGlobalAdmin = getCurrentUserRole() === USER_ROLES.SUPERUSER;
 
     if (canAccessGlobalAdmin) {
         adminSection.style.display = 'block';
     } else {
         adminSection.style.display = 'none';
-        // Se si è in una sezione admin, torna agli eventi
         if (currentSection.startsWith('admin-')) {
             switchSection('eventi');
         }
     }
 
-    // Mostra moderazione clan se è moderatore o superuser del clan
     const canModerateClan = isClanModerator();
 
     if (canModerateClan) {
         clanModerationItem.style.display = 'block';
     } else {
         clanModerationItem.style.display = 'none';
-        // Se si è nella sezione moderazione, torna alla chat clan
         if (currentSection === 'clan-moderation') {
             switchSection('clan-chat');
         }
     }
 }
 
-// Setup presenza utente
 function setupUserPresence() {
     if (!currentUser || !window.useFirebase || !window.firebaseDatabase || !firebaseReady || !ref || !onDisconnect || !set || !child || !serverTimestamp)
         return;
@@ -1751,16 +1450,13 @@ function setupUserPresence() {
         const userStatusRef = ref(window.firebaseDatabase, `presence/${currentUser.uid}`);
         const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}`);
 
-        // Quando l'utente si disconnette, imposta offline
         onDisconnect(userStatusRef).set({
             state: 'offline',
             lastSeen: serverTimestamp()
         });
 
-        // Aggiorna ultima visita
         set(child(userRef, 'lastSeen'), serverTimestamp());
 
-        // Imposta online
         set(userStatusRef, {
             state: 'online',
             lastSeen: serverTimestamp()
@@ -1770,7 +1466,6 @@ function setupUserPresence() {
     }
 }
 
-// Aggiorna interfaccia utente
 function updateUserInterface() {
     if (currentUser) {
         document.getElementById('userStatus').className = 'online-indicator';
@@ -1779,7 +1474,6 @@ function updateUserInterface() {
     updateClanSectionsAccess();
 }
 
-// Aggiorna accesso alle sezioni clan
 function updateClanSectionsAccess() {
     const userClan = getCurrentUserClan();
     const clanItems = document.querySelectorAll('.nav-item.clan-only');
@@ -1795,13 +1489,12 @@ function updateClanSectionsAccess() {
     });
 }
 
-// Aggiorna stato connessione
 function updateConnectionStatus() {
     const statusEl = document.getElementById('connectionStatus');
     if (window.useFirebase) {
         if (isConnected) {
             statusEl.className = 'connection-status online';
-            statusEl.textContent = '🟢 Firebase Connesso';
+            statusEl.textContent = '🟢 Firebase + Supabase Connesso';
         } else {
             statusEl.className = 'connection-status offline';
             statusEl.textContent = '🔴 Firebase Disconnesso';
@@ -1812,7 +1505,7 @@ function updateConnectionStatus() {
     }
 }
 
-// 🤖 GESTIONE INTERFACCIA LOGIN/REGISTRAZIONE CON reCAPTCHA
+// Gestione interfaccia login/registrazione
 function switchToLogin() {
     isLoginMode = true;
     document.getElementById('loginTab').classList.add('active');
@@ -1821,10 +1514,8 @@ function switchToLogin() {
     document.getElementById('submitBtn').textContent = 'Accedi';
     document.getElementById('googleBtnText').textContent = 'Continua con Google';
 
-    // Pulisci campi opzionali
     document.getElementById('username').value = '';
 
-    // Reset reCAPTCHA
     if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
         window.resetRecaptcha();
     }
@@ -1840,7 +1531,6 @@ function switchToRegister() {
     document.getElementById('submitBtn').textContent = 'Registrati';
     document.getElementById('googleBtnText').textContent = 'Registrati con Google';
 
-    // Reset reCAPTCHA
     if (window.useFirebase && window.appCheckEnabled && typeof window.resetRecaptcha === 'function') {
         window.resetRecaptcha();
     }
@@ -1848,7 +1538,6 @@ function switchToRegister() {
     hideError();
 }
 
-// Gestione form submit
 function handleSubmit() {
     if (isLoginMode) {
         handleLogin();
@@ -1856,7 +1545,7 @@ function handleSubmit() {
         handleRegister();
     }
 }
-// Login con email e password
+
 async function handleLogin() {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
@@ -1866,7 +1555,6 @@ async function handleLogin() {
         return;
     }
 
-    // Verifica reCAPTCHA solo se App Check è attivo
     if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
         if (!window.verifyRecaptcha()) {
             showError('🤖 Completa la verifica reCAPTCHA');
@@ -1879,16 +1567,13 @@ async function handleLogin() {
 
     try {
         if (window.useFirebase && firebaseReady && signInWithEmailAndPassword) {
-            // Login Firebase
             await signInWithEmailAndPassword(window.firebaseAuth, email, password);
         } else {
-            // Login locale (demo)
             await simulateLogin(email, password);
         }
 
         showSuccess('Login effettuato con successo!');
 
-        // Reset reCAPTCHA dopo successo (solo se attivo)
         if (window.useFirebase && window.appCheckEnabled) {
             window.resetRecaptcha();
         }
@@ -1896,7 +1581,6 @@ async function handleLogin() {
         console.error('Errore login:', error);
         showError(getErrorMessage(error));
 
-        // Reset reCAPTCHA in caso di errore (solo se attivo)
         if (window.useFirebase && window.appCheckEnabled) {
             window.resetRecaptcha();
         }
@@ -1904,13 +1588,7 @@ async function handleLogin() {
         showLoading(false);
     }
 }
-// Login con Google
-// Login con Google
-// ===============================================
-// PATCH PER GOOGLE LOGIN - DA AGGIUNGERE A script.js
-// ===============================================
 
-// Login con Google - VERSIONE CORRETTA
 async function handleGoogleLogin() {
     if (!window.useFirebase || !firebaseReady || !signInWithPopup || !window.googleProvider) {
         alert('Login con Google non disponibile in modalità demo');
@@ -1925,68 +1603,47 @@ async function handleGoogleLogin() {
     `;
 
     try {
-        console.log('🔐 Iniziando login Google...');
         const result = await signInWithPopup(window.firebaseAuth, window.googleProvider);
         const user = result.user;
 
-        console.log('👤 Utente Google loggato:', user.email);
-
-        // Verifica se l'utente esiste già nel database
         const userRef = ref(window.firebaseDatabase, `users/${user.uid}`);
         const snapshot = await get(userRef);
 
         if (!snapshot.exists()) {
-            console.log('🆕 Nuovo utente Google, preparazione dati...');
-            
-            // NUOVO UTENTE - Determina ruolo
             const userRole = await determineUserRole();
-            console.log('👤 Ruolo determinato:', userRole);
             
-            // Salva dati temporanei
             await set(userRef, {
-                username: '', // Vuoto temporaneamente
+                username: '',
                 email: user.email,
                 clan: 'Nessuno',
                 role: userRole,
-                createdAt: Date.now(), // Usa timestamp locale per compatibilità
+                createdAt: Date.now(),
                 lastSeen: Date.now(),
                 provider: 'google',
                 needsUsername: true
             });
 
-            console.log('✅ Dati temporanei salvati');
-            
-            // Mostra modal per scegliere username con delay per assicurarsi che tutto sia caricato
             setTimeout(() => {
                 if (window.usernameManager) {
                     window.usernameManager.showUsernameModal(user);
                 } else {
-                    console.error('❌ usernameManager non disponibile');
-                    // Fallback: procedi senza username personalizzato
                     handleUserLogin(user);
                 }
             }, 100);
 
         } else {
-            // UTENTE ESISTENTE
             const userData = snapshot.val();
-            console.log('👤 Utente esistente trovato:', userData);
             
             if (userData.needsUsername === true || !userData.username || userData.username.trim() === '') {
-                console.log('⚠️ Utente senza username valido, mostrando modal...');
-                
                 setTimeout(() => {
                     if (window.usernameManager) {
                         window.usernameManager.showUsernameModal(user, userData);
                     } else {
-                        console.error('❌ usernameManager non disponibile');
                         handleUserLogin(user);
                     }
                 }, 100);
             } else {
-                console.log('✅ Utente con username completo, login completato');
                 showSuccess('Login con Google effettuato con successo!');
-                // Il login continua automaticamente tramite onAuthStateChanged
             }
         }
 
@@ -1995,7 +1652,6 @@ async function handleGoogleLogin() {
 
         let errorMessage = 'Errore nel login con Google';
         
-        // Gestione errori specifici
         switch (error.code) {
             case 'auth/popup-closed-by-user':
                 errorMessage = 'Login annullato dall\'utente';
@@ -2018,7 +1674,6 @@ async function handleGoogleLogin() {
         showError(errorMessage);
         
     } finally {
-        // Ripristina pulsante
         googleBtn.disabled = false;
         googleBtn.innerHTML = `
             <svg width="20" height="20" viewBox="0 0 24 24">
@@ -2032,62 +1687,43 @@ async function handleGoogleLogin() {
     }
 }
 
-// Gestione login utente CORRETTA
 function handleUserLogin(user) {
-    console.log('👤 Gestione login per:', user.email);
-
-    // Controlla se l'utente ha bisogno di scegliere username
-    if (window.usernameManager) {
+    const isGoogleUser = user.providerData && user.providerData.some(provider => 
+        provider.providerId === 'google.com'
+    );
+    
+    if (isGoogleUser && window.usernameManager) {
         window.usernameManager.checkUserNeedsUsername(user).then(needsUsername => {
             if (needsUsername) {
-                console.log('⚠️ Utente ha bisogno di username, mostrando modal...');
                 setTimeout(() => {
                     window.usernameManager.showUsernameModal(user);
                 }, 500);
-                return; // Non procedere con il login completo
+                return;
             }
             
-            // Procedi con login normale
             completeUserLogin(user);
         }).catch(error => {
             console.error('Errore controllo username:', error);
-            completeUserLogin(user); // Procedi comunque
+            completeUserLogin(user);
         });
     } else {
         completeUserLogin(user);
     }
 }
 
-// Completa il login utente
 function completeUserLogin(user) {
-    console.log('✅ Completando login per:', user.email);
-
-    // Nascondi tutti i modal
-    const loginModal = document.getElementById('loginModal');
-    const usernameModal = document.getElementById('usernameModal');
+    document.getElementById('loginModal').style.display = 'none';
     
-    if (loginModal) loginModal.style.display = 'none';
-    if (usernameModal) usernameModal.style.display = 'none';
-    
-    // Mostra campanella notifiche
     const notificationsBell = document.getElementById('notificationsBell');
     if (notificationsBell) {
         notificationsBell.classList.add('user-logged-in');
     }
 
-    // Aggiorna UI
     updateUserInterface();
-
-    // Setup presenza utente
     setupUserPresence();
-
-    // Carica dati utente
     loadUserProfile();
-    
-    // Inizializza notifiche
-    initializeNotifications(); 
+    initializeNotifications();
 
-    // Setup avatar e altri componenti
     setTimeout(() => {
         setupAvatarUpload();
         if (currentUserData && currentUserData.avatarUrl) {
@@ -2095,7 +1731,6 @@ function completeUserLogin(user) {
         }
     }, 200);
 
-    // Aggiorna dashboard se è la sezione corrente
     if (currentSection === 'home') {
         setTimeout(() => {
             loadDashboard();
@@ -2103,105 +1738,6 @@ function completeUserLogin(user) {
     }
 }
 
-// DEBUG: Funzione per testare il modal username
-window.testUsernameModal = function() {
-    if (window.usernameManager) {
-        const mockUser = {
-            uid: 'test_' + Date.now(),
-            email: 'test@example.com',
-            displayName: null
-        };
-        window.usernameManager.showUsernameModal(mockUser);
-    } else {
-        console.error('usernameManager non disponibile');
-    }
-};
-
-// Assicurati che le funzioni siano globali
-window.handleGoogleLogin = handleGoogleLogin;
-window.handleUserLogin = handleUserLogin;
-window.completeUserLogin = completeUserLogin;
-// 🤖 GESTIONE AUTENTICAZIONE CON reCAPTCHA MIGLIORATA
-function handleUserLogin(user) {
-    console.log('👤 Gestione login per:', user.email);
-
-    // CORREZIONE: Controlla il provider di autenticazione
-    const isGoogleUser = user.providerData && user.providerData.some(provider => 
-        provider.providerId === 'google.com'
-    );
-    
-    // IMPORTANTE: Solo gli utenti Google devono scegliere username
-    if (isGoogleUser && window.usernameManager) {
-        console.log('🔍 Utente Google - controllo username necessario...');
-        
-        window.usernameManager.checkUserNeedsUsername(user).then(needsUsername => {
-            if (needsUsername) {
-                console.log('⚠️ Utente Google ha bisogno di username, mostrando modal...');
-                setTimeout(() => {
-                    window.usernameManager.showUsernameModal(user);
-                }, 500);
-                return; // Non procedere con il login completo
-            }
-            
-            // Utente Google con username già impostato
-            console.log('✅ Utente Google con username esistente');
-            completeUserLogin(user);
-        }).catch(error => {
-            console.error('Errore controllo username:', error);
-            completeUserLogin(user); // Procedi comunque
-        });
-    } else {
-        // Utenti email/password o altri provider - mai mostrare modal username
-        console.log('✅ Utente email/password - procedo direttamente con login');
-        completeUserLogin(user);
-    }
-}
-
-// ✅ AGGIUNGI QUESTA NUOVA FUNZIONE
-function completeUserLogin(user) {
-    console.log('✅ Completando login per:', user.email);
-
-    // Nascondi modal login
-    document.getElementById('loginModal').style.display = 'none';
-    
-    // Mostra campanella notifiche
-    const notificationsBell = document.getElementById('notificationsBell');
-    if (notificationsBell) {
-        notificationsBell.classList.add('user-logged-in');
-    }
-
-    // Aggiorna UI
-    updateUserInterface();
-
-    // Setup presenza utente
-    setupUserPresence();
-
-    // Carica dati utente
-    loadUserProfile();
-    
-    // Inizializza notifiche
-    initializeNotifications(); 
-    if (window.activityTracker) {
-    setTimeout(() => {
-        window.activityTracker.init();
-    }, 1000);
-}
-
-    // Carica lista utenti e notifiche dopo il login
-    setTimeout(() => {
-        setupAvatarUpload();
-        if (currentUserData && currentUserData.avatarUrl) {
-            updateUserAvatarDisplay(currentUserData.avatarUrl);
-        }
-    }, 100);
-
-    // Aggiorna dashboard se è la sezione corrente
-    if (currentSection === 'home') {
-        setTimeout(() => {
-            loadDashboard();
-        }, 500);
-    }
-}
 async function handleRegister() {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
@@ -2212,7 +1748,6 @@ async function handleRegister() {
         return;
     }
 
-    // Verifica reCAPTCHA solo se App Check è attivo
     if (window.useFirebase && window.appCheckEnabled && typeof grecaptcha !== 'undefined') {
         if (!window.verifyRecaptcha()) {
             showError('🤖 Completa la verifica reCAPTCHA');
@@ -2224,12 +1759,10 @@ async function handleRegister() {
     hideError();
 
     try {
-        // Determina il ruolo del nuovo utente
         const userRole = await determineUserRole();
         const isFirstUser = userRole === USER_ROLES.SUPERUSER;
 
         if (window.useFirebase && firebaseReady && createUserWithEmailAndPassword) {
-            // Registrazione Firebase
             const userCredential = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
             const user = userCredential.user;
 
@@ -2250,7 +1783,6 @@ async function handleRegister() {
 
             await set(ref(window.firebaseDatabase, `users/${user.uid}`), userData);
 
-            // 🆕 NUOVA PARTE: Gestisci benvenuto nuovo utente
             const newUserData = {
                 uid: user.uid,
                 username: username,
@@ -2260,14 +1792,11 @@ async function handleRegister() {
                 provider: 'email'
             };
             
-            // Chiama il sistema di benvenuto
             await handleNewUserComplete(newUserData, isFirstUser);
 
         } else {
-            // Registrazione locale (demo)
             await simulateRegister(email, password, username, 'Nessuno', userRole);
             
-            // 🆕 NUOVA PARTE: Gestisci benvenuto per utente locale
             const newUserData = {
                 uid: 'local_' + Date.now(),
                 username: username,
@@ -2277,7 +1806,6 @@ async function handleRegister() {
                 provider: 'email'
             };
             
-            // Chiama il sistema di benvenuto
             await handleNewUserComplete(newUserData, isFirstUser);
         }
 
@@ -2286,7 +1814,6 @@ async function handleRegister() {
 
         showSuccess(`Account creato con successo!${roleMessage}`);
 
-        // Reset reCAPTCHA dopo successo (solo se attivo)
         if (window.useFirebase && window.appCheckEnabled) {
             window.resetRecaptcha();
         }
@@ -2294,7 +1821,6 @@ async function handleRegister() {
         console.error('Errore registrazione:', error);
         showError(getErrorMessage(error));
 
-        // Reset reCAPTCHA in caso di errore (solo se attivo)
         if (window.useFirebase && window.appCheckEnabled) {
             window.resetRecaptcha();
         }
@@ -2303,17 +1829,13 @@ async function handleRegister() {
     }
 }
 
-// Determina il ruolo del nuovo utente
 async function determineUserRole() {
     try {
         if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // In Firebase, per sicurezza, assumiamo sempre USER come ruolo di default
             return USER_ROLES.USER;
         } else {
-            // Modalità locale - controlla se ci sono utenti reali (non di esempio)
             const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
 
-            // Filtra solo utenti reali (non quelli di esempio)
             const realUsers = Object.values(users).filter(user =>
                     !user.uid.startsWith('super_admin_') &&
                     !user.uid.startsWith('clan_mod_') &&
@@ -2331,7 +1853,6 @@ async function determineUserRole() {
     }
 }
 
-// Simulazione autenticazione locale
 async function simulateLogin(email, password) {
     return new Promise((resolve, reject) => {
         setTimeout(() => {
@@ -2345,10 +1866,8 @@ async function simulateLogin(email, password) {
                     displayName: user.username
                 };
 
-                // Salva i dati utente correnti
                 currentUserData = user;
 
-                // Aggiorna UI con i dati del clan
                 document.getElementById('currentUsername').textContent = user.username;
                 document.getElementById('currentClan').textContent = user.clan || 'Nessuno';
                 document.getElementById('sidebarClan').textContent = user.clan || 'Nessuno';
@@ -2381,7 +1900,7 @@ async function simulateRegister(email, password, username, clan, role) {
                 clan: clan || 'Nessuno',
                 role: role || USER_ROLES.USER,
                 createdAt: Date.now(),
-                provider: 'email' // Aggiungi provider
+                provider: 'email'
             };
 
             localStorage.setItem('hc_local_users', JSON.stringify(users));
@@ -2403,15 +1922,12 @@ async function simulateRegister(email, password, username, clan, role) {
         }, 1000);
     });
 }
+
 async function handleLogout() {
-    if (window.activityTracker) {
-    await window.activityTracker.recordLogout();
-    }
     try {
         if (window.useFirebase && window.firebaseAuth && firebaseReady && signOut) {
             await signOut(window.firebaseAuth);
         } else {
-            // Logout locale
             currentUser = null;
             handleUserLogout();
         }
@@ -2421,37 +1937,29 @@ async function handleLogout() {
     window.location.reload();
 }
 
-// Inizializza dati di esempio per modalità locale
 function initializeLocalData() {
-    // Crea utenti di esempio se non esistono
     const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
 
-    // Controlla se ci sono utenti reali
     const realUsers = Object.values(users).filter(user =>
             !user.uid.startsWith('super_admin_') &&
             !user.uid.startsWith('clan_mod_') &&
             !user.uid.startsWith('user_'));
 
-    // Se c'è già un utente reale ma non ha ruolo superuser, assegnaglielo
     if (realUsers.length > 0) {
         const firstRealUser = realUsers[0];
         if (!firstRealUser.role || firstRealUser.role === USER_ROLES.USER) {
             firstRealUser.role = USER_ROLES.SUPERUSER;
-            // Trova l'email corrispondente e aggiorna
             for (const email in users) {
                 if (users[email].uid === firstRealUser.uid) {
                     users[email].role = USER_ROLES.SUPERUSER;
                     localStorage.setItem('hc_local_users', JSON.stringify(users));
-                    console.log('🎉 Primo utente reale promosso a SUPERUSER:', email);
                     break;
                 }
             }
         }
     }
 
-    // Crea utenti di esempio solo se non ci sono utenti reali
     if (realUsers.length === 0) {
-        // Superuser di default
         const defaultSuperUser = {
             uid: 'super_admin_001',
             username: 'SuperAdmin',
@@ -2462,7 +1970,6 @@ function initializeLocalData() {
             createdAt: Date.now()
         };
 
-        // Moderatore clan di esempio
         const clanMod = {
             uid: 'clan_mod_001',
             username: 'ModeratoreDraghi',
@@ -2473,7 +1980,6 @@ function initializeLocalData() {
             createdAt: Date.now()
         };
 
-        // Utente normale di esempio
         const normalUser = {
             uid: 'user_001',
             username: 'GiocatoreLeoni',
@@ -2489,24 +1995,9 @@ function initializeLocalData() {
         users['player@leoni.com'] = normalUser;
 
         localStorage.setItem('hc_local_users', JSON.stringify(users));
-
-        console.log('🔧 Utenti di esempio creati:', {
-            superuser: {
-                email: 'admin@hustlecastle.com',
-                password: 'admin123'
-            },
-            clanMod: {
-                email: 'mod@draghi.com',
-                password: 'mod123'
-            },
-            user: {
-                email: 'player@leoni.com',
-                password: 'player123'
-            }
-        });
     }
 
-    // Aggiungi thread di esempio per sezioni generali se non esistono
+    // Inizializza dati thread su localStorage per demo
     const sections = ['salotto', 'eventi', 'oggetti', 'novita', 'associa-clan', 'segnalazioni'];
     sections.forEach(section => {
         const threads = JSON.parse(localStorage.getItem(`hc_threads_${section}`) || '[]');
@@ -2516,166 +2007,113 @@ function initializeLocalData() {
         }
     });
 
-    // Aggiungi messaggi di esempio per chat generale se non esistono
+    // Inizializza messaggi chat
     const messages = JSON.parse(localStorage.getItem(`hc_messages_chat-generale`) || '[]');
     if (messages.length === 0) {
         const exampleMessages = getExampleMessages('chat-generale');
         localStorage.setItem(`hc_messages_chat-generale`, JSON.stringify(exampleMessages));
     }
-
-    // Inizializza dati di esempio per clan specifici
-    const exampleClans = ['Draghi Rossi', 'Leoni Neri', 'Aquile Bianche'];
-    exampleClans.forEach(clan => {
-        const safeClanName = clan.replace(/[.#$[\]]/g, '_');
-
-        // Thread clan (alcuni pending per testare moderazione)
-        const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
-        clanSections.forEach(section => {
-            const storageKey = `hc_threads_clan_${safeClanName}_${section}`;
-            const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            if (threads.length === 0) {
-                const exampleThreads = getExampleClanThreads(section, clan);
-                localStorage.setItem(storageKey, JSON.stringify(exampleThreads));
-            }
-        });
-
-        // Messaggi clan chat
-        const chatStorageKey = `hc_messages_clan_${safeClanName}_clan-chat`;
-        const chatMessages = JSON.parse(localStorage.getItem(chatStorageKey) || '[]');
-        if (chatMessages.length === 0) {
-            const exampleMessages = getExampleClanMessages(clan);
-            localStorage.setItem(chatStorageKey, JSON.stringify(exampleMessages));
-        }
-    });
 }
 
 function getExampleThreads(section) {
     const examples = {
-'oggetti': [{
-                id: 'salotto_thread_1',
-                title: 'Salotto',
-                content: 'Un posto per chiacchierare del più e del meno, fuori dagli schemi del gioco.',
-                author: 'Admin',
-                createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
-                replies: 5,
-                views: 42,
-                status: 'approved'
-            }
-        ],
-        'segnalazioni': [{
-                id: 'bug_report_1',
-                title: '🐞 Bug - Non riesco a equipaggiare l\'armatura del drago',
-                content: 'Quando provo a equipaggiare l\'armatura del drago, il gioco si blocca e devo riavviare. Succede solo con quel pezzo.',
-                author: 'BugHunter',
-                createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
-                replies: 2,
-                views: 18,
-                status: 'approved'
-            }
-        ],
+        'salotto': [{
+            id: 'salotto_thread_1',
+            title: 'Chiacchiere del giorno',
+            content: 'Un posto per parlare di tutto e di niente!',
+            author: 'Admin',
+            authorId: 'super_admin_001',
+            createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
+            replies: 5,
+            views: 42,
+            status: 'approved'
+        }],
         'eventi': [{
-                id: 'evt_demo_1',
-                title: '🎃 Evento Halloween - Strategie e Premi',
-                content: 'Discussione sulle migliori strategie per l\'evento Halloween! Condividete i vostri setup e le ricompense ottenute.',
-                author: 'EventMaster',
-                createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
-                replies: 15,
-                views: 87,
-                status: 'approved',
-                imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmY2NjAwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfjoMgRXZlbnRvIEhhbGxvd2VlbiDwn46DPC90ZXh0Pjwvc3ZnPg==',
-                imageName: 'halloween_event.jpg'
-            }
-        ],
+            id: 'evt_demo_1',
+            title: '🎃 Evento Halloween - Strategie e Premi',
+            content: 'Discussione sulle migliori strategie per l\'evento Halloween!',
+            author: 'EventMaster',
+            authorId: 'super_admin_001',
+            createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
+            replies: 15,
+            views: 87,
+            status: 'approved'
+        }],
+        'oggetti': [{
+            id: 'obj_demo_1',
+            title: '⚔️ Nuove armi leggendarie',
+            content: 'Discussione sulle nuove armi aggiunte nell\'ultimo aggiornamento',
+            author: 'WeaponMaster',
+            authorId: 'super_admin_001',
+            createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
+            replies: 8,
+            views: 65,
+            status: 'approved'
+        }],
         'novita': [{
-                id: 'news_demo_1',
-                title: '📢 Aggiornamento 1.58.0 - Nuove Features!',
-                content: 'Ecco tutte le novità dell\'ultimo aggiornamento: nuovi eroi, dungeon migliorati e molto altro!',
-                author: 'GameUpdater',
-                createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
-                replies: 23,
-                views: 145,
-                status: 'approved',
-                imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMDA4OGNjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfkKIgQWdnaW9ybmFtZW50byB2MS41OC4wIPCfkKI8L3RleHQ+PC9zdmc+',
-                imageName: 'update_158.jpg'
-            }
-        ]
-    };
-    return examples[section] || [];
-}
-
-function getExampleClanThreads(section, clanName) {
-    const examples = {
-        'clan-war': [],
-        'clan-premi': [],
-        'clan-consigli': [],
-        'clan-bacheca': []
+            id: 'news_demo_1',
+            title: '📢 Aggiornamento 1.58.0 - Nuove Features!',
+            content: 'Tutte le novità dell\'ultimo aggiornamento del gioco',
+            author: 'GameUpdater',
+            authorId: 'super_admin_001',
+            createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
+            replies: 23,
+            views: 145,
+            status: 'approved'
+        }],
+        'segnalazioni': [{
+            id: 'bug_report_1',
+            title: '🐞 Bug - Problema con equipaggiamento',
+            content: 'Segnalazione di un bug nell\'equipaggiamento degli oggetti',
+            author: 'BugHunter',
+            authorId: 'user_001',
+            createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
+            replies: 2,
+            views: 18,
+            status: 'approved'
+        }]
     };
     return examples[section] || [];
 }
 
 function getExampleMessages(section) {
-    const examples = {
-        'chat-generale': []
-    };
-    return examples[section] || [];
+    return [];
 }
 
-function getExampleClanMessages(clanName) {
-    return [{
-            id: 'cmsg1',
-            author: `Leader${clanName.replace(' ', '')}`,
-            message: `Benvenuti nel clan ${clanName}! Preparatevi per la guerra di domani!`,
-            timestamp: Date.now() - 15 * 60 * 1000
-        }, {
-            id: 'cmsg2',
-            author: 'WarriorClan',
-            message: 'Le mie truppe sono pronte! ⚔️',
-            timestamp: Date.now() - 10 * 60 * 1000
-        }, {
-            id: 'cmsg3',
-            author: 'DefenderMaster',
-            message: 'Chi ha bisogno di aiuto per il setup delle difese?',
-            timestamp: Date.now() - 5 * 60 * 1000
-        }
-    ];
-}
-
-// 🤖 GESTIONE MESSAGGI ERRORE CON reCAPTCHA
 function getErrorMessage(error) {
     switch (error.code) {
-    case 'auth/invalid-email':
-        return 'Email non valida';
-    case 'auth/user-disabled':
-        return 'Account disabilitato';
-    case 'auth/user-not-found':
-        return 'Utente non trovato';
-    case 'auth/wrong-password':
-        return 'Password errata';
-    case 'auth/email-already-in-use':
-        return 'Email già in uso';
-    case 'auth/weak-password':
-        return 'Password troppo debole';
-    case 'auth/popup-closed-by-user':
-        return 'Login annullato dall\'utente';
-    case 'auth/popup-blocked':
-        return 'Popup bloccato dal browser. Abilita i popup per questo sito.';
-    case 'auth/cancelled-popup-request':
-        return 'Popup di login cancellato';
-    case 'auth/network-request-failed':
-        return 'Errore di connessione. Controlla la tua connessione internet.';
-    case 'auth/recaptcha-not-enabled':
-        return 'reCAPTCHA non abilitato. Contatta l\'amministratore.';
-    case 'auth/too-many-requests':
-        return 'Troppi tentativi. Riprova più tardi o completa la verifica reCAPTCHA.';
-    default:
-        if (error.message && error.message.includes('recaptcha')) {
-            return 'Errore nella verifica reCAPTCHA. Riprova.';
-        }
-        return error.message || 'Errore sconosciuto';
+        case 'auth/invalid-email':
+            return 'Email non valida';
+        case 'auth/user-disabled':
+            return 'Account disabilitato';
+        case 'auth/user-not-found':
+            return 'Utente non trovato';
+        case 'auth/wrong-password':
+            return 'Password errata';
+        case 'auth/email-already-in-use':
+            return 'Email già in uso';
+        case 'auth/weak-password':
+            return 'Password troppo debole';
+        case 'auth/popup-closed-by-user':
+            return 'Login annullato dall\'utente';
+        case 'auth/popup-blocked':
+            return 'Popup bloccato dal browser. Abilita i popup per questo sito.';
+        case 'auth/cancelled-popup-request':
+            return 'Popup di login cancellato';
+        case 'auth/network-request-failed':
+            return 'Errore di connessione. Controlla la tua connessione internet.';
+        case 'auth/recaptcha-not-enabled':
+            return 'reCAPTCHA non abilitato. Contatta l\'amministratore.';
+        case 'auth/too-many-requests':
+            return 'Troppi tentativi. Riprova più tardi o completa la verifica reCAPTCHA.';
+        default:
+            if (error.message && error.message.includes('recaptcha')) {
+                return 'Errore nella verifica reCAPTCHA. Riprova.';
+            }
+            return error.message || 'Errore sconosciuto';
     }
 }
 
-// Utility UI
 function showError(message) {
     const errorEl = document.getElementById('loginError');
     errorEl.textContent = message;
@@ -2705,7 +2143,6 @@ function switchSection(sectionKey) {
     if (!section)
         return;
 
-    // Controlla accesso alla sezione
     if (!canAccessSection(sectionKey)) {
         if (sectionKey.startsWith('clan-')) {
             if (sectionKey === 'clan-moderation' && !isClanModerator()) {
@@ -2719,26 +2156,22 @@ function switchSection(sectionKey) {
         return;
     }
 
-    // Pulisci listeners precedenti
     cleanupListeners();
     cleanupCommentImageUpload();
-
-    currentSection = sectionKey;
-    if (window.activityTracker && currentUser) {
-    window.markSectionAsVisited(sectionKey);
+     if (currentSection && currentSection !== sectionKey && window.markSectionAsVisited) {
+        window.markSectionAsVisited(currentSection);
     }
 
-    // Aggiorna header
+    currentSection = sectionKey;
+
     document.getElementById('section-title').textContent = section.title;
     document.getElementById('section-description').textContent = section.description;
 
-    // Mostra contenuto appropriato
     const forumContent = document.getElementById('forum-content');
     const chatContent = document.getElementById('chat-content');
     const threadView = document.getElementById('thread-view');
     const newThreadBtn = document.getElementById('new-thread-btn');
 
-    // Nascondi tutto inizialmente
     forumContent.style.display = 'none';
     chatContent.style.display = 'none';
     threadView.style.display = 'none';
@@ -2762,10 +2195,8 @@ function switchSection(sectionKey) {
         loadDashboard();
     }
 
-    // Chiudi menu mobile se aperto
     closeMobileMenu();
 
-    // Aggiorna navigazione
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
@@ -2775,7 +2206,6 @@ function switchSection(sectionKey) {
     }
 }
 
-// Funzioni per gestione mobile
 function toggleMobileMenu() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('mobileOverlay');
@@ -2805,925 +2235,74 @@ function closeMobileMenu() {
     document.body.style.overflow = 'auto';
 }
 
-
-// Carica contenuto amministrativo
 function loadAdminContent(sectionKey) {
     const threadList = document.getElementById('thread-list');
 
     switch (sectionKey) {
-    case 'admin-users':
-        loadUsersManagement();
-        break;
-    case 'admin-clans':
-        loadClansManagement();
-        break;
-    default:
-        threadList.innerHTML = '<div style="text-align: center; padding: 40px;">Sezione non trovata</div>';
+        case 'admin-users':
+            loadUsersManagement();
+            break;
+        case 'admin-clans':
+            loadClansManagement();
+            break;
+        default:
+            threadList.innerHTML = '<div style="text-align: center; padding: 40px;">Sezione non trovata</div>';
     }
 }
 
-// Carica contenuto moderazione clan
 function loadClanModerationContent() {
     const threadList = document.getElementById('thread-list');
 
     threadList.innerHTML = `
-                <div class="admin-panel">
-                    <h3>🛡️ Moderazione Clan ${getCurrentUserClan()}</h3>
-                    <div id="moderation-content">
-                        <div style="text-align: center; padding: 20px;">
-                            <div>🔄 Caricamento contenuti da moderare...</div>
-                        </div>
-                    </div>
+        <div class="admin-panel">
+            <h3>🛡️ Moderazione Clan ${getCurrentUserClan()}</h3>
+            <div id="moderation-content">
+                <div style="text-align: center; padding: 20px;">
+                    <div>🔄 Caricamento contenuti da moderare...</div>
                 </div>
-            `;
+            </div>
+        </div>
+    `;
 
     loadPendingThreads();
 }
 
-// Carica thread in attesa di approvazione
-async function loadPendingThreads() {
-    const moderationContent = document.getElementById('moderation-content');
-
-    try {
-        const userClan = getCurrentUserClan();
-        const pendingThreads = await getPendingThreadsForClan(userClan);
-
-        if (pendingThreads.length === 0) {
-            moderationContent.innerHTML = `
-                        <div style="text-align: center; padding: 20px; color: #666;">
-                            ✅ Nessun contenuto in attesa di approvazione
-                        </div>
-                    `;
-            return;
-        }
-
-        moderationContent.innerHTML = `
-                    <div style="margin-bottom: 20px;">
-                        <h4>📋 Thread in attesa di approvazione (${pendingThreads.length})</h4>
-                    </div>
-                    ${pendingThreads.map(thread => `
-                        <div class="thread-item thread-pending" style="margin-bottom: 15px;">
-                            <div class="thread-main">
-                                <div class="thread-title">
-                                    ${thread.title}
-                                    <span class="pending-indicator">PENDING</span>
-                                </div>
-                                <div class="thread-author">
-                                    da ${thread.author} • ${formatTime(thread.createdAt)}
-                                </div>
-                                <div class="moderation-actions">
-                                    <button class="approve-btn" onclick="approveThread('${thread.id}', '${thread.section}')">
-                                        ✅ Approva
-                                    </button>
-                                    <button class="reject-btn" onclick="rejectThread('${thread.id}', '${thread.section}')">
-                                        ❌ Rifiuta
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
-                `;
-    } catch (error) {
-        console.error('Errore caricamento thread pending:', error);
-        moderationContent.innerHTML = `
-                    <div style="text-align: center; color: red;">
-                        Errore nel caricamento dei contenuti da moderare
-                    </div>
-                `;
-    }
-}
-
-// Ottieni thread in attesa per un clan
-async function getPendingThreadsForClan(clanName) {
-    const pendingThreads = [];
-    const clanSections = ['clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'];
-
-    for (const section of clanSections) {
-        try {
-            const dataPath = getDataPath(section, 'threads');
-            if (!dataPath)
-                continue;
-
-            let threads = [];
-
-            if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-                const threadsRef = ref(window.firebaseDatabase, dataPath);
-                const snapshot = await get(threadsRef);
-
-                if (snapshot.exists()) {
-                    snapshot.forEach((childSnapshot) => {
-                        const threadData = childSnapshot.val();
-                        if (threadData.status === 'pending') {
-                            threads.push({
-                                id: childSnapshot.key,
-                                section: section,
-                                ...threadData
-                            });
-                        }
-                    });
-                }
-            } else {
-                // Modalità locale
-                const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-                const localThreads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                threads = localThreads.filter(t => t.status === 'pending').map(t => ({
-                            ...t,
-                            section: section
-                        }));
-            }
-
-            pendingThreads.push(...threads);
-        } catch (error) {
-            console.error(`Errore caricamento thread pending per ${section}:`, error);
-        }
-    }
-
-    // Ordina per data (più recenti prima)
-    return pendingThreads.sort((a, b) => b.createdAt - a.createdAt);
-}
-
-// Approva thread
-async function approveThread(threadId, section) {
-    try {
-        await updateThreadStatus(threadId, section, 'approved');
-        alert('Thread approvato con successo!');
-        loadPendingThreads(); // Ricarica lista
-    } catch (error) {
-        console.error('Errore approvazione thread:', error);
-        alert('Errore nell\'approvazione del thread');
-    }
-}
-
-// Rifiuta thread
-async function rejectThread(threadId, section) {
-    const reason = prompt('Motivo del rifiuto (opzionale):');
-
-    try {
-        await updateThreadStatus(threadId, section, 'rejected', reason);
-        alert('Thread rifiutato');
-        loadPendingThreads(); // Ricarica lista
-    } catch (error) {
-        console.error('Errore rifiuto thread:', error);
-        alert('Errore nel rifiuto del thread');
-    }
-}
-
-// Aggiorna status thread
-async function updateThreadStatus(threadId, section, status, reason = null) {
-    const dataPath = getDataPath(section, 'threads');
-    if (!dataPath)
-        return;
-
-    const updateData = {
-        status: status,
-        moderatedAt: window.useFirebase ? serverTimestamp() : Date.now(),
-        moderatedBy: currentUser.displayName || 'Moderatore'
-    };
-
-    if (reason) {
-        updateData.rejectionReason = reason;
-    }
-
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        // leggi i dati esistenti del thread
-        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-        const snapshot = await get(threadRef);
-        if (snapshot.exists()) {
-            const existingData = snapshot.val();
-            // mantieni tutti i campi, aggiungendo/modificando solo quelli di moderazione
-            const updatedThread = {
-                ...existingData,
-                ...updateData
-            };
-            await set(threadRef, updatedThread);
-        } else {
-            console.warn(`Thread con id ${threadId} non trovato in ${dataPath}`);
-        }
-    } else {
-        // modalità locale
-        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        const threadIndex = threads.findIndex(t => t.id === threadId);
-        if (threadIndex !== -1) {
-            threads[threadIndex] = {
-                ...threads[threadIndex],
-                ...updateData
-            };
-            localStorage.setItem(storageKey, JSON.stringify(threads));
-        }
-    }
-}
-
-// Carica gestione utenti
-async function loadUsersManagement() {
-    const threadList = document.getElementById('thread-list');
-
-    threadList.innerHTML = `
-                <div class="admin-panel">
-                    <h3>👥 Gestione Utenti</h3>
-                    <div id="users-grid" class="users-grid">
-                        <div style="text-align: center; padding: 20px;">
-                            <div>🔄 Caricamento utenti...</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-    // Carica lista utenti che è una funzione diversa da quella per autocomplete
-    loadUsersGrid();
-}
-
-// Carica lista utenti per il pannello admin
-// Modifica per loadUsersGrid (per il pannello admin)
-async function loadUsersGrid() {
-    const usersGrid = document.getElementById('users-grid');
-
-    try {
-        let users = [];
-
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            // Verifica se l'utente è superuser
-            const currentUserRole = getCurrentUserRole();
-            
-            if (currentUserRole === USER_ROLES.SUPERUSER) {
-                console.log('🔐 Superuser rilevato, caricamento diretto utenti...');
-                
-                try {
-                    // Carica direttamente tutti gli utenti per superuser
-                    const usersRef = ref(window.firebaseDatabase, 'users');
-                    const snapshot = await get(usersRef);
-                    
-                    if (snapshot.exists()) {
-                        const userData = snapshot.val();
-                        users = Object.keys(userData).map(uid => ({
-                            uid: uid,
-                            ...userData[uid]
-                        }));
-                        
-                        console.log('✅ Caricati', users.length, 'utenti direttamente da Firebase');
-                    } else {
-                        console.warn('⚠️ Nodo users vuoto in Firebase');
-                    }
-                    
-                } catch (directError) {
-                    console.warn('⚠️ Errore accesso diretto Firebase per utenti:', directError.message);
-                    console.log('🔄 Fallback su metodo alternativo...');
-                    
-                    // Fallback: usa il metodo esistente
-                    await loadUsersList();
-                    users = allUsers.filter(user => user.email);
-                }
-                
-            } else {
-                console.log('⚠️ Utente non superuser, usando metodo limitato');
-                // Usa metodo limitato per non-superuser
-                await loadUsersList();
-                users = allUsers.filter(user => user.email);
-            }
-            
-        } else {
-            // Modalità locale
-            console.log('🏠 Modalità locale, caricamento da localStorage...');
-            const localUsers = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            users = Object.values(localUsers);
-        }
-
-        // Mostra risultati
-        if (users.length === 0) {
-            usersGrid.innerHTML = `
-                <div style="text-align: center; padding: 20px; background: rgba(231, 76, 60, 0.1); border-radius: 8px; color: #e74c3c;">
-                    <div style="margin-bottom: 10px;">❌ Nessun utente trovato</div>
-                    <div style="font-size: 14px;">
-                        Verifica le regole Firebase o i permessi utente.
-                    </div>
-                </div>
-            `;
-        } else {
-            // Mostra messaggio informativo sui permessi
-            const currentUserRole = getCurrentUserRole();
-            let infoMessage = '';
-            
-            if (currentUserRole === USER_ROLES.SUPERUSER) {
-                infoMessage = `
-                    <div style="background: rgba(39, 174, 96, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid rgba(39, 174, 96, 0.2);">
-                        <div style="color: #27ae60; font-weight: 600; margin-bottom: 5px;">✅ Accesso Completo Superuser</div>
-                        <div style="font-size: 14px; color: #27ae60;">Caricati ${users.length} utenti con permessi completi di gestione.</div>
-                    </div>
-                `;
-            } else {
-                infoMessage = `
-                    <div style="background: rgba(255, 193, 7, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid rgba(255, 193, 7, 0.2);">
-                        <div style="color: #f39c12; font-weight: 600; margin-bottom: 5px;">⚠️ Accesso Limitato</div>
-                        <div style="font-size: 14px; color: #f39c12;">Visualizzazione limitata ai dati disponibili (${users.length} utenti).</div>
-                    </div>
-                `;
-            }
-            
-            usersGrid.innerHTML = infoMessage;
-            displayUsersList(users);
-        }
-
-    } catch (error) {
-        console.error('❌ Errore caricamento utenti admin:', error);
-        
-        // Analizza il tipo di errore per dare suggerimenti specifici
-        let errorDetails = error.message || 'Errore sconosciuto';
-        let suggestion = '';
-        
-        if (error.code === 'PERMISSION_DENIED') {
-            suggestion = `
-                <div style="margin-top: 10px; padding: 10px; background: rgba(231, 76, 60, 0.1); border-radius: 5px;">
-                    <strong>💡 Suggerimenti:</strong><br>
-                    1. Verifica che le regole Firebase siano aggiornate<br>
-                    2. Assicurati di essere superuser<br>
-                    3. Controlla la configurazione App Check
-                </div>
-            `;
-        } else if (errorDetails.includes('network')) {
-            suggestion = `
-                <div style="margin-top: 10px; padding: 10px; background: rgba(255, 193, 7, 0.1); border-radius: 5px;">
-                    <strong>💡 Suggerimento:</strong> Problema di connessione. Riprova tra qualche momento.
-                </div>
-            `;
-        }
-        
-        usersGrid.innerHTML = `
-            <div style="text-align: center; color: #e74c3c; padding: 20px; background: rgba(231, 76, 60, 0.1); border-radius: 8px;">
-                <div style="margin-bottom: 10px;">❌ Errore nel caricamento degli utenti</div>
-                <div style="font-size: 14px; margin-bottom: 10px;">
-                    <strong>Dettagli:</strong> ${errorDetails}
-                </div>
-                ${suggestion}
-                <div style="margin-top: 15px;">
-                    <button onclick="loadUsersGrid()" style="background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">
-                        🔄 Riprova
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-}
-
-// Funzione di debug per testare i permessi utente
-window.debugUserPermissions = function() {
-    console.log('🔍 DEBUG PERMESSI UTENTE:');
-    console.log('- Utente corrente:', currentUser?.uid, currentUser?.email);
-    console.log('- Dati utente:', currentUserData);
-    console.log('- Ruolo corrente:', getCurrentUserRole());
-    console.log('- È superuser?', getCurrentUserRole() === USER_ROLES.SUPERUSER);
-    console.log('- Firebase attivo?', window.useFirebase);
-    console.log('- Firebase pronto?', firebaseReady);
-    console.log('- Database disponibile?', !!window.firebaseDatabase);
-    
-    // Test accesso diretto users
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        console.log('🧪 Test accesso diretto nodo users...');
-        const usersRef = ref(window.firebaseDatabase, 'users');
-        get(usersRef).then(snapshot => {
-            if (snapshot.exists()) {
-                console.log('✅ Accesso riuscito! Trovati', Object.keys(snapshot.val()).length, 'utenti');
-            } else {
-                console.warn('⚠️ Nodo users vuoto o inesistente');
-            }
-        }).catch(error => {
-            console.error('❌ Errore accesso users:', error.code, error.message);
-        });
-    }
-};
-
-// Funzione di test per verificare le regole Firebase
-window.testFirebaseRules = async function() {
-    if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady) {
-        console.log('❌ Firebase non attivo per il test');
-        return;
-    }
-    
-    console.log('🧪 TEST REGOLE FIREBASE INIZIATO...');
-    
-    const tests = [
-        {
-            name: 'Lettura nodo users (generale)',
-            path: 'users',
-            operation: 'read'
-        },
-        {
-            name: 'Lettura profilo utente corrente',
-            path: `users/${currentUser?.uid}`,
-            operation: 'read'
-        },
-        {
-            name: 'Scrittura profilo utente corrente',
-            path: `users/${currentUser?.uid}/lastSeen`,
-            operation: 'write',
-            data: Date.now()
-        }
-    ];
-    
-    for (const test of tests) {
-        try {
-            console.log(`🔍 Testing: ${test.name}`);
-            
-            if (test.operation === 'read') {
-                const testRef = ref(window.firebaseDatabase, test.path);
-                const snapshot = await get(testRef);
-                console.log(`✅ ${test.name}: OK`, snapshot.exists() ? 'Dati trovati' : 'Nodo vuoto');
-            } else if (test.operation === 'write') {
-                const testRef = ref(window.firebaseDatabase, test.path);
-                await set(testRef, test.data);
-                console.log(`✅ ${test.name}: OK`);
-            }
-            
-        } catch (error) {
-            console.error(`❌ ${test.name}: FAILED`, error.code, error.message);
-        }
-    }
-    
-    console.log('🏁 Test regole Firebase completato');
-};
-// Visualizza lista utenti
-function displayUsersList(users) {
-    const usersGrid = document.getElementById('users-grid');
-
-    if (users.length === 0) {
-        usersGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun utente trovato</div>';
-        return;
-    }
-
-    usersGrid.innerHTML = users.map(user => {
-        const roleText = user.role === 'superuser' ? 'SUPER' :
-            user.role === 'clan_mod' ? 'CLAN MOD' : 'USER';
-        const roleClass = user.role === 'superuser' ? 'role-superuser' :
-            user.role === 'clan_mod' ? 'role-moderator' : 'role-user';
-
-        return `
-                    <div class="user-card">
-                        <div class="user-card-header">
-                            <div class="user-card-name">
-                                ${user.username} 
-                                <span class="user-role ${roleClass}">
-                                    ${roleText}
-                                </span>
-                            </div>
-                            <div style="font-size: 12px; color: #666;">
-                                ${formatTime(user.createdAt)}
-                            </div>
-                        </div>
-                        <div class="user-card-info">
-                            <div>📧 ${user.email}</div>
-                            <div>🏰 Clan: ${user.clan || 'Nessuno'}</div>
-                            <div>🔗 Provider: ${user.provider || 'email'}</div>
-                        </div>
-                        <div class="user-card-actions">
-                            <button class="admin-btn btn-assign-clan" onclick="assignClan('${user.id || user.uid}', '${user.username}')">
-                                Assegna Clan
-                            </button>
-                            ${getCurrentUserRole() === USER_ROLES.SUPERUSER ? `
-                                <button class="admin-btn btn-change-role" onclick="changeUserRole('${user.id || user.uid}', '${user.username}', '${user.role || 'user'}')">
-                                    Cambia Ruolo
-                                </button>
-                            ` : ''}
-                            ${user.clan && user.clan !== 'Nessuno' ? `
-                                <button class="admin-btn btn-remove-clan" onclick="removFromClan('${user.id || user.uid}', '${user.username}')">
-                                    Rimuovi Clan
-                                </button>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-    }).join('');
-}
-
-// Funzioni amministrative
-async function assignClan(userId, username) {
-    const availableClans = await getAvailableClans();
-    const clanList = availableClans.length > 0 ? availableClans.join('\n') : 'Nessun clan disponibile';
-
-    const clanName = prompt(`Assegna un clan a ${username}:\n\nClan disponibili:\n${clanList}\n\nInserisci il nome del clan:`);
-    if (!clanName || clanName.trim() === '')
-        return;
-
-    try {
-        await updateUserClan(userId, clanName.trim());
-        alert(`${username} è stato assegnato al clan "${clanName}"`);
-        loadUsersGrid(); // Ricarica lista
-    } catch (error) {
-        console.error('Errore assegnazione clan:', error);
-        alert('Errore nell\'assegnazione del clan');
-    }
-}
-
-async function changeUserRole(userId, username, currentRole) {
-    if (getCurrentUserRole() !== USER_ROLES.SUPERUSER) {
-        alert('Solo i superuser possono modificare i ruoli');
-        return;
-    }
-
-    const newRole = prompt(`Cambia il ruolo di ${username}:\n\nRuolo attuale: ${currentRole}\n\nOpzioni:\n- user (utente normale)\n- clan_mod (moderatore di clan)\n- superuser (super amministratore)\n\nInserisci il nuovo ruolo:`);
-
-    if (!newRole || !Object.values(USER_ROLES).includes(newRole)) {
-        alert('Ruolo non valido');
-        return;
-    }
-
-    try {
-        await updateUserRole(userId, newRole);
-        alert(`Ruolo di ${username} cambiato in "${newRole}"`);
-        loadUsersGrid(); // Ricarica lista
-    } catch (error) {
-        console.error('Errore cambio ruolo:', error);
-        alert('Errore nel cambio del ruolo');
-    }
-}
-
-async function removFromClan(userId, username) {
-    if (confirm(`Rimuovere ${username} dal clan?`)) {
-        try {
-            await updateUserClan(userId, 'Nessuno');
-            alert(`${username} è stato rimosso dal clan`);
-            loadUsersGrid(); // Ricarica lista
-        } catch (error) {
-            console.error('Errore rimozione clan:', error);
-            alert('Errore nella rimozione dal clan');
-        }
-    }
-}
-
-// Funzioni di aggiornamento database
-async function updateUserClan(userId, clanName) {
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        const userRef = ref(window.firebaseDatabase, `users/${userId}/clan`);
-        await set(userRef, clanName);
-    } else {
-        // Aggiorna localStorage
-        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-        for (const email in users) {
-            if (users[email].uid === userId) {
-                users[email].clan = clanName;
-                localStorage.setItem('hc_local_users', JSON.stringify(users));
-                break;
-            }
-        }
-    }
-}
-
-async function updateUserRole(userId, newRole) {
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        const userRef = ref(window.firebaseDatabase, `users/${userId}/role`);
-        await set(userRef, newRole);
-    } else {
-        // Aggiorna localStorage
-        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-        for (const email in users) {
-            if (users[email].uid === userId) {
-                users[email].role = newRole;
-                localStorage.setItem('hc_local_users', JSON.stringify(users));
-                break;
-            }
-        }
-    }
-}
-
-// Gestione clan
-async function loadClansManagement() {
-    const threadList = document.getElementById('thread-list');
-
-    threadList.innerHTML = `
-                <div class="clan-management">
-                    <h3>🏰 Gestione Clan</h3>
-                    <button class="create-clan-btn" onclick="createNewClan()">
-                        + Crea Nuovo Clan
-                    </button>
-                    <div id="clans-grid" class="clan-list">
-                        <div style="text-align: center; padding: 20px;">
-                            <div>🔄 Caricamento clan...</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-    loadClansList();
-}
-
-async function loadClansList() {
-    const clansGrid = document.getElementById('clans-grid');
-
-    try {
-        const clans = await getAvailableClans();
-        const clanStats = await getClanStats(clans);
-
-        if (clans.length === 0) {
-            clansGrid.innerHTML = '<div style="text-align: center; padding: 20px;">Nessun clan trovato</div>';
-            return;
-        }
-
-        clansGrid.innerHTML = clans.map(clan => `
-                    <div class="clan-card">
-                        <h4>${clan}</h4>
-                        <div class="clan-members">
-                            👥 ${clanStats[clan] || 0} membri
-                        </div>
-                        <div style="margin-top: 10px;">
-                            <button class="admin-btn btn-remove-clan" onclick="deleteClan('${clan}')">
-                                Elimina Clan
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-    } catch (error) {
-        console.error('Errore caricamento clan:', error);
-        clansGrid.innerHTML = '<div style="text-align: center; color: red;">Errore nel caricamento dei clan</div>';
-    }
-}
-
-async function getAvailableClans() {
-    let clans = [];
-
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        const usersRef = ref(window.firebaseDatabase, 'users');
-        const snapshot = await get(usersRef);
-
-        if (snapshot.exists()) {
-            const clanSet = new Set();
-            snapshot.forEach((childSnapshot) => {
-                const userData = childSnapshot.val();
-                if (userData.clan && userData.clan !== 'Nessuno') {
-                    clanSet.add(userData.clan);
-                }
-            });
-            clans = Array.from(clanSet);
-        }
-    } else {
-        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-        const clanSet = new Set();
-        Object.values(users).forEach(user => {
-            if (user.clan && user.clan !== 'Nessuno') {
-                clanSet.add(user.clan);
-            }
-        });
-        clans = Array.from(clanSet);
-    }
-
-    return clans.sort();
-}
-
-async function getClanStats(clans) {
-    const stats = {};
-
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-        const usersRef = ref(window.firebaseDatabase, 'users');
-        const snapshot = await get(usersRef);
-
-        if (snapshot.exists()) {
-            clans.forEach(clan => stats[clan] = 0);
-
-            snapshot.forEach((childSnapshot) => {
-                const userData = childSnapshot.val();
-                if (userData.clan && stats.hasOwnProperty(userData.clan)) {
-                    stats[userData.clan]++;
-                }
-            });
-        }
-    } else {
-        const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-        clans.forEach(clan => stats[clan] = 0);
-
-        Object.values(users).forEach(user => {
-            if (user.clan && stats.hasOwnProperty(user.clan)) {
-                stats[user.clan]++;
-            }
-        });
-    }
-
-    return stats;
-}
-
-async function createNewClan() {
-    const clanName = prompt('Nome del nuovo clan:');
-    if (!clanName || clanName.trim() === '')
-        return;
-
-    const trimmedName = clanName.trim();
-    const existingClans = await getAvailableClans();
-
-    if (existingClans.includes(trimmedName)) {
-        alert('Questo clan esiste già!');
-        return;
-    }
-
-    alert(`Clan "${trimmedName}" creato! Ora puoi assegnare utenti a questo clan.`);
-    loadClansList();
-}
-
-async function deleteClan(clanName) {
-    if (!confirm(`Sei sicuro di voler eliminare il clan "${clanName}"?\n\nTutti i membri verranno rimossi dal clan.`)) {
-        return;
-    }
-
-    try {
-        // Rimuovi tutti gli utenti dal clan
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
-            const usersRef = ref(window.firebaseDatabase, 'users');
-            const snapshot = await get(usersRef);
-
-            if (snapshot.exists()) {
-                const updates = {};
-                snapshot.forEach((childSnapshot) => {
-                    const userData = childSnapshot.val();
-                    if (userData.clan === clanName) {
-                        updates[`users/${childSnapshot.key}/clan`] = 'Nessuno';
-                    }
-                });
-
-                await update(ref(window.firebaseDatabase), updates);
-            }
-        } else {
-            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            Object.values(users).forEach(user => {
-                if (user.clan === clanName) {
-                    user.clan = 'Nessuno';
-                }
-            });
-            localStorage.setItem('hc_local_users', JSON.stringify(users));
-        }
-
-        alert(`Clan "${clanName}" eliminato con successo`);
-        loadClansList();
-    } catch (error) {
-        console.error('Errore eliminazione clan:', error);
-        alert('Errore nell\'eliminazione del clan');
-    }
-}
-
-// Genera il path corretto per messaggi/thread in base alla sezione e clan
-function getDataPath(sectionKey, dataType) {
-    if (sectionKey.startsWith('clan-')) {
-        const userClan = getCurrentUserClan();
-        if (userClan === 'Nessuno') {
-            return null;
-        }
-        // Sostituisci caratteri speciali nel nome del clan per Firebase
-        const safeClanName = userClan.replace(/[.#$[\]]/g, '_');
-        return `${dataType}/clan/${safeClanName}/${sectionKey}`;
-    } else {
-        return `${dataType}/${sectionKey}`;
-    }
-}
-
-// Upload immagine thread
-async function uploadThreadImage(file, progressCallback) {
-    if (!file)
-        return null;
-
-    try {
-        if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
-            try {
-                // Upload su Firebase Storage
-                const timestamp = Date.now();
-                const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
-                const imageRef = storageRef(window.firebaseStorage, filename);
-
-                // Upload con progress tracking
-                const uploadTask = uploadBytes(imageRef, file);
-
-                // Simula progress (Firebase v9 non ha onSnapshot per upload)
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    progress += Math.random() * 30;
-                    if (progress > 90)
-                        progress = 90;
-                    progressCallback(progress);
-                }, 200);
-
-                const snapshot = await uploadTask;
-                clearInterval(progressInterval);
-                progressCallback(100);
-
-                // Ottieni URL download
-                const downloadURL = await getDownloadURL(snapshot.ref);
-                return downloadURL;
-
-            } catch (storageError) {
-                console.warn('⚠️ Errore Firebase Storage, uso fallback locale:', storageError.message);
-
-                // Fallback: converte in base64 se Firebase Storage fallisce
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = function (e) {
-                        progressCallback(100);
-                        console.log('📷 Immagine convertita in base64 (fallback)');
-                        resolve(e.target.result);
-                    };
-                    reader.readAsDataURL(file);
-                });
-            }
-
-        } else {
-            // Modalità locale - converte in base64
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    progressCallback(100);
-                    resolve(e.target.result);
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-    } catch (error) {
-        console.error('Errore upload immagine:', error);
-
-        // Ultimo tentativo: base64 fallback
-        console.log('🔄 Tentativo fallback base64...');
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                progressCallback(100);
-                console.log('📷 Immagine salvata come base64 (fallback finale)');
-                resolve(e.target.result);
-            };
-            reader.onerror = function () {
-                reject(new Error('Errore nella conversione dell\'immagine'));
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-}
-
-// Update upload progress
-function updateUploadProgress(progress) {
-    const progressContainer = document.getElementById('upload-progress');
-    const progressPercent = Math.round(progress);
-
-    progressContainer.innerHTML = `
-                <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
-                        <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
-                    </div>
-                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
-                        <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
-                    </div>
-                </div>
-            `;
-    progressContainer.style.display = 'block';
-
-    // Nascondi il progresso quando completato
-    if (progress >= 100) {
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-        }, 1000);
-    }
-}
-
-// Carica thread
-function loadThreads(sectionKey) {
+// SUPABASE FUNCTIONS - THREAD MANAGEMENT
+async function loadThreads(sectionKey) {
     const dataPath = getDataPath(sectionKey, 'threads');
     if (!dataPath) return;
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
-        
-        
-       
-        
-        // ✅ FALLBACK: USA onValue SEMPLICE
-        console.log('📊 Usando onValue semplice per thread (fallback):', sectionKey);
-        const threadsRef = ref(window.firebaseDatabase, dataPath);
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('threads')
+                .select('*')
+                .eq('section', sectionKey)
+                .order('created_at', { ascending: false })
+                .limit(20);
 
-        // Cleanup previous listener
-        if (threadListeners[sectionKey]) {
-            const oldRef = ref(window.firebaseDatabase, threadListeners[sectionKey].path);
-            off(oldRef, threadListeners[sectionKey].callback);
-        }
-
-        const callback = (snapshot) => {
-            const threads = [];
-            snapshot.forEach((childSnapshot) => {
-                threads.push({
-                    id: childSnapshot.key,
-                    ...childSnapshot.val()
-                });
-            });
-
-            // Ordina e limita manualmente
-            threads.sort((a, b) => b.createdAt - a.createdAt);
-            const limitedThreads = threads.slice(0, 20); // Primi 20
+            if (error) throw error;
             
-            displayThreads(limitedThreads);
-        };
-
-        threadListeners[sectionKey] = { path: dataPath, callback: callback };
-        onValue(threadsRef, callback);
-        
-        console.log('📥 Listening thread con fallback per:', dataPath);
+            displayThreads(data || []);
+        } catch (error) {
+            console.error('Errore caricamento threads Supabase:', error);
+            loadLocalThreads(sectionKey);
+        }
     } else {
-        // Modalità locale
-        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        threads.sort((a, b) => b.createdAt - a.createdAt);
-        displayThreads(threads);
+        loadLocalThreads(sectionKey);
     }
 }
 
-// Mostra thread
+function loadLocalThreads(sectionKey) {
+    const dataPath = getDataPath(sectionKey, 'threads');
+    if (!dataPath) return;
+    
+    const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+    const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    threads.sort((a, b) => b.createdAt - a.createdAt);
+    displayThreads(threads);
+}
+
 function displayThreads(threads) {
     const threadList = document.getElementById('thread-list');
 
@@ -3742,7 +2321,6 @@ function displayThreads(threads) {
         return;
     }
 
-    // Filtra thread approvati per utenti normali
     const visibleThreads = threads.filter(thread => {
         if (canModerateSection(currentSection)) {
             return true;
@@ -3758,18 +2336,17 @@ function displayThreads(threads) {
             <div>Ultimo Messaggio</div>
         </div>
     ` + visibleThreads.map(thread => {
-            const statusClass = thread.status === 'pending' ? 'thread-pending' :
-                thread.status === 'rejected' ? 'thread-rejected' : '';
-            const statusIndicator = thread.status === 'pending' ? '<span class="pending-indicator">PENDING</span>' :
-                thread.status === 'rejected' ? '<span class="pending-indicator" style="background: rgba(231, 76, 60, 0.2); color: #e74c3c;">RIFIUTATO</span>' : '';
+        const statusClass = thread.status === 'pending' ? 'thread-pending' :
+            thread.status === 'rejected' ? 'thread-rejected' : '';
+        const statusIndicator = thread.status === 'pending' ? '<span class="pending-indicator">PENDING</span>' :
+            thread.status === 'rejected' ? '<span class="pending-indicator" style="background: rgba(231, 76, 60, 0.2); color: #e74c3c;">RIFIUTATO</span>' : '';
 
-            // Trova dati autore per clan
-            const author = allUsers.find(u => u.uid === thread.authorId) || {
-                username: thread.author,
-                clan: 'Nessuno'
-            };
+        const author = allUsers.find(u => u.uid === thread.author_id) || {
+            username: thread.author,
+            clan: 'Nessuno'
+        };
 
-            return `
+        return `
             <div class="thread-item ${statusClass}">
                 <div class="thread-main">
                     <div class="thread-title" onclick="openThread('${thread.id}', '${currentSection}')">
@@ -3791,7 +2368,7 @@ function displayThreads(threads) {
                         </div>
                         <div class="stat">
                             <span>🕐</span>
-                            <span>${formatTime(thread.createdAt)}</span>
+                            <span>${formatTime(thread.created_at || thread.createdAt)}</span>
                         </div>
                     </div>
                     ${thread.status === 'pending' && canModerateSection(currentSection) ? `
@@ -3808,102 +2385,14 @@ function displayThreads(threads) {
                 <div class="thread-replies">${thread.replies || 0}</div>
                 <div class="thread-stats">${thread.views || 0}</div>
                 <div class="thread-last-post">
-                    <div>${formatTime(thread.createdAt)}</div>
+                    <div>${formatTime(thread.created_at || thread.createdAt)}</div>
                     <div>da <strong>${thread.author}</strong></div>
                 </div>
             </div>
         `;
-        }).join('');
+    }).join('');
 }
 
-// Mostra modal creazione thread
-function showThreadCreationModal() {
-    if (!currentUser) {
-        alert('Devi effettuare l\'accesso per creare thread');
-        return;
-    }
-
-    // Controlla accesso clan
-    if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
-        alert('Devi appartenere a un clan per creare thread qui!');
-        return;
-    }
-
-    document.getElementById('threadCreationModal').style.display = 'flex';
-    document.getElementById('thread-title-input').focus();
-
-    // Setup image upload listener
-    setupImageUpload();
-}
-
-// Setup image upload
-function setupImageUpload() {
-    const imageInput = document.getElementById('thread-image-input');
-    const imageLabel = document.querySelector('.image-upload-label');
-
-    // Remove existing listeners
-    imageInput.removeEventListener('change', handleImageSelect);
-    imageLabel.removeEventListener('click', () => imageInput.click());
-
-    // Add new listeners
-    imageInput.addEventListener('change', handleImageSelect);
-    imageLabel.addEventListener('click', () => imageInput.click());
-}
-
-// Handle image selection
-function handleImageSelect(event) {
-    const file = event.target.files[0];
-    const preview = document.getElementById('image-preview');
-    const progressContainer = document.getElementById('upload-progress');
-
-    if (!file)
-        return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-        alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
-        return;
-    }
-
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-        alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
-        return;
-    }
-
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        preview.innerHTML = `
-                    <img src="${e.target.result}" alt="Anteprima immagine">
-                    <button type="button" class="remove-image" onclick="removeSelectedImage()">
-                        🗑️ Rimuovi Immagine
-                    </button>
-                `;
-    };
-    reader.readAsDataURL(file);
-
-    // Hide progress initially
-    progressContainer.style.display = 'none';
-}
-
-// Remove selected image
-function removeSelectedImage() {
-    document.getElementById('thread-image-input').value = '';
-    document.getElementById('image-preview').innerHTML = '';
-    document.getElementById('upload-progress').style.display = 'none';
-}
-
-// Nascondi modal creazione thread
-function hideThreadCreationModal() {
-    document.getElementById('threadCreationModal').style.display = 'none';
-    document.getElementById('thread-title-input').value = '';
-    document.getElementById('thread-content-input').value = '';
-    removeSelectedImage(); // Pulisci anche l'immagine selezionata
-}
-
-// Crea thread dalla modal
 async function createThread() {
     const title = document.getElementById('thread-title-input').value.trim();
     const content = document.getElementById('thread-content-input').value.trim();
@@ -3912,6 +2401,12 @@ async function createThread() {
 
     if (!title || !content) {
         alert('Inserisci sia il titolo che il contenuto del thread');
+        return;
+    }
+
+    const isSynced = await ensureUserSyncedWithSupabase();
+    if (!isSynced) {
+        alert('Errore di sincronizzazione utente. Riprova tra qualche secondo.');
         return;
     }
 
@@ -3926,13 +2421,13 @@ async function createThread() {
             title: title,
             content: content,
             author: getUserDisplayName(),
-            authorId: currentUser.uid,
-            createdAt: Date.now(), // USA TIMESTAMP LOCALE
+            author_id: currentUser.uid,
+            section: currentSection,
+            created_at: new Date().toISOString(),
             replies: 0,
             views: 0
         };
 
-        // Upload immagine se presente
         if (imageFile) {
             createBtn.textContent = 'Caricamento immagine...';
             progressContainer.style.display = 'block';
@@ -3942,38 +2437,25 @@ async function createThread() {
             });
 
             if (imageUrl) {
-                threadData.imageUrl = imageUrl;
-                threadData.imageName = imageFile.name;
+                threadData.image_url = imageUrl;
+                threadData.image_name = imageFile.name;
             }
         }
 
-        // Determina se il thread ha bisogno di approvazione
         const needsApproval = currentSection.startsWith('clan-') && !canModerateSection(currentSection);
-
-        if (needsApproval) {
-            threadData.status = 'pending';
-        } else {
-            threadData.status = 'approved';
-        }
-
-        const dataPath = getDataPath(currentSection, 'threads');
-        if (!dataPath) {
-            console.error('❌ Path dati non valido per sezione:', currentSection);
-            alert('Errore: sezione non valida');
-            return;
-        }
+        threadData.status = needsApproval ? 'pending' : 'approved';
 
         createBtn.textContent = 'Salvando thread...';
 
-        console.log('📤 Creazione thread a:', dataPath);
-        console.log('📝 Dati thread:', threadData);
+        if (supabase) {
+            const { data, error } = await supabase
+                .from('threads')
+                .insert([threadData])
+                .select()
+                .single();
 
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
-            const threadsRef = ref(window.firebaseDatabase, dataPath);
-            await push(threadsRef, threadData);
-            console.log('✅ Thread creato con successo');
+            if (error) throw error;
         } else {
-            // Salva in locale
             saveLocalThread(currentSection, threadData);
         }
 
@@ -3983,19 +2465,17 @@ async function createThread() {
             alert('Thread creato! È in attesa di approvazione da parte del moderatore del clan.');
         } else {
             alert('Thread creato con successo!');
-            if (window.activityTracker) {
-                window.handleNewContent(currentSection, 'thread');
-            }
         }
     } catch (error) {
-        console.error('❌ Errore creazione thread:', error);
-        
-        if (error.code === 'PERMISSION_DENIED') {
-            console.error('🚫 Permesso negato per path:', dataPath);
-            alert('❌ Errore di permessi nella creazione del thread');
+        if (error.code === '42501') {
+            alert('❌ Errore di permessi. Assicurati di essere autenticato correttamente.');
+            
+            // Tentare una nuova sincronizzazione
+            await syncUserWithSupabase(currentUser, currentUserData);
         } else {
             alert('Errore nella creazione del thread: ' + (error.message || error));
         }
+        
     } finally {
         createBtn.disabled = false;
         createBtn.textContent = 'Crea Thread';
@@ -4005,7 +2485,6 @@ async function createThread() {
     loadThreads(currentSection);
 }
 
-// Apri thread per visualizzazione
 async function openThread(threadId, section) {
     if (!currentUser) {
         alert('Devi effettuare l\'accesso per visualizzare i thread');
@@ -4013,57 +2492,47 @@ async function openThread(threadId, section) {
     }
 
     try {
-        // Trova il thread
         const thread = await getThread(threadId, section);
         if (!thread) {
             alert('Thread non trovato');
             return;
         }
 
-        // Aggiorna visualizzazioni
         await incrementThreadViews(threadId, section);
 
-        // Salva riferimenti
         currentThread = thread;
         currentThreadId = threadId;
         currentThreadSection = section;
 
-        // Mostra vista thread
         document.getElementById('forum-content').style.display = 'none';
         document.getElementById('chat-content').style.display = 'none';
         document.getElementById('thread-view').style.display = 'flex';
         document.getElementById('new-thread-btn').style.display = 'none';
 
-        // Popola dati thread
         document.getElementById('thread-title').textContent = thread.title;
         document.getElementById('thread-author').textContent = thread.author;
-        document.getElementById('thread-date').textContent = formatTime(thread.createdAt);
+        document.getElementById('thread-date').textContent = formatTime(thread.created_at || thread.createdAt);
         document.getElementById('thread-views').textContent = `${thread.views || 0} visualizzazioni`;
 
-        // Contenuto del thread con immagine se presente - CON FORMATTAZIONE HTML
         const threadContentEl = document.getElementById('thread-content');
         let contentHtml = processContent(thread.content || 'Nessun contenuto disponibile', true);
 
-        if (thread.imageUrl) {
+        if (thread.image_url || thread.imageUrl) {
+            const imageUrl = thread.image_url || thread.imageUrl;
+            const imageName = thread.image_name || thread.imageName || 'Immagine del thread';
             contentHtml += `
                 <div class="thread-image">
-                    <img src="${thread.imageUrl}" 
-                         alt="${thread.imageName || 'Immagine del thread'}" 
-                         onclick="openImageModal('${thread.imageUrl}', '${thread.imageName || 'Immagine del thread'}')"
+                    <img src="${imageUrl}" 
+                         alt="${imageName}" 
+                         onclick="openImageModal('${imageUrl}', '${imageName}')"
                          title="Clicca per ingrandire">
                 </div>
             `;
         }
 
         threadContentEl.innerHTML = contentHtml;
-
-        // Carica commenti
         loadThreadComments(threadId, section);
-
-        // Reset flag per permettere nuovo setup nei commenti
         commentImageUploadInitialized = false;
-
-        // Chiudi menu mobile se aperto
         closeMobileMenu();
 
     } catch (error) {
@@ -4072,66 +2541,48 @@ async function openThread(threadId, section) {
     }
 }
 
-// Torna al forum
-function backToForum() {
-    document.getElementById('thread-view').style.display = 'none';
-    document.getElementById('forum-content').style.display = 'block';
-    document.getElementById('new-thread-btn').style.display = 'block';
-
-    // Pulisci dati thread
-    cleanupCommentImageUpload();
-
-    // Pulisci dati thread
-    currentThread = null;
-    currentThreadId = null;
-    currentThreadSection = null;
-
-    // Ricarica contenuto se necessario
-    if (currentSection && sectionConfig[currentSection]) {
-        const section = sectionConfig[currentSection];
-        if (section.type === 'forum') {
-            loadThreads(currentSection);
-        } else if (section.type === 'dashboard') {
-            loadDashboard();
-        }
-    }
-}
-
-// Ottieni thread per ID
 async function getThread(threadId, section) {
-    const dataPath = getDataPath(section, 'threads');
-    if (!dataPath)
-        return null;
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('threads')
+                .select('*')
+                .eq('id', threadId)
+                .single();
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
-        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-        const snapshot = await get(threadRef);
-        return snapshot.exists() ? {
-            id: threadId,
-            ...snapshot.val()
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Errore recupero thread Supabase:', error);
         }
-         : null;
-    } else {
-        // Modalità locale
-        const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-        const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        return threads.find(t => t.id === threadId) || null;
     }
+
+    // Fallback locale
+    const dataPath = getDataPath(section, 'threads');
+    if (!dataPath) return null;
+
+    const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+    const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    return threads.find(t => t.id === threadId) || null;
 }
 
-// Incrementa visualizzazioni thread
 async function incrementThreadViews(threadId, section) {
-    const dataPath = getDataPath(section, 'threads');
-    if (!dataPath)
-        return;
+    if (supabase) {
+        try {
+            const { error } = await supabase
+                .from('threads')
+                .update({ views: (currentThread?.views || 0) + 1 })
+                .eq('id', threadId);
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && update) {
-        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-        await update(ref(window.firebaseDatabase), {
-            [`${dataPath}/${threadId}/views`]: (currentThread?.views || 0) + 1
-        });
+            if (error) throw error;
+        } catch (error) {
+            console.error('Errore incremento views Supabase:', error);
+        }
     } else {
-        // Modalità locale
+        // Fallback locale
+        const dataPath = getDataPath(section, 'threads');
+        if (!dataPath) return;
+
         const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
         const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
         const threadIndex = threads.findIndex(t => t.id === threadId);
@@ -4143,59 +2594,39 @@ async function incrementThreadViews(threadId, section) {
     }
 }
 
-// Carica commenti thread
-function loadThreadComments(threadId, section) {
-    const dataPath = getDataPath(section, 'comments');
-    if (!dataPath) return;
+// SUPABASE FUNCTIONS - COMMENT MANAGEMENT
+async function loadThreadComments(threadId, section) {
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('comments')
+                .select('*')
+                .eq('thread_id', threadId)
+                .order('created_at', { ascending: true })
+                .limit(50);
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue) {
-        
-        
-        
-        
-        // ✅ FALLBACK: USA onValue SEMPLICE
-        console.log('📊 Usando onValue semplice per commenti (fallback):', threadId);
-        const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-
-        onValue(commentsRef, (snapshot) => {
-            const comments = [];
-            snapshot.forEach((childSnapshot) => {
-                comments.push({
-                    id: childSnapshot.key,
-                    ...childSnapshot.val()
-                });
-            });
-
-            // Ordina e limita manualmente
-            comments.sort((a, b) => a.timestamp - b.timestamp);
-            const limitedComments = comments.slice(-30); // Ultimi 30
+            if (error) throw error;
             
-            displayThreadComments(limitedComments);
-        });
-        
-        console.log('📥 Listening commenti con fallback per:', `${dataPath}/${threadId}`);
+            displayThreadComments(data || []);
+        } catch (error) {
+            console.error('Errore caricamento commenti Supabase:', error);
+            loadLocalComments(threadId, section);
+        }
     } else {
-        // Modalità locale
-        const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
-        const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        comments.sort((a, b) => a.timestamp - b.timestamp);
-        displayThreadComments(comments);
+        loadLocalComments(threadId, section);
     }
 }
-function safeInitializeFirebaseQueries() {
-    console.log('🔧 Inizializzazione sicura query Firebase...');
+
+function loadLocalComments(threadId, section) {
+    const dataPath = getDataPath(section, 'comments');
+    if (!dataPath) return;
     
-    // Verifica periodicamente se le query functions sono disponibili
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    const checkInterval = setInterval(() => {
-        attempts++;
-        
-        
-    }, 1000); // Controlla ogni secondo
+    const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
+    const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    comments.sort((a, b) => a.timestamp - b.timestamp);
+    displayThreadComments(comments);
 }
-// Mostra commenti thread con avatar potenziati
+
 async function displayThreadComments(comments) {
     const commentsContainer = document.getElementById('thread-comments');
 
@@ -4208,8 +2639,7 @@ async function displayThreadComments(comments) {
         return;
     }
 
-    // Pre-carica tutti gli utenti necessari con gestione errori
-    const uniqueUserIds = [...new Set(comments.map(comment => comment.authorId).filter(Boolean))];
+    const uniqueUserIds = [...new Set(comments.map(comment => comment.author_id || comment.authorId).filter(Boolean))];
     try {
         await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
     } catch (error) {
@@ -4217,9 +2647,9 @@ async function displayThreadComments(comments) {
     }
 
     commentsContainer.innerHTML = comments.map(comment => {
-        // Trova dati utente per avatar e clan
-        const user = allUsers.find(u => u.uid === comment.authorId) || {
-            uid: comment.authorId || 'unknown',
+        const userId = comment.author_id || comment.authorId;
+        const user = allUsers.find(u => u.uid === userId) || {
+            uid: userId || 'unknown',
             username: comment.author,
             clan: 'Nessuno',
             avatarUrl: null
@@ -4227,26 +2657,27 @@ async function displayThreadComments(comments) {
 
         let commentContentHtml = '';
 
-        // Aggiungi testo del commento se presente - CON FORMATTAZIONE HTML
         if (comment.content && comment.content.trim()) {
             const processedContent = processContent(comment.content, true);
             const contentWithMentions = highlightMentions(processedContent, currentUser?.uid);
             commentContentHtml += `<div class="comment-text">${contentWithMentions}</div>`;
         }
 
-        // Aggiungi immagine se presente
-        if (comment.imageUrl) {
+        const imageUrl = comment.image_url || comment.imageUrl;
+        if (imageUrl) {
+            const imageName = comment.image_name || comment.imageName || 'Immagine del commento';
             commentContentHtml += `
                 <div class="comment-image">
-                    <img src="${comment.imageUrl}" 
-                         alt="${comment.imageName || 'Immagine del commento'}" 
+                    <img src="${imageUrl}" 
+                         alt="${imageName}" 
                          class="comment-main-image"
-                         onclick="openImageModal('${comment.imageUrl}', '${comment.imageName || 'Immagine del commento'}')"
+                         onclick="openImageModal('${imageUrl}', '${imageName}')"
                          title="Clicca per ingrandire">
                 </div>
             `;
         }
 
+        const timestamp = comment.created_at || comment.timestamp;
         return `
             <div class="comment-with-avatar">
                 ${createAvatarHTML(user, 'small')}
@@ -4254,7 +2685,7 @@ async function displayThreadComments(comments) {
                     <div class="comment-header">
                         <span class="comment-author-name">${comment.author}</span>
                         ${createClanBadgeHTML(user.clan)}
-                        <span class="comment-time">${formatTime(comment.timestamp)}</span>
+                        <span class="comment-time">${formatTime(timestamp)}</span>
                     </div>
                     <div class="comment-body">${commentContentHtml}</div>
                 </div>
@@ -4262,12 +2693,9 @@ async function displayThreadComments(comments) {
         `;
     }).join('');
 
-    // Scroll to bottom
     commentsContainer.scrollTop = commentsContainer.scrollHeight;
 }
 
-
-// Aggiungi commento
 async function addComment() {
     if (!currentUser) {
         alert('Devi effettuare l\'accesso per commentare');
@@ -4283,9 +2711,7 @@ async function addComment() {
         return;
     }
 
-    // Rileva menzioni
     const mentions = detectMentions(commentText);
-
     const commentBtn = document.getElementById('submit-comment-btn');
     const progressContainer = document.getElementById('comment-upload-progress');
 
@@ -4295,13 +2721,12 @@ async function addComment() {
     try {
         const commentData = {
             author: getUserDisplayName(),
-            authorId: currentUser.uid,
+            author_id: currentUser.uid,
             content: commentText || '',
-            threadId: currentThreadId,
-            timestamp: Date.now() // USA TIMESTAMP LOCALE
+            thread_id: currentThreadId,
+            created_at: new Date().toISOString()
         };
 
-        // Upload immagine se presente
         if (imageFile) {
             commentBtn.textContent = 'Caricamento immagine...';
             progressContainer.style.display = 'block';
@@ -4311,36 +2736,27 @@ async function addComment() {
             });
 
             if (imageUrl) {
-                commentData.imageUrl = imageUrl;
-                commentData.imageName = imageFile.name;
+                commentData.image_url = imageUrl;
+                commentData.image_name = imageFile.name;
             }
-        }
-
-        const dataPath = getDataPath(currentThreadSection, 'comments');
-        if (!dataPath) {
-            console.error('❌ Path commenti non valido');
-            alert('Errore: sezione non valida per commenti');
-            return;
         }
 
         commentBtn.textContent = 'Salvando commento...';
 
-        console.log('📤 Invio commento a:', `${dataPath}/${currentThreadId}`);
-        console.log('📝 Dati commento:', commentData);
+        if (supabase) {
+            const { data, error } = await supabase
+                .from('comments')
+                .insert([commentData])
+                .select()
+                .single();
 
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
-            const commentsRef = ref(window.firebaseDatabase, `${dataPath}/${currentThreadId}`);
-            await push(commentsRef, commentData);
-
-            // Aggiorna contatore risposte
+            if (error) throw error;
+            
             await incrementThreadReplies(currentThreadId, currentThreadSection);
-            console.log('✅ Commento inviato con successo');
         } else {
-            // Salva in locale
             saveLocalComment(currentThreadSection, currentThreadId, commentData);
         }
 
-        // Crea notifiche per le menzioni
         for (const mention of mentions) {
             await createNotification('mention', mention.userId, {
                 message: commentText,
@@ -4351,23 +2767,15 @@ async function addComment() {
             });
         }
 
-        // Pulisci input
         document.getElementById('comment-text').value = '';
         removeCommentSelectedImage();
 
-        // Nascondi sezione upload se visibile
         const uploadSection = document.getElementById('comment-image-upload');
         uploadSection.classList.remove('show');
 
     } catch (error) {
-        console.error('❌ Errore invio commento:', error);
-        
-        if (error.code === 'PERMISSION_DENIED') {
-            console.error('🚫 Permesso negato per commenti');
-            alert('❌ Errore di permessi nell\'invio del commento');
-        } else {
-            alert('Errore nell\'invio del commento: ' + (error.message || error));
-        }
+        console.error('Errore invio commento:', error);
+        alert('Errore nell\'invio del commento: ' + (error.message || error));
     } finally {
         commentBtn.disabled = false;
         commentBtn.textContent = 'Commenta';
@@ -4375,35 +2783,23 @@ async function addComment() {
     }
 }
 
-// Salva commento locale
-function saveLocalComment(section, threadId, commentData) {
-    const dataPath = getDataPath(section, 'comments');
-    if (!dataPath) return;
-
-    const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
-    const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    commentData.timestamp = Date.now();
-    commentData.id = 'comment_' + Date.now();
-    commentData.author = getUserDisplayName(); // Assicurati che usi username
-    comments.push(commentData);
-    localStorage.setItem(storageKey, JSON.stringify(comments));
-
-    incrementThreadReplies(threadId, section);
-    loadThreadComments(threadId, section);
-}
-// Incrementa risposte thread
 async function incrementThreadReplies(threadId, section) {
-    const dataPath = getDataPath(section, 'threads');
-    if (!dataPath)
-        return;
+    if (supabase) {
+        try {
+            const { error } = await supabase
+                .from('threads')
+                .update({ replies: (currentThread?.replies || 0) + 1 })
+                .eq('id', threadId);
 
-    if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && update) {
-        const threadRef = ref(window.firebaseDatabase, `${dataPath}/${threadId}`);
-        await update(ref(window.firebaseDatabase), {
-            [`${dataPath}/${threadId}/replies`]: (currentThread?.replies || 0) + 1
-        });
+            if (error) throw error;
+        } catch (error) {
+            console.error('Errore incremento replies Supabase:', error);
+        }
     } else {
-        // Modalità locale
+        // Fallback locale
+        const dataPath = getDataPath(section, 'threads');
+        if (!dataPath) return;
+
         const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
         const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
         const threadIndex = threads.findIndex(t => t.id === threadId);
@@ -4415,93 +2811,51 @@ async function incrementThreadReplies(threadId, section) {
     }
 }
 
-// Gestione emoticon
-function toggleEmoticonPicker(type) {
-    const panel = document.getElementById(`${type}-emoticon-panel`);
-    const isVisible = panel.classList.contains('show');
+function saveLocalComment(section, threadId, commentData) {
+    const dataPath = getDataPath(section, 'comments');
+    if (!dataPath) return;
 
-    // Chiudi tutti i panel
-    document.querySelectorAll('.emoticon-panel').forEach(p => {
-        p.classList.remove('show');
-    });
+    const storageKey = `hc_${dataPath.replace(/\//g, '_')}_${threadId}`;
+    const comments = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    commentData.timestamp = Date.now();
+    commentData.id = 'comment_' + Date.now();
+    commentData.author = getUserDisplayName();
+    comments.push(commentData);
+    localStorage.setItem(storageKey, JSON.stringify(comments));
 
-    // Mostra quello corrente se non era visibile
-    if (!isVisible) {
-        panel.classList.add('show');
-    }
+    incrementThreadReplies(threadId, section);
+    loadThreadComments(threadId, section);
 }
 
-// Aggiungi emoticon
-function addEmoticon(type, emoticon) {
-    const input = type === 'chat' ?
-        document.getElementById('message-input') :
-        document.getElementById('comment-text');
+function backToForum() {
+    document.getElementById('thread-view').style.display = 'none';
+    document.getElementById('forum-content').style.display = 'block';
+    document.getElementById('new-thread-btn').style.display = 'block';
 
-    const cursorPos = input.selectionStart;
-    const textBefore = input.value.substring(0, cursorPos);
-    const textAfter = input.value.substring(cursorPos);
+    cleanupCommentImageUpload();
 
-    input.value = textBefore + emoticon + textAfter;
-    input.focus();
-    input.setSelectionRange(cursorPos + emoticon.length, cursorPos + emoticon.length);
+    currentThread = null;
+    currentThreadId = null;
+    currentThreadSection = null;
 
-    // Chiudi picker
-    document.getElementById(`${type}-emoticon-panel`).classList.remove('show');
-}
-
-// Apri modal immagine a schermo intero
-function openImageModal(imageUrl, imageName) {
-    // Non aprire il modal se l'elemento cliccato è un avatar
-    if (event && event.target) {
-        if (event.target.classList.contains('avatar-image') || 
-            event.target.closest('.user-avatar, .message-avatar, .comment-avatar, .user-avatar-default')) {
-            return false;
+    if (currentSection && sectionConfig[currentSection]) {
+        const section = sectionConfig[currentSection];
+        if (section.type === 'forum') {
+            loadThreads(currentSection);
+        } else if (section.type === 'dashboard') {
+            loadDashboard();
         }
     }
-
-    const modal = document.getElementById('imageModal');
-    const modalImage = document.getElementById('modalImage');
-
-    modalImage.src = imageUrl;
-    modalImage.alt = imageName || 'Immagine';
-    modal.style.display = 'flex';
-
-    // Previeni scroll del body
-    document.body.style.overflow = 'hidden';
 }
 
-// Chiudi modal immagine
-function closeImageModal() {
-    const modal = document.getElementById('imageModal');
-    modal.style.display = 'none';
-
-    // Ripristina scroll del body
-    document.body.style.overflow = 'auto';
-}
-
-// Chiudi emoticon picker quando si clicca fuori
-document.addEventListener('click', function (event) {
-    if (!event.target.closest('.emoticon-picker')) {
-        document.querySelectorAll('.emoticon-panel').forEach(panel => {
-            panel.classList.remove('show');
-        });
-    }
-});
-
-// Carica messaggi
+// CHAT FUNCTIONS (rimangono su Firebase)
 function loadMessages(sectionKey) {
     const dataPath = getDataPath(sectionKey, 'messages');
     if (!dataPath) return;
 
     if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && onValue && off) {
-        
-        
-        
-        // ✅ FALLBACK: USA onValue SEMPLICE
-        console.log('📊 Usando onValue semplice per messaggi (fallback):', sectionKey);
         const messagesRef = ref(window.firebaseDatabase, dataPath);
 
-        // Cleanup previous listener
         if (messageListeners[sectionKey]) {
             const oldRef = ref(window.firebaseDatabase, messageListeners[sectionKey].path);
             off(oldRef, messageListeners[sectionKey].callback);
@@ -4516,9 +2870,8 @@ function loadMessages(sectionKey) {
                 });
             });
 
-            // Ordina e limita manualmente
             messages.sort((a, b) => a.timestamp - b.timestamp);
-            const limitedMessages = messages.slice(-50); // Ultimi 50
+            const limitedMessages = messages.slice(-50);
             
             displayMessages(limitedMessages);
             updateMessageCounter(limitedMessages.length);
@@ -4527,9 +2880,7 @@ function loadMessages(sectionKey) {
         messageListeners[sectionKey] = { path: dataPath, callback: callback };
         onValue(messagesRef, callback);
         
-        console.log('📥 Listening messaggi con fallback per:', dataPath);
     } else {
-        // Modalità locale
         const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
         const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
         messages.sort((a, b) => a.timestamp - b.timestamp);
@@ -4537,7 +2888,7 @@ function loadMessages(sectionKey) {
         updateMessageCounter(messages.length);
     }
 }
-// Mostra messaggi stile WhatsApp con avatar potenziati
+
 async function displayMessages(messages) {
     const chatMessages = document.getElementById('chat-messages');
 
@@ -4554,7 +2905,6 @@ async function displayMessages(messages) {
     let lastAuthor = '';
     let lastTimestamp = 0;
 
-    // Pre-carica tutti gli utenti necessari con gestione errori
     const uniqueUserIds = [...new Set(messages.map(msg => msg.authorId).filter(Boolean))];
     try {
         await Promise.all(uniqueUserIds.map(userId => loadUserWithAvatar(userId)));
@@ -4566,20 +2916,19 @@ async function displayMessages(messages) {
         const msg = messages[index];
 
         if (msg.isSystemMessage) {
-        htmlContent += `
-            <div class="message-bubble-container system-message">
-                <div class="message-bubble system-bubble">
-                    <div class="message-text">${highlightMentions(processContent(msg.message, true), currentUser?.uid)}</div>
-                    <div class="message-meta">
-                        <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
+            htmlContent += `
+                <div class="message-bubble-container system-message">
+                    <div class="message-bubble system-bubble">
+                        <div class="message-text">${highlightMentions(processContent(msg.message, true), currentUser?.uid)}</div>
+                        <div class="message-meta">
+                            <span class="message-time-bubble">${formatTimeShort(msg.timestamp)}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-        continue; // Salta il resto del loop per i messaggi di sistema
+            `;
+            continue;
         }
         
-        // Trova dati utente per avatar e clan
         const user = allUsers.find(u => u.uid === msg.authorId) || {
             uid: msg.authorId || 'unknown',
             username: msg.author,
@@ -4590,9 +2939,8 @@ async function displayMessages(messages) {
         const isOwnMessage = currentUser && msg.authorId === currentUser.uid;
         const isNewAuthor = msg.author !== lastAuthor;
         const timeDiff = msg.timestamp - lastTimestamp;
-        const showTimestamp = timeDiff > 300000; // 5 minuti
+        const showTimestamp = timeDiff > 300000;
 
-        // Separatore temporale se molto tempo è passato
         if (showTimestamp && index > 0) {
             htmlContent += `
                 <div class="message-time-separator">
@@ -4601,11 +2949,9 @@ async function displayMessages(messages) {
             `;
         }
 
-        // Processa il messaggio con formattazione HTML
         const processedMessage = processContent(msg.message, true);
         const messageWithMentions = highlightMentions(processedMessage, currentUser?.uid);
 
-        // Container del messaggio
         htmlContent += `
             <div class="message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}">
                 ${!isOwnMessage && isNewAuthor ? `
@@ -4640,76 +2986,6 @@ async function displayMessages(messages) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function formatTimeShort(timestamp) {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('it-IT', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
-}
-
-function formatDate(timestamp) {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffTime = now - date;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Oggi';
-    if (diffDays === 1) return 'Ieri';
-    if (diffDays < 7) return date.toLocaleDateString('it-IT', { weekday: 'long' });
-    
-    return date.toLocaleDateString('it-IT', { 
-        day: 'numeric', 
-        month: 'long',
-        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-    });
-}
-function saveLocalMessage(section, messageData) {
-    const dataPath = getDataPath(section, 'messages');
-    if (!dataPath) return;
-
-    const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-    const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    messageData.timestamp = Date.now();
-    messageData.id = 'msg_' + Date.now();
-    messageData.author = getUserDisplayName(); // Assicurati che usi username
-    messages.push(messageData);
-    localStorage.setItem(storageKey, JSON.stringify(messages));
-
-    // Ricarica messaggi
-    loadMessages(section);
-}
-
-// ✅ AGGIORNA saveLocalThread per usare getUserDisplayName
-function saveLocalThread(section, threadData) {
-    const dataPath = getDataPath(section, 'threads');
-    if (!dataPath) return;
-
-    const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
-    const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    threadData.createdAt = Date.now();
-    threadData.id = 'thread_' + Date.now();
-    threadData.replies = 0;
-    threadData.views = 0;
-    threadData.author = getUserDisplayName(); // Assicurati che usi username
-
-    if (!threadData.status) {
-        threadData.status = 'approved';
-    }
-
-    if (!threadData.content) {
-        threadData.content = 'Nessun contenuto disponibile';
-    }
-
-    threads.push(threadData);
-    localStorage.setItem(storageKey, JSON.stringify(threads));
-
-    loadThreads(section);
-}
-
-// Invia messaggio (Firebase o locale)
 async function sendMessage() {
     if (!currentUser) {
         alert('Devi effettuare l\'accesso per inviare messaggi');
@@ -4727,7 +3003,6 @@ async function sendMessage() {
 
     if (!message) return;
 
-    // Rileva menzioni
     const mentions = detectMentions(message);
 
     input.disabled = true;
@@ -4738,28 +3013,22 @@ async function sendMessage() {
             author: getUserDisplayName(),
             authorId: currentUser.uid,
             message: message,
-            timestamp: Date.now() // USA TIMESTAMP LOCALE invece di serverTimestamp per evitare errori
+            timestamp: Date.now()
         };
 
         const dataPath = getDataPath(currentSection, 'messages');
         if (!dataPath) {
-            console.error('❌ Path dati non valido per sezione:', currentSection);
             alert('Errore: sezione non valida');
             return;
         }
 
-        console.log('📤 Invio messaggio a:', dataPath);
-        console.log('📝 Dati messaggio:', messageData);
-
         if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
             const messagesRef = ref(window.firebaseDatabase, dataPath);
             await push(messagesRef, messageData);
-            console.log('✅ Messaggio inviato con successo');
         } else {
             saveLocalMessage(currentSection, messageData);
         }
 
-        // Crea notifiche per le menzioni
         for (const mention of mentions) {
             await createNotification('mention', mention.userId, {
                 message: message,
@@ -4769,23 +3038,12 @@ async function sendMessage() {
         }
 
         input.value = '';
-        if (window.activityTracker) {
-            window.handleNewContent(currentSection, 'message');
-        }
 
     } catch (error) {
-        console.error('❌ Errore invio messaggio:', error);
+        console.error('Errore invio messaggio:', error);
         
-        // Gestione errori specifici
         if (error.code === 'PERMISSION_DENIED') {
-            console.error('🚫 Permesso negato per path:', dataPath);
-            console.error('👤 Utente corrente:', currentUser.uid);
-            console.error('🏰 Clan corrente:', getCurrentUserClan());
-            
-            alert('❌ Errore di permessi. Verifica:\n' +
-                  '1. Di essere loggato correttamente\n' +
-                  '2. Di appartenere al clan per chat clan\n' +
-                  '3. Che le regole Firebase siano aggiornate');
+            alert('❌ Errore di permessi nell\'invio del messaggio');
         } else {
             alert('Errore nell\'invio del messaggio: ' + (error.message || error));
         }
@@ -4795,212 +3053,291 @@ async function sendMessage() {
         input.focus();
     }
 }
-// Utility
-function formatTime(timestamp) {
-    if (!timestamp)
-        return 'ora';
 
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
+function saveLocalMessage(section, messageData) {
+    const dataPath = getDataPath(section, 'messages');
+    if (!dataPath) return;
 
-    if (diff < 60000)
-        return 'ora';
-    if (diff < 3600000)
-        return `${Math.floor(diff / 60000)} min fa`;
-    if (diff < 86400000)
-        return `${Math.floor(diff / 3600000)} ore fa`;
-    if (diff < 2592000000)
-        return `${Math.floor(diff / 86400000)} giorni fa`;
-    return date.toLocaleDateString();
+    const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+    const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    messageData.timestamp = Date.now();
+    messageData.id = 'msg_' + Date.now();
+    messageData.author = getUserDisplayName();
+    messages.push(messageData);
+    localStorage.setItem(storageKey, JSON.stringify(messages));
+
+    loadMessages(section);
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function saveLocalThread(section, threadData) {
+    const dataPath = getDataPath(section, 'threads');
+    if (!dataPath) return;
+
+    const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+    const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    threadData.createdAt = Date.now();
+    threadData.id = 'thread_' + Date.now();
+    threadData.replies = 0;
+    threadData.views = 0;
+    threadData.author = getUserDisplayName();
+
+    if (!threadData.status) {
+        threadData.status = 'approved';
+    }
+
+    if (!threadData.content) {
+        threadData.content = 'Nessun contenuto disponibile';
+    }
+
+    threads.push(threadData);
+    localStorage.setItem(storageKey, JSON.stringify(threads));
+
+    loadThreads(section);
 }
 
-function updateMessageCounter(count) {
-    messageCount = count;
-    document.getElementById('messageCounter').textContent = `💬 ${count} messaggi`;
-}
-
-function cleanupListeners() {
-    if (!window.useFirebase || !window.firebaseDatabase || !firebaseReady || !ref || !off)
+// Thread Management Functions
+function showThreadCreationModal() {
+    if (!currentUser) {
+        alert('Devi effettuare l\'accesso per creare thread');
         return;
+    }
+
+    if (currentSection.startsWith('clan-') && getCurrentUserClan() === 'Nessuno') {
+        alert('Devi appartenere a un clan per creare thread qui!');
+        return;
+    }
+
+    document.getElementById('threadCreationModal').style.display = 'flex';
+    document.getElementById('thread-title-input').focus();
+    setupImageUpload();
+}
+
+function hideThreadCreationModal() {
+    document.getElementById('threadCreationModal').style.display = 'none';
+    document.getElementById('thread-title-input').value = '';
+    document.getElementById('thread-content-input').value = '';
+    removeSelectedImage();
+}
+
+function setupImageUpload() {
+    const imageInput = document.getElementById('thread-image-input');
+    const imageLabel = document.querySelector('.image-upload-label');
+
+    imageInput.removeEventListener('change', handleImageSelect);
+    imageLabel.removeEventListener('click', () => imageInput.click());
+
+    imageInput.addEventListener('change', handleImageSelect);
+    imageLabel.addEventListener('click', () => imageInput.click());
+}
+
+function handleImageSelect(event) {
+    const file = event.target.files[0];
+    const preview = document.getElementById('image-preview');
+    const progressContainer = document.getElementById('upload-progress');
+
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
+        return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        preview.innerHTML = `
+            <img src="${e.target.result}" alt="Anteprima immagine">
+            <button type="button" class="remove-image" onclick="removeSelectedImage()">
+                🗑️ Rimuovi Immagine
+            </button>
+        `;
+    };
+    reader.readAsDataURL(file);
+
+    progressContainer.style.display = 'none';
+}
+
+function removeSelectedImage() {
+    document.getElementById('thread-image-input').value = '';
+    document.getElementById('image-preview').innerHTML = '';
+    document.getElementById('upload-progress').style.display = 'none';
+}
+
+async function uploadThreadImage(file, progressCallback) {
+    if (!file) return null;
 
     try {
-        // Pulisci listeners messaggi
-        Object.keys(messageListeners).forEach(section => {
-            const listener = messageListeners[section];
-            if (listener && listener.path && listener.callback) {
-                const messagesRef = ref(window.firebaseDatabase, listener.path);
-                off(messagesRef, listener.callback);
-            }
-        });
-        messageListeners = {};
+        if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
+            try {
+                const timestamp = Date.now();
+                const filename = `threads/${currentUser.uid}/${timestamp}_${file.name}`;
+                const imageRef = storageRef(window.firebaseStorage, filename);
 
-        // Pulisci listeners thread
-        Object.keys(threadListeners).forEach(section => {
-            const listener = threadListeners[section];
-            if (listener && listener.path && listener.callback) {
-                const threadsRef = ref(window.firebaseDatabase, listener.path);
-                off(threadsRef, listener.callback);
-            }
-        });
-        threadListeners = {};
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.random() * 30;
+                    if (progress > 90) progress = 90;
+                    progressCallback(progress);
+                }, 200);
 
-        // Pulisci upload commenti
-        cleanupCommentImageUpload();
+                const snapshot = await uploadBytes(imageRef, file);
+                clearInterval(progressInterval);
+                progressCallback(100);
+
+                const downloadURL = await getDownloadURL(snapshot.ref);
+                return downloadURL;
+
+            } catch (storageError) {
+                console.warn('⚠️ Errore Firebase Storage, uso fallback locale:', storageError.message);
+                return convertToBase64(file, progressCallback);
+            }
+        } else {
+            return convertToBase64(file, progressCallback);
+        }
     } catch (error) {
-        console.error('Errore pulizia listeners:', error);
+        console.error('Errore upload immagine:', error);
+        return convertToBase64(file, progressCallback);
     }
 }
 
-// Event listeners
-function setupEventListeners() {
-    // Logout
-    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-
-    // Navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const section = item.getAttribute('data-section');
-            if (section)
-                switchSection(section);
-        });
-    });
-
-    // Chat input
-    document.getElementById('message-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-
-    // Comment input
-    document.getElementById('comment-text').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && e.ctrlKey) {
-            e.preventDefault();
-            addComment();
-        }
-    });
-
-    // Form inputs - Enter per submit
-    ['email', 'password', 'username'].forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-            element.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSubmit();
-                }
-            });
-        }
-    });
-
-    // Thread creation form - Enter per submit
-    document.getElementById('thread-title-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('thread-content-input').focus();
-        }
-    });
-
-    document.getElementById('thread-content-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && e.ctrlKey) {
-            e.preventDefault();
-            createThread();
-        }
-    });
-
-    // Escape per chiudere modal
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            if (document.getElementById('threadCreationModal').style.display === 'flex') {
-                hideThreadCreationModal();
-            } else if (document.getElementById('imageModal').style.display === 'flex') {
-                closeImageModal();
-            }
-        }
-    });
-
-    // Chiudi modal cliccando fuori
-    document.getElementById('threadCreationModal').addEventListener('click', (e) => {
-        if (e.target === document.getElementById('threadCreationModal')) {
-            hideThreadCreationModal();
-        }
-    });
-
-    // Previeni chiusura modal immagine cliccando sull'immagine
-    document.getElementById('modalImage').addEventListener('click', (e) => {
-        e.stopPropagation();
+function convertToBase64(file, progressCallback) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            progressCallback(100);
+            resolve(e.target.result);
+        };
+        reader.readAsDataURL(file);
     });
 }
 
-// Toggle comment image upload section
+function updateUploadProgress(progress) {
+    const progressContainer = document.getElementById('upload-progress');
+    const progressPercent = Math.round(progress);
+
+    progressContainer.innerHTML = `
+        <div style="background: rgba(45, 130, 181, 0.2); border-radius: 10px; padding: 10px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-size: 12px; color: #3498db; font-weight: 600;">Caricamento immagine...</span>
+                <span style="font-size: 12px; color: #3498db; font-weight: 600;">${progressPercent}%</span>
+            </div>
+            <div style="background: rgba(255, 255, 255, 0.1); border-radius: 5px; height: 6px; overflow: hidden;">
+                <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease; border-radius: 5px;"></div>
+            </div>
+        </div>
+    `;
+    progressContainer.style.display = 'block';
+
+    if (progress >= 100) {
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 1000);
+    }
+}
+
+// Emoticon functions
+function toggleEmoticonPicker(type) {
+    const panel = document.getElementById(`${type}-emoticon-panel`);
+    const isVisible = panel.classList.contains('show');
+
+    document.querySelectorAll('.emoticon-panel').forEach(p => {
+        p.classList.remove('show');
+    });
+
+    if (!isVisible) {
+        panel.classList.add('show');
+    }
+}
+
+function addEmoticon(type, emoticon) {
+    const input = type === 'chat' ?
+        document.getElementById('message-input') :
+        document.getElementById('comment-text');
+
+    const cursorPos = input.selectionStart;
+    const textBefore = input.value.substring(0, cursorPos);
+    const textAfter = input.value.substring(cursorPos);
+
+    input.value = textBefore + emoticon + textAfter;
+    input.focus();
+    input.setSelectionRange(cursorPos + emoticon.length, cursorPos + emoticon.length);
+
+    document.getElementById(`${type}-emoticon-panel`).classList.remove('show');
+}
+
+// Image modal functions
+function openImageModal(imageUrl, imageName) {
+    if (event && event.target) {
+        if (event.target.classList.contains('avatar-image') || 
+            event.target.closest('.user-avatar, .message-avatar, .comment-avatar, .user-avatar-default')) {
+            return false;
+        }
+    }
+
+    const modal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+
+    modalImage.src = imageUrl;
+    modalImage.alt = imageName || 'Immagine';
+    modal.style.display = 'flex';
+
+    document.body.style.overflow = 'hidden';
+}
+
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// Comment image upload functions
 function toggleCommentImageUpload() {
     const uploadSection = document.getElementById('comment-image-upload');
     const isVisible = uploadSection.classList.contains('show');
 
-    console.log('📷 Toggle upload commento, visibile:', isVisible);
-
     if (isVisible) {
         uploadSection.classList.remove('show');
         removeCommentSelectedImage();
-        console.log('📷 Sezione upload nascosta');
     } else {
         uploadSection.classList.add('show');
-        // Setup solo se non è già stato fatto
         if (!commentImageUploadInitialized) {
             setupCommentImageUploadSafe();
         }
-        console.log('📷 Sezione upload mostrata');
     }
 }
 
-// Setup comment image upload SICURO (previene doppi listener)
 function setupCommentImageUploadSafe() {
     const imageInput = document.getElementById('comment-image-input');
     const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
 
     if (!imageInput || !imageLabel) {
-        console.log('❌ Elementi upload commento non trovati');
         return;
     }
 
-    // Rimuovi TUTTI i listener esistenti prima di aggiungerne di nuovi
     cleanupCommentImageListeners();
 
-    console.log('🔧 Setup listener upload commento (SAFE)');
-
-    // Aggiungi listener per il click sulla label
     const clickHandler = () => {
-        console.log('🖱️ Click su label upload');
         imageInput.click();
     };
 
-    // Aggiungi listener per la selezione file
     const changeHandler = (event) => {
-        console.log('📁 File selezionato tramite input');
         handleCommentImageSelect(event);
     };
 
-    // Salva riferimenti per cleanup futuro
     imageLabel._commentClickHandler = clickHandler;
     imageInput._commentChangeHandler = changeHandler;
 
-    // Aggiungi listener
     imageLabel.addEventListener('click', clickHandler);
     imageInput.addEventListener('change', changeHandler);
 
     commentImageUploadInitialized = true;
-    console.log('✅ Listener upload commento configurati');
 }
 
-// Pulisci tutti i listener per evitare duplicati
 function cleanupCommentImageListeners() {
     const imageInput = document.getElementById('comment-image-input');
     const imageLabel = document.querySelector('#comment-image-upload .image-upload-label');
@@ -5008,19 +3345,15 @@ function cleanupCommentImageListeners() {
     if (imageInput && imageInput._commentChangeHandler) {
         imageInput.removeEventListener('change', imageInput._commentChangeHandler);
         delete imageInput._commentChangeHandler;
-        console.log('🧹 Rimosso listener change esistente');
     }
 
     if (imageLabel && imageLabel._commentClickHandler) {
         imageLabel.removeEventListener('click', imageLabel._commentClickHandler);
         delete imageLabel._commentClickHandler;
-        console.log('🧹 Rimosso listener click esistente');
     }
 }
 
-// Pulisci tutto quando si chiude il thread o si cambia sezione
 function cleanupCommentImageUpload() {
-    console.log('🧹 Cleanup completo upload commenti');
     cleanupCommentImageListeners();
     commentImageUploadInitialized = false;
     removeCommentSelectedImage();
@@ -5031,35 +3364,24 @@ function cleanupCommentImageUpload() {
     }
 }
 
-// Handle comment image selection
 function handleCommentImageSelect(event) {
-    console.log('🖼️ Selezione immagine commento avviata');
-
     const file = event.target.files[0];
     const preview = document.getElementById('comment-image-preview');
     const progressContainer = document.getElementById('comment-upload-progress');
 
-    if (!file) {
-        console.log('❌ Nessun file selezionato');
-        return;
-    }
+    if (!file) return;
 
-    console.log('📁 File selezionato:', file.name, 'Tipo:', file.type, 'Dimensione:', file.size);
-
-    // Validate file type
     if (!file.type.startsWith('image/')) {
         alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
         return;
     }
 
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
         alert('L\'immagine è troppo grande. Massimo 5MB consentiti.');
         return;
     }
 
-    // Show preview
     const reader = new FileReader();
     reader.onload = function (e) {
         preview.innerHTML = `
@@ -5071,18 +3393,15 @@ function handleCommentImageSelect(event) {
     };
     reader.readAsDataURL(file);
 
-    // Hide progress initially
     progressContainer.style.display = 'none';
 }
 
-// Remove selected comment image
 function removeCommentSelectedImage() {
     document.getElementById('comment-image-input').value = '';
     document.getElementById('comment-image-preview').innerHTML = '';
     document.getElementById('comment-upload-progress').style.display = 'none';
 }
 
-// Update comment upload progress
 function updateCommentUploadProgress(progress) {
     const progressContainer = document.getElementById('comment-upload-progress');
     const progressPercent = Math.round(progress);
@@ -5100,7 +3419,6 @@ function updateCommentUploadProgress(progress) {
     `;
     progressContainer.style.display = 'block';
 
-    // Nascondi il progresso quando completato
     if (progress >= 100) {
         setTimeout(() => {
             progressContainer.style.display = 'none';
@@ -5108,6 +3426,7 @@ function updateCommentUploadProgress(progress) {
     }
 }
 
+// Avatar functions
 function setupAvatarUpload() {
     const avatarUpload = document.getElementById('avatar-upload');
     const avatarControls = document.getElementById('avatarControls');
@@ -5118,20 +3437,16 @@ function setupAvatarUpload() {
     }
 }
 
-// Handle avatar upload
 function handleAvatarUpload(event) {
     const file = event.target.files[0];
-    if (!file)
-        return;
+    if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
         alert('Seleziona solo file immagine (JPG, PNG, GIF, etc.)');
         return;
     }
 
-    // Validate file size (max 2MB for avatar)
-    const maxSize = 2 * 1024 * 1024; // 2MB
+    const maxSize = 2 * 1024 * 1024;
     if (file.size > maxSize) {
         alert('L\'immagine è troppo grande. Massimo 2MB consentiti per l\'avatar.');
         return;
@@ -5141,7 +3456,6 @@ function handleAvatarUpload(event) {
     showAvatarModal(file);
 }
 
-// Show avatar modal with preview
 function showAvatarModal(file) {
     const modal = document.getElementById('avatarModal');
     const previewLarge = document.getElementById('avatarPreviewLarge');
@@ -5158,10 +3472,8 @@ function showAvatarModal(file) {
     document.body.style.overflow = 'hidden';
 }
 
-// Save avatar changes
 async function saveAvatarChanges() {
-    if (!currentAvatarFile || isAvatarUploading)
-        return;
+    if (!currentAvatarFile || isAvatarUploading) return;
 
     isAvatarUploading = true;
     const saveBtn = document.querySelector('.btn-save-avatar');
@@ -5172,18 +3484,13 @@ async function saveAvatarChanges() {
     progressContainer.style.display = 'block';
 
     try {
-        // Upload avatar
         const avatarUrl = await uploadAvatarImage(currentAvatarFile, (progress) => {
             updateAvatarUploadProgress(progress);
         });
 
         if (avatarUrl) {
-            // Save to user profile
             await updateUserAvatar(avatarUrl);
-
-            // Update UI
             updateUserAvatarDisplay(avatarUrl);
-
             alert('✅ Avatar aggiornato con successo!');
             cancelAvatarChange();
         }
@@ -5199,21 +3506,17 @@ async function saveAvatarChanges() {
     }
 }
 
-// Cancel avatar change
 function cancelAvatarChange() {
     const modal = document.getElementById('avatarModal');
     modal.style.display = 'none';
     document.body.style.overflow = 'auto';
 
-    // Reset file input
     document.getElementById('avatar-upload').value = '';
     currentAvatarFile = null;
 }
 
-// Remove avatar
 async function removeAvatar() {
-    if (!confirm('🗑️ Sei sicuro di voler rimuovere il tuo avatar?'))
-        return;
+    if (!confirm('🗑️ Sei sicuro di voler rimuovere il tuo avatar?')) return;
 
     try {
         await updateUserAvatar(null);
@@ -5226,25 +3529,20 @@ async function removeAvatar() {
     }
 }
 
-// Upload avatar image
 async function uploadAvatarImage(file, progressCallback) {
-    if (!file)
-        return null;
+    if (!file) return null;
 
     try {
         if (window.useFirebase && window.firebaseStorage && firebaseReady && storageRef && uploadBytes && getDownloadURL) {
             try {
-                // Upload su Firebase Storage
                 const timestamp = Date.now();
                 const filename = `avatars/${currentUser.uid}/${timestamp}_avatar.${file.name.split('.').pop()}`;
                 const imageRef = storageRef(window.firebaseStorage, filename);
 
-                // Simula progress
                 let progress = 0;
                 const progressInterval = setInterval(() => {
                     progress += Math.random() * 30;
-                    if (progress > 90)
-                        progress = 90;
+                    if (progress > 90) progress = 90;
                     progressCallback(progress);
                 }, 200);
 
@@ -5253,7 +3551,6 @@ async function uploadAvatarImage(file, progressCallback) {
                 progressCallback(100);
 
                 const downloadURL = await getDownloadURL(snapshot.ref);
-                console.log('📷 Avatar caricato su Firebase Storage');
                 return downloadURL;
 
             } catch (storageError) {
@@ -5261,7 +3558,6 @@ async function uploadAvatarImage(file, progressCallback) {
                 return convertToBase64(file, progressCallback);
             }
         } else {
-            // Modalità locale - converte in base64
             return convertToBase64(file, progressCallback);
         }
     } catch (error) {
@@ -5270,20 +3566,6 @@ async function uploadAvatarImage(file, progressCallback) {
     }
 }
 
-// Convert image to base64
-function convertToBase64(file, progressCallback) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            progressCallback(100);
-            console.log('📷 Avatar convertito in base64');
-            resolve(e.target.result);
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
-// Update avatar upload progress
 function updateAvatarUploadProgress(progress) {
     const progressContainer = document.getElementById('avatar-upload-progress');
     const progressPercent = Math.round(progress);
@@ -5301,20 +3583,16 @@ function updateAvatarUploadProgress(progress) {
     `;
 }
 
-// Update user avatar in database
-// Hook per aggiornare cache quando l'avatar cambia
 async function updateUserAvatar(avatarUrl) {
     if (window.useFirebase && window.firebaseDatabase && firebaseReady) {
         const userRef = ref(window.firebaseDatabase, `users/${currentUser.uid}/avatarUrl`);
         await set(userRef, avatarUrl);
     } else {
-        // Modalità locale
         const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
         for (const email in users) {
             if (users[email].uid === currentUser.uid) {
                 users[email].avatarUrl = avatarUrl;
                 localStorage.setItem('hc_local_users', JSON.stringify(users));
-                // Aggiorna anche i dati correnti
                 if (currentUserData) {
                     currentUserData.avatarUrl = avatarUrl;
                 }
@@ -5323,20 +3601,15 @@ async function updateUserAvatar(avatarUrl) {
         }
     }
     
-    // Aggiorna cache
     updateUserAvatarInCache(currentUser.uid, avatarUrl);
-    
-    // Ricarica la lista utenti per aggiornare la cache
-    await loadUsersList();
 }
-// Update user avatar display in UI
+
 function updateUserAvatarDisplay(avatarUrl) {
     const avatarContainer = document.getElementById('userAvatar');
     const avatarImg = document.getElementById('userAvatarImg');
     const avatarDefault = document.getElementById('userAvatarDefault');
 
     if (avatarUrl) {
-        // Mostra immagine avatar
         avatarImg.src = avatarUrl;
         avatarImg.style.display = 'block';
         avatarImg.style.position = 'absolute';
@@ -5348,39 +3621,29 @@ function updateUserAvatarDisplay(avatarUrl) {
         avatarImg.style.objectFit = 'cover';
         avatarImg.style.zIndex = '2';
         
-        // Nascondi completamente il default
         avatarDefault.style.display = 'none';
         avatarDefault.style.visibility = 'hidden';
         avatarDefault.style.opacity = '0';
     } else {
-        // Nascondi immagine avatar
         avatarImg.style.display = 'none';
         avatarImg.style.visibility = 'hidden';
         avatarImg.src = '';
         
-        // Mostra default
         avatarDefault.style.display = 'flex';
         avatarDefault.style.visibility = 'visible';
         avatarDefault.style.opacity = '1';
     }
 
-    // Aggiorna anche nei dati utente correnti
     if (currentUserData) {
         currentUserData.avatarUrl = avatarUrl;
     }
 }
 
-// ===============================================
-// UTILITY FUNCTIONS PER AVATAR E CLAN
-// ===============================================
-
-// Create avatar HTML
-// Create avatar HTML with enhanced support
+// Utility functions
 function createAvatarHTML(user, size = 'small') {
     const sizeClass = size === 'large' ? 'user-avatar' :
         size === 'medium' ? 'message-avatar' : 'comment-avatar';
 
-    // Verifica se l'utente ha un avatar
     const hasAvatar = user.avatarUrl && user.avatarUrl.trim() !== '';
     
     if (hasAvatar) {
@@ -5399,42 +3662,6 @@ function createAvatarHTML(user, size = 'small') {
     }
 }
 
-// 2. AGGIORNA LA FUNZIONE openImageModal per controllare se è un avatar
-function openImageModal(imageUrl, imageName) {
-    // Non aprire il modal se l'elemento cliccato è un avatar
-    if (event && event.target) {
-        if (event.target.classList.contains('avatar-image') || 
-            event.target.closest('.user-avatar, .message-avatar, .comment-avatar, .user-avatar-default')) {
-            return false;
-        }
-    }
-
-    const modal = document.getElementById('imageModal');
-    const modalImage = document.getElementById('modalImage');
-
-    modalImage.src = imageUrl;
-    modalImage.alt = imageName || 'Immagine';
-    modal.style.display = 'flex';
-
-    // Previeni scroll del body
-    document.body.style.overflow = 'hidden';
-}
-
-// 3. AGGIUNGI EVENT LISTENER PER PREVENIRE CLICK SUGLI AVATAR
-document.addEventListener('DOMContentLoaded', function() {
-    // Previeni il click sugli avatar
-    document.addEventListener('click', function(event) {
-        // Se è un avatar, previeni l'apertura del modal
-        if (event.target.classList.contains('avatar-image') || 
-            event.target.closest('.user-avatar, .message-avatar, .comment-avatar')) {
-            event.stopPropagation();
-            event.preventDefault();
-            return false;
-        }
-    }, true); // Usa capture per intercettare prima
-});
-
-// Create clan badge HTML
 function createClanBadgeHTML(clan) {
     if (!clan || clan === 'Nessuno') {
         return '<span class="user-clan-badge no-clan">Nessun Clan</span>';
@@ -5442,133 +3669,71 @@ function createClanBadgeHTML(clan) {
     return `<span class="user-clan-badge">🏰 ${clan}</span>`;
 }
 
-// Get user display name with clan
-function getUserDisplayNameWithClan(user) {
-    const clan = user.clan && user.clan !== 'Nessuno' ? ` [${user.clan}]` : '';
-    return `${user.username}${clan}`;
+function formatTime(timestamp) {
+    if (!timestamp) return 'ora';
+
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+
+    if (diff < 60000) return 'ora';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)} min fa`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} ore fa`;
+    if (diff < 2592000000) return `${Math.floor(diff / 86400000)} giorni fa`;
+    return date.toLocaleDateString();
 }
 
-// ✅ AGGIUNGI QUESTE FUNZIONI ALLA FINE DEL FILE
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
-// Funzione di test per verificare il sistema notifiche
-window.testNotifications = function () {
-    if (!currentUser) {
-        console.log('❌ Devi essere loggato per testare le notifiche');
-        return;
+function processContent(content, enableAutoFormat = true) {
+    if (!content || typeof content !== 'string') return '';
+    
+    if (content.includes('<') && content.includes('>')) {
+        return sanitizeHtml(content);
     }
-
-    console.log('🧪 Test notifiche iniziato...');
-
-    // Crea una notifica di test
-    const testNotification = {
-        id: 'test_notif_' + Date.now(),
-        type: 'mention',
-        fromUser: 'TestUser',
-        fromUserId: 'test_user_123',
-        targetUserId: currentUser.uid,
-        timestamp: Date.now(),
-        read: false,
-        message: 'Questa è una notifica di test!',
-        section: 'chat-generale',
-        sectionTitle: 'Chat Generale'
-    };
-
-    // Salva la notifica
-    saveLocalNotification(currentUser.uid, testNotification);
-
-    // Mostra toast
-    showMentionToast(testNotification);
-
-    console.log('✅ Notifica di test creata! Controlla il badge e il pannello notifiche.');
-};
-
-// Funzione per pulire le notifiche di test
-window.clearTestNotifications = function () {
-    if (!currentUser) {
-        console.log('❌ Devi essere loggato');
-        return;
+    
+    if (enableAutoFormat) {
+        return autoFormatText(content);
     }
+    
+    return escapeHtml(content);
+}
 
-    const storageKey = `hc_notifications_${currentUser.uid}`;
-    const notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    const filtered = notifications.filter(n => !n.id.startsWith('test_notif_'));
-
-    localStorage.setItem(storageKey, JSON.stringify(filtered));
-    loadNotifications();
-
-    console.log('🧹 Notifiche di test rimosse.');
-};
-
-// Funzione per mostrare info debug notifiche
-window.debugNotifications = function () {
-    console.log('🔍 Debug Notifiche:');
-    console.log('- Utente corrente:', currentUser?.uid, currentUser?.displayName);
-    console.log('- Notifiche in memoria:', notificationsData.length);
-    console.log('- Notifiche non lette:', unreadNotificationsCount);
-    console.log('- Utenti per autocomplete:', allUsers.length);
-
-    if (currentUser) {
-        const storageKey = `hc_notifications_${currentUser.uid}`;
-        const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        console.log('- Notifiche in localStorage:', stored.length);
-        console.log('- Dettagli notifiche:', stored);
-    }
-
-    const badge = document.getElementById('notificationBadge');
-    console.log('- Badge elemento:', badge);
-    console.log('- Badge visibile:', badge ? !badge.classList.contains('hidden') : false);
-    console.log('- Badge testo:', badge ? badge.textContent : 'N/A');
-};
 function sanitizeHtml(html) {
     if (!html || typeof html !== 'string') return '';
     
-    // Lista dei tag HTML permessi (sicuri)
     const allowedTags = {
-        'b': [],
-        'strong': [],
-        'i': [],
-        'em': [],
-        'u': [],
-        'br': [],
-        'p': [],
-        'div': [],
-        'span': ['class'],
-        'h1': [], 'h2': [], 'h3': [], 'h4': [], 'h5': [], 'h6': [],
-        'ul': [], 'ol': [], 'li': [],
-        'blockquote': [],
-        'code': [],
-        'pre': [],
-        'a': ['href', 'title', 'target'],
-        'img': ['src', 'alt', 'title', 'width', 'height'],
+        'b': [], 'strong': [], 'i': [], 'em': [], 'u': [], 'br': [], 'p': [], 'div': [],
+        'span': ['class'], 'h1': [], 'h2': [], 'h3': [], 'h4': [], 'h5': [], 'h6': [],
+        'ul': [], 'ol': [], 'li': [], 'blockquote': [], 'code': [], 'pre': [],
+        'a': ['href', 'title', 'target'], 'img': ['src', 'alt', 'title', 'width', 'height'],
         'table': [], 'tr': [], 'td': [], 'th': [], 'thead': [], 'tbody': []
     };
     
-    // Rimuovi script e altri tag pericolosi
     html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
     html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    html = html.replace(/on\w+\s*=\s*[^>]*/gi, ''); // Rimuovi attributi onclick, onload, etc.
-    html = html.replace(/javascript:/gi, ''); // Rimuovi javascript: negli href
+    html = html.replace(/on\w+\s*=\s*[^>]*/gi, '');
+    html = html.replace(/javascript:/gi, '');
     
-    // Funzione per processare i tag
     function processTag(match, isClosing, tagName, attributes) {
         tagName = tagName.toLowerCase();
         
-        // Se il tag non è permesso, rimuovilo
         if (!allowedTags[tagName]) {
             return '';
         }
         
-        // Se è un tag di chiusura, restituiscilo così com'è
         if (isClosing) {
             return `</${tagName}>`;
         }
         
-        // Processa gli attributi per i tag di apertura
         const allowedAttrs = allowedTags[tagName];
         let processedAttrs = '';
         
         if (attributes && allowedAttrs.length > 0) {
-            // Estrae gli attributi
             const attrRegex = /(\w+)\s*=\s*["']([^"']*)["']/g;
             let attrMatch;
             
@@ -5576,9 +3741,7 @@ function sanitizeHtml(html) {
                 const attrName = attrMatch[1].toLowerCase();
                 const attrValue = attrMatch[2];
                 
-                // Se l'attributo è permesso per questo tag
                 if (allowedAttrs.includes(attrName)) {
-                    // Sanitizza il valore dell'attributo
                     let sanitizedValue = attrValue
                         .replace(/javascript:/gi, '')
                         .replace(/on\w+/gi, '')
@@ -5589,7 +3752,6 @@ function sanitizeHtml(html) {
             }
         }
         
-        // Tag auto-chiudenti
         if (['br', 'img'].includes(tagName)) {
             return `<${tagName}${processedAttrs} />`;
         }
@@ -5597,10 +3759,7 @@ function sanitizeHtml(html) {
         return `<${tagName}${processedAttrs}>`;
     }
     
-    // Regex per trovare tutti i tag HTML
     const tagRegex = /<(\/?)([\w-]+)([^>]*)>/g;
-    
-    // Sostituisci tutti i tag con versioni sanitizzate
     html = html.replace(tagRegex, (match, isClosing, tagName, attributes) => {
         return processTag(match, isClosing, tagName, attributes);
     });
@@ -5608,170 +3767,300 @@ function sanitizeHtml(html) {
     return html;
 }
 
-// Funzione per convertire testo semplice in HTML con formattazione automatica
 function autoFormatText(text) {
     if (!text || typeof text !== 'string') return '';
     
-    // Converti a capo in <br>
     text = text.replace(/\n/g, '<br>');
-    
-    // Converti markdown semplice
-    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // **grassetto**
-    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>'); // *corsivo*
-    text = text.replace(/__(.*?)__/g, '<u>$1</u>'); // __sottolineato__
-    text = text.replace(/`(.*?)`/g, '<code>$1</code>'); // `codice`
-    
-    // Converti URL in link (versione semplice)
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    text = text.replace(/__(.*?)__/g, '<u>$1</u>');
+    text = text.replace(/`(.*?)`/g, '<code>$1</code>');
     text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
     
     return text;
 }
 
-// Funzione combinata per processare il contenuto
-function processContent(content, enableAutoFormat = true) {
-    if (!content || typeof content !== 'string') return '';
-    
-    // Se sembra contenere HTML, sanitizzalo
-    if (content.includes('<') && content.includes('>')) {
-        return sanitizeHtml(content);
-    }
-    
-    // Altrimenti, se l'auto-formattazione è abilitata, processalo
-    if (enableAutoFormat) {
-        return autoFormatText(content);
-    }
-    
-    // Fallback: escape HTML per sicurezza
-    return escapeHtml(content);
+function updateMessageCounter(count) {
+    messageCount = count;
+    document.getElementById('messageCounter').textContent = `💬 ${count} messaggi`;
 }
 
-let dataTransferLog = {
-    reads: 0,
-    writes: 0,
-    lastReset: Date.now()
-};
+function cleanupListeners() {
 
-function logFirebaseOperation(type, path, dataSize = 0) {
-    dataTransferLog[type === 'read' ? 'reads' : 'writes']++;
-    
-    // Log ogni 10 operazioni
-    if ((dataTransferLog.reads + dataTransferLog.writes) % 10 === 0) {
-        console.log('📊 Firebase Usage:', {
-            reads: dataTransferLog.reads,
-            writes: dataTransferLog.writes,
-            session: `${Math.round((Date.now() - dataTransferLog.lastReset) / 1000)}s`
-        });
-    }
-}
-
-
-window.emergencyCleanup = function() {
-    console.log('🚨 CLEANUP DI EMERGENZA ATTIVATO');
-    
-    // Ferma tutti i refresh
-    if (window.dashboardManager && window.dashboardManager.refreshInterval) {
-        clearInterval(window.dashboardManager.refreshInterval);
-        console.log('⏹️ Dashboard refresh fermato');
+// SOSTITUIRE TUTTO IL CONTENUTO CON:
+    // Cleanup Activity Tracker subscriptions
+    if (window.activityTracker && window.activityTracker.stopTracking) {
+        window.activityTracker.stopTracking();
     }
     
-    // Pulisci tutti i listeners
-    forceCleanupAllListeners();
-    
-    // Svuota cache
-    usersCache = null;
-    allUsers = [];
-    
-    console.log('✅ Cleanup di emergenza completato');
-};
+    // Cleanup notifications subscription
+    if (window.notificationsSubscription) {
+        try {
+            window.notificationsSubscription.unsubscribe();
+            window.notificationsSubscription = null;
+            console.log('✅ Subscription notifiche chiusa');
+        } catch (error) {
+            console.warn('⚠️ Errore chiusura subscription notifiche:', error);
+        }
+    }
 
-window.checkDataUsage = function() {
-    console.log('📊 REPORT CONSUMO DATI:');
-    console.log('- Operazioni lettura:', dataTransferLog.reads);
-    console.log('- Operazioni scrittura:', dataTransferLog.writes);
-    console.log('- Tempo sessione:', Math.round((Date.now() - dataTransferLog.lastReset) / 1000), 'secondi');
-    console.log('- Listeners attivi messaggi:', Object.keys(messageListeners).length);
-    console.log('- Listeners attivi thread:', Object.keys(threadListeners).length);
-    console.log('- Cache utenti attiva:', !!usersCache);
-};
+    // Cleanup Firebase listeners (legacy)
+    if (!window.useFirebase || !window.firebaseDatabase || !window.getFirebaseReady() || !ref || !off) return;
 
-console.log('🚀 Ottimizzazioni Firebase caricate - consumo dati ridotto drasticamente!');
-
-
-async function findAllSuperUsers() {
-    const superUsers = [];
-    
     try {
-        if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && get) {
-            // Firebase
-            const usersRef = ref(window.firebaseDatabase, 'users');
-            const snapshot = await get(usersRef);
-            
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    const userData = childSnapshot.val();
-                    if (userData.role === USER_ROLES.SUPERUSER) {
-                        superUsers.push({
-                            uid: childSnapshot.key,
-                            ...userData
-                        });
-                    }
-                });
+        Object.keys(messageListeners).forEach(section => {
+            const listener = messageListeners[section];
+            if (listener && listener.path && listener.callback) {
+                const messagesRef = ref(window.firebaseDatabase, listener.path);
+                off(messagesRef, listener.callback);
             }
-        } else {
-            // Modalità locale
-            const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
-            Object.values(users).forEach(user => {
-                if (user.role === USER_ROLES.SUPERUSER) {
-                    superUsers.push(user);
+        });
+        messageListeners = {};
+
+        Object.keys(threadListeners).forEach(section => {
+            const listener = threadListeners[section];
+            if (listener && listener.path && listener.callback) {
+                const threadsRef = ref(window.firebaseDatabase, listener.path);
+                off(threadsRef, listener.callback);
+            }
+        });
+        threadListeners = {};
+
+        cleanupCommentImageUpload();
+    } catch (error) {
+        console.error('Errore pulizia listeners:', error);
+    }
+}
+
+function getDataPath(sectionKey, dataType) {
+    if (sectionKey.startsWith('clan-')) {
+        const userClan = getCurrentUserClan();
+        if (userClan === 'Nessuno') {
+            return null;
+        }
+        const safeClanName = userClan.replace(/[.#$[\]]/g, '_');
+        return `${dataType}/clan/${safeClanName}/${sectionKey}`;
+    } else {
+        return `${dataType}/${sectionKey}`;
+    }
+}
+
+// Event listeners
+function setupEventListeners() {
+    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const section = item.getAttribute('data-section');
+            if (section) switchSection(section);
+        });
+    });
+
+    document.getElementById('message-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    document.getElementById('comment-text').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            addComment();
+        }
+    });
+
+    ['email', 'password', 'username'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSubmit();
                 }
             });
         }
-    } catch (error) {
-        console.error('Errore ricerca superuser:', error);
-    }
-    
-    return superUsers;
-}
+    });
 
-// Invia notifica di nuovo utente a tutti i superuser
-async function notifyNewUserRegistration(newUser, isFirstUser = false) {
-    try {
-        const superUsers = await findAllSuperUsers();
-        console.log(`📨 Inviando notifiche di nuovo utente a ${superUsers.length} superuser`);
-        
-        for (const superUser of superUsers) {
-            // Non inviare notifica a se stesso se il nuovo utente è anche superuser
-            if (superUser.uid === newUser.uid) continue;
-            
-            const notificationData = {
-                type: 'new_user',
-                message: isFirstUser ? 
-                    `🎉 ${newUser.username} si è registrato ed è diventato il primo SUPERUSER!` :
-                    `${newUser.username} si è registrato al forum`,
-                userInfo: {
-                    username: newUser.username,
-                    email: newUser.email,
-                    clan: newUser.clan || 'Nessuno',
-                    provider: newUser.provider || 'email'
-                },
-                section: 'home',
-                sectionTitle: 'Nuovi Utenti'
-            };
-            
-            await createNotification('new_user', superUser.uid, notificationData);
+    document.getElementById('thread-title-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('thread-content-input').focus();
         }
-        
-        console.log('✅ Notifiche superuser inviate');
-    } catch (error) {
-        console.error('Errore invio notifiche superuser:', error);
+    });
+
+    document.getElementById('thread-content-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            createThread();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (document.getElementById('threadCreationModal').style.display === 'flex') {
+                hideThreadCreationModal();
+            } else if (document.getElementById('imageModal').style.display === 'flex') {
+                closeImageModal();
+            }
+        }
+    });
+
+    document.getElementById('threadCreationModal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('threadCreationModal')) {
+            hideThreadCreationModal();
+        }
+    });
+
+    document.getElementById('modalImage').addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.emoticon-picker')) {
+            document.querySelectorAll('.emoticon-panel').forEach(panel => {
+                panel.classList.remove('show');
+            });
+        }
+    });
+
+    document.addEventListener('click', function(event) {
+        if (event.target.classList.contains('avatar-image') || 
+            event.target.closest('.user-avatar, .message-avatar, .comment-avatar')) {
+            event.stopPropagation();
+            event.preventDefault();
+            return false;
+        }
+    }, true);
+}
+
+// Admin functions (stub implementations)
+async function loadUsersManagement() {
+    const threadList = document.getElementById('thread-list');
+    threadList.innerHTML = `
+        <div class="admin-panel">
+            <h3>👥 Gestione Utenti</h3>
+            <p>Funzionalità di gestione utenti disponibile solo in modalità locale per questa demo.</p>
+        </div>
+    `;
+}
+
+async function loadClansManagement() {
+    const threadList = document.getElementById('thread-list');
+    threadList.innerHTML = `
+        <div class="admin-panel">
+            <h3>🏰 Gestione Clan</h3>
+            <p>Funzionalità di gestione clan disponibile solo in modalità locale per questa demo.</p>
+        </div>
+    `;
+}
+
+async function loadPendingThreads() {
+    const moderationContent = document.getElementById('moderation-content');
+    moderationContent.innerHTML = `
+        <div style="text-align: center; padding: 20px; color: #666;">
+            ✅ Nessun contenuto in attesa di approvazione
+        </div>
+    `;
+}
+
+async function approveThread(threadId, section) {
+    if (supabase) {
+        try {
+            const { error } = await supabase
+                .from('threads')
+                .update({ 
+                    status: 'approved',
+                    moderated_at: new Date().toISOString(),
+                    moderated_by: currentUser.displayName || 'Moderatore'
+                })
+                .eq('id', threadId);
+
+            if (error) throw error;
+            
+            alert('Thread approvato con successo!');
+            loadPendingThreads();
+        } catch (error) {
+            console.error('Errore approvazione thread:', error);
+            alert('Errore nell\'approvazione del thread');
+        }
     }
 }
 
-// Invia messaggio di benvenuto nella chat globale
+async function rejectThread(threadId, section) {
+    const reason = prompt('Motivo del rifiuto (opzionale):');
+    
+    if (supabase) {
+        try {
+            const updateData = {
+                status: 'rejected',
+                moderated_at: new Date().toISOString(),
+                moderated_by: currentUser.displayName || 'Moderatore'
+            };
+
+            if (reason) {
+                updateData.rejection_reason = reason;
+            }
+
+            const { error } = await supabase
+                .from('threads')
+                .update(updateData)
+                .eq('id', threadId);
+
+            if (error) throw error;
+            
+            alert('Thread rifiutato');
+            loadPendingThreads();
+        } catch (error) {
+            console.error('Errore rifiuto thread:', error);
+            alert('Errore nel rifiuto del thread');
+        }
+    }
+}
+
+// Stub functions for admin features
+function assignClan(userId, username) {
+    alert('Funzione disponibile solo in modalità locale per questa demo');
+}
+
+function changeUserRole(userId, username, currentRole) {
+    alert('Funzione disponibile solo in modalità locale per questa demo');
+}
+
+function removFromClan(userId, username) {
+    alert('Funzione disponibile solo in modalità locale per questa demo');
+}
+
+function createNewClan() {
+    alert('Funzione disponibile solo in modalità locale per questa demo');
+}
+
+function deleteClan(clanName) {
+    alert('Funzione disponibile solo in modalità locale per questa demo');
+}
+
+// Welcome system
+async function handleNewUserComplete(newUser, isFirstUser = false) {
+    try {
+        setTimeout(async () => {
+            try {
+                await notifyNewUserRegistration(newUser, isFirstUser);
+                await sendWelcomeMessage(newUser, isFirstUser);
+            } catch (error) {
+                console.error('Errore nel processo di benvenuto:', error);
+            }
+        }, 1000);
+    } catch (error) {
+        console.error('Errore gestione benvenuto:', error);
+    }
+}
+
+async function notifyNewUserRegistration(newUser, isFirstUser = false) {
+    // Implementazione notifiche per nuovi utenti
+}
+
 async function sendWelcomeMessage(newUser, isFirstUser = false) {
     try {
-        console.log('🎉 Inviando messaggio di benvenuto per:', newUser.username);
-        
         const welcomeMessages = [
             `🎉 Benvenuto @${newUser.username}! Siamo felici di averti nella community di Hustle Castle Council!`,
             `👋 Un caloroso benvenuto a @${newUser.username}! Preparati per epiche battaglie e strategie!`,
@@ -5784,44 +4073,33 @@ async function sendWelcomeMessage(newUser, isFirstUser = false) {
         if (isFirstUser) {
             welcomeText = `🎊 @${newUser.username} è il PRIMO utente registrato e ha ottenuto i privilegi di SUPERUSER! Un benvenuto speciale al nostro fondatore! 👑`;
         } else {
-            // Scegli un messaggio casuale
             welcomeText = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
         }
         
-        // Aggiungi informazioni sul clan se presente
         if (newUser.clan && newUser.clan !== 'Nessuno') {
             welcomeText += `\n🏰 Clan: ${newUser.clan}`;
         }
         
-        // Crea il messaggio di sistema
         const systemMessage = {
-            author: '🤖 Sistema', // Username del sistema
-            authorId: 'system_bot', // ID fittizio per il sistema
+            author: '🤖 Sistema',
+            authorId: 'system_bot',
             message: welcomeText,
             timestamp: Date.now(),
-            isSystemMessage: true // Flag per distinguere i messaggi di sistema
+            isSystemMessage: true
         };
         
-        // Invia nella chat globale
         const dataPath = getDataPath('chat-generale', 'messages');
-        if (!dataPath) {
-            console.warn('⚠️ Path chat generale non valido');
-            return;
-        }
+        if (!dataPath) return;
         
         if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
-            // Firebase
             const messagesRef = ref(window.firebaseDatabase, dataPath);
             await push(messagesRef, systemMessage);
-            console.log('✅ Messaggio di benvenuto inviato su Firebase');
         } else {
-            // Modalità locale
             const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
             const messages = JSON.parse(localStorage.getItem(storageKey) || '[]');
             systemMessage.id = 'welcome_' + Date.now();
             messages.push(systemMessage);
             localStorage.setItem(storageKey, JSON.stringify(messages));
-            console.log('✅ Messaggio di benvenuto inviato in locale');
         }
         
     } catch (error) {
@@ -5829,40 +4107,8 @@ async function sendWelcomeMessage(newUser, isFirstUser = false) {
     }
 }
 
-// Funzione wrapper per gestire tutto il processo di benvenuto
-async function handleNewUserComplete(newUser, isFirstUser = false) {
-    try {
-        console.log('🎯 Gestendo benvenuto per nuovo utente:', newUser.username);
-        
-        // Piccolo delay per assicurarsi che il salvataggio sia completato
-        setTimeout(async () => {
-            try {
-                // 1. Invia notifiche ai superuser
-                await notifyNewUserRegistration(newUser, isFirstUser);
-                
-                // 2. Invia messaggio di benvenuto nella chat globale
-                await sendWelcomeMessage(newUser, isFirstUser);
-                
-                console.log('✅ Processo di benvenuto completato per:', newUser.username);
-            } catch (error) {
-                console.error('Errore nel processo di benvenuto:', error);
-            }
-        }, 1000);
-        
-    } catch (error) {
-        console.error('Errore gestione benvenuto:', error);
-    }
-}
-
-
-// ===============================================
-// DASHBOARD FALLBACK - AGGIUNGI ALLA FINE DI script.js
-// ===============================================
-
-// Funzione fallback per loadDashboard
+// Dashboard fallback
 function loadDashboard() {
-    console.log('📊 Caricamento dashboard...');
-    
     const threadList = document.getElementById('thread-list');
     if (!threadList) return;
 
@@ -5884,7 +4130,7 @@ function loadDashboard() {
                 <div class="stat-card">
                     <h3>🔥 Stato</h3>
                     <p>Connessione: <strong>${isConnected ? '🟢 Online' : '🔴 Offline'}</strong></p>
-                    <p>Modalità: <strong>${window.useFirebase ? '🔥 Firebase' : '🏠 Locale'}</strong></p>
+                    <p>Modalità: <strong>${window.useFirebase ? '🔥 Firebase + 🗄️ Supabase' : '🏠 Locale'}</strong></p>
                 </div>
                 
                 <div class="stat-card">
@@ -5898,7 +4144,6 @@ function loadDashboard() {
     `;
 }
 
-// Funzioni helper
 function getCurrentUsername() {
     const usernameEl = document.getElementById('currentUsername');
     return usernameEl ? usernameEl.textContent : 'Ospite';
@@ -5916,4 +4161,87 @@ function getRoleDisplayName() {
 // Esporta globalmente
 window.loadDashboard = loadDashboard;
 
-console.log('✅ Dashboard fallback caricata');
+
+async function syncUserWithSupabase(firebaseUser, userData = null) {
+    if (!supabase || !firebaseUser) return;
+
+    try {
+        console.log('🔄 Sincronizzazione utente con Supabase...');
+
+        // 1. Controllare se l'utente esiste già in Supabase
+        const { data: existingUser, error: selectError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('uid', firebaseUser.uid)
+            .single();
+
+        if (selectError && selectError.code !== 'PGRST116') {
+            console.error('Errore controllo utente esistente:', selectError);
+            return;
+        }
+
+        // 2. Preparare i dati utente
+        const userSupabaseData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            username: userData?.username || firebaseUser.displayName || 'Utente',
+            clan: userData?.clan || 'Nessuno',
+            role: userData?.role || 'user',
+            avatar_url: userData?.avatarUrl || null,
+            updated_at: new Date().toISOString()
+        };
+
+        // 3. Inserire o aggiornare l'utente
+        if (existingUser) {
+            // Aggiornare utente esistente
+            const { error: updateError } = await supabase
+                .from('users')
+                .update(userSupabaseData)
+                .eq('uid', firebaseUser.uid);
+
+            if (updateError) {
+                console.error('Errore aggiornamento utente Supabase:', updateError);
+            } else {
+                console.log('✅ Utente aggiornato in Supabase');
+            }
+        } else {
+            // Inserire nuovo utente
+            userSupabaseData.created_at = new Date().toISOString();
+            
+            const { error: insertError } = await supabase
+                .from('users')
+                .insert([userSupabaseData]);
+
+            if (insertError) {
+                console.error('Errore inserimento utente Supabase:', insertError);
+            } else {
+                console.log('✅ Nuovo utente creato in Supabase');
+            }
+        }
+
+        // 4. Autenticare anche in Supabase (sessione fittizia)
+        // Questo è un workaround per far funzionare le RLS
+        await createSupabaseSession(firebaseUser);
+
+    } catch (error) {
+        console.error('Errore sincronizzazione Supabase:', error);
+    }
+}
+
+/**
+ * Crea una sessione fittizia in Supabase per le RLS
+ * NOTA: Questo è un workaround temporaneo
+ */
+async function createSupabaseSession(firebaseUser) {
+    try {
+        // Opzione A: Se hai configurato Supabase Auth
+        // const { error } = await supabase.auth.signInAnonymously();
+        
+        // Opzione B: Usare una custom function per settare il context
+        // await supabase.rpc('set_current_user_context', { user_uid: firebaseUser.uid });
+        
+        console.log('⚠️ Sessione Supabase: usando Firebase Auth come principale');
+    } catch (error) {
+        console.error('Errore creazione sessione Supabase:', error);
+    }
+}
