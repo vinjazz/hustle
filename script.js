@@ -79,6 +79,20 @@ async function initializeSupabase() {
     }
 }
 
+window.ensureSupabaseForActivityTracker = async function() {
+    if (!window.supabase && window.supabaseUrl && window.supabaseKey) {
+        try {
+            window.supabase = window.supabase || {};
+            window.supabase.createClient = window.supabase.createClient || function() {
+                console.warn('Supabase fallback attivato');
+                return null;
+            };
+        } catch (error) {
+            console.error('Errore setup Supabase fallback:', error);
+        }
+    }
+};
+
 // Rendi le funzioni globali per gli onclick
 window.switchToLogin = switchToLogin;
 window.switchToRegister = switchToRegister;
@@ -1185,6 +1199,50 @@ async function initializeApp() {
 async function handleUserLogin(user) {
     document.getElementById('loginModal').style.display = 'none';
     
+    // Assicurarsi che currentUser sia globale
+    window.currentUser = user;
+    
+    const notificationsBell = document.getElementById('notificationsBell');
+    if (notificationsBell) {
+        notificationsBell.classList.add('user-logged-in');
+    }
+
+    updateUserInterface();
+    setupUserPresence();
+    
+    // 🆕 AGGIUNTO: Sincronizzare con Supabase
+    await syncUserWithSupabase(user);
+    
+    loadUserProfile();
+    initializeNotifications();
+
+    // 🆕 AGGIUNTO: Inizializza Activity Tracker dopo login
+    setTimeout(async () => {
+        setupAvatarUpload();
+        if (currentUserData && currentUserData.avatarUrl) {
+            updateUserAvatarDisplay(currentUserData.avatarUrl);
+        }
+        
+        // Inizializza Activity Tracker
+        if (window.activityTracker) {
+            await window.ensureSupabaseForActivityTracker();
+            await window.activityTracker.init();
+        }
+    }, 1000);
+
+    if (currentSection === 'home') {
+        setTimeout(() => {
+            loadDashboard();
+        }, 500);
+    }
+}
+// Gestione logout utente
+async function handleUserLogin(user) {
+    document.getElementById('loginModal').style.display = 'none';
+    
+    // Assicurarsi che currentUser sia globale
+    window.currentUser = user;
+    
     const notificationsBell = document.getElementById('notificationsBell');
     if (notificationsBell) {
         notificationsBell.classList.add('user-logged-in');
@@ -1205,8 +1263,8 @@ async function handleUserLogin(user) {
             updateUserAvatarDisplay(currentUserData.avatarUrl);
         }
         if (window.activityTracker) {
-        await window.activityTracker.init();
-    }
+            window.activityTracker.init();
+        }
     }, 100);
 
     if (currentSection === 'home') {
@@ -1216,8 +1274,10 @@ async function handleUserLogin(user) {
     }
 }
 
-// Gestione logout utente
 function handleUserLogout() {
+    // Assicurarsi che currentUser sia globale
+    window.currentUser = null;
+    
     const notificationsBell = document.getElementById('notificationsBell');
     if (notificationsBell) {
         notificationsBell.classList.remove('user-logged-in');
@@ -1249,7 +1309,7 @@ function handleUserLogout() {
         backToForum();
     }
 
-     // Ferma Activity Tracker
+    // Ferma Activity Tracker
     if (window.activityTracker) {
         window.activityTracker.recordLogout();
     }
@@ -2140,8 +2200,7 @@ function showLoading(show) {
 // Gestione sezioni
 function switchSection(sectionKey) {
     const section = sectionConfig[sectionKey];
-    if (!section)
-        return;
+    if (!section) return;
 
     if (!canAccessSection(sectionKey)) {
         if (sectionKey.startsWith('clan-')) {
@@ -2156,10 +2215,17 @@ function switchSection(sectionKey) {
         return;
     }
 
+    // 🆕 AGGIUNTO: Salva sezione precedente per marcarla come visitata
+    const previousSection = currentSection;
+
     cleanupListeners();
     cleanupCommentImageUpload();
-     if (currentSection && currentSection !== sectionKey && window.markSectionAsVisited) {
-        window.markSectionAsVisited(currentSection);
+    
+    // 🆕 AGGIUNTO: Marca sezione precedente come visitata
+    if (previousSection && previousSection !== sectionKey && window.markSectionAsVisited) {
+        setTimeout(async () => {
+            await window.markSectionAsVisited(previousSection);
+        }, 100);
     }
 
     currentSection = sectionKey;
@@ -2205,7 +2271,6 @@ function switchSection(sectionKey) {
         targetNav.classList.add('active');
     }
 }
-
 function toggleMobileMenu() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('mobileOverlay');
