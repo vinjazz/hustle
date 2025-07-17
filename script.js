@@ -49,6 +49,8 @@ let currentMentionInput = null;
 let currentMentionPosition = 0;
 let currentAvatarFile = null;
 let isAvatarUploading = false;
+let userSectionVisits = {};
+let badgeUpdateInterval = null;
 
 // Supabase client
 let supabase = null;
@@ -116,7 +118,6 @@ window.changeUserRole = changeUserRole;
 window.removFromClan = removFromClan;
 window.createNewClan = createNewClan;
 window.deleteClan = deleteClan;
-window.switchSection = switchSection;
 window.handleImageSelect = handleImageSelect;
 window.removeSelectedImage = removeSelectedImage;
 window.openImageModal = openImageModal;
@@ -144,6 +145,12 @@ window.sendMessage = sendMessage;
 window.createThread = createThread;
 window.addComment = addComment;
 window.getUserDisplayName = getUserDisplayName;
+window.loadUsersList = loadUsersList;
+window.markSectionAsVisited = markSectionAsVisited;
+window.updateSectionBadges = updateSectionBadges;
+window.countNewThreadsInSection = countNewThreadsInSection;
+window.createNotification = createNotification;
+
 
 // Esporta funzioni globali
 window.getCurrentSection = () => currentSection;
@@ -381,7 +388,11 @@ const sectionConfig = {
 window.sectionConfig = sectionConfig;
 
 // Inizializza sistema notifiche
-function initializeNotifications() {
+async function initializeNotifications() {
+    if (!currentUser) return;
+    
+    console.log('🔄 Inizializzazione sistema notifiche...');
+    
     let bell = document.getElementById('notificationsBell');
     if (!bell) {
         bell = document.createElement('button');
@@ -391,42 +402,31 @@ function initializeNotifications() {
         bell.onclick = toggleNotificationsPanel;
         document.body.appendChild(bell);
     }
-
+    
+    // Carica notifiche
     loadNotifications();
+    
+    // Inizializza sistema menzioni
     setupMentionListeners();
     
-    setTimeout(async () => {
-        try {
-            if (typeof loadUsersList === 'function') {
-                await loadUsersList();
-            } else {
-                setTimeout(async () => {
-                    try {
-                        if (typeof loadUsersList === 'function') {
-                            await loadUsersList();
-                        } else {
-                            if (typeof allUsers === 'undefined') {
-                                window.allUsers = [];
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Errore caricamento utenti (secondo tentativo):', error);
-                        window.allUsers = window.allUsers || [];
-                    }
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Errore caricamento utenti:', error);
-            window.allUsers = window.allUsers || [];
-        }
-    }, 500);
-
+    // Carica lista utenti
+    await loadUsersList();
+    
+    // Carica visite sezioni
+    await loadUserSectionVisits();
+    
+    // Aggiorna badge sezioni
+    await updateSectionBadges();
+    
+    // Setup listener per click fuori
     document.addEventListener('click', handleClickOutside);
+    
+    console.log('✅ Sistema notifiche inizializzato');
 }
 
 // Rileva menzioni nel testo
 function detectMentions(text) {
-    if (!Array.isArray(allUsers)) {
+    if (!text || !Array.isArray(allUsers)) {
         return [];
     }
 
@@ -447,6 +447,7 @@ function detectMentions(text) {
         }
     }
 
+    console.log(`🔍 Rilevate ${mentions.length} menzioni valide nel testo`);
     return mentions;
 }
 
@@ -490,23 +491,28 @@ function highlightMentions(html, currentUserId = null) {
 function setupMentionListeners() {
     const messageInput = document.getElementById('message-input');
     if (messageInput) {
+        messageInput.removeEventListener('input', handleMentionInput);
+        messageInput.removeEventListener('keydown', handleMentionKeydown);
         messageInput.addEventListener('input', handleMentionInput);
         messageInput.addEventListener('keydown', handleMentionKeydown);
     }
 
     const commentTextarea = document.getElementById('comment-text');
     if (commentTextarea) {
+        commentTextarea.removeEventListener('input', handleMentionInput);
+        commentTextarea.removeEventListener('keydown', handleMentionKeydown);
         commentTextarea.addEventListener('input', handleMentionInput);
         commentTextarea.addEventListener('keydown', handleMentionKeydown);
     }
 
     const threadTextarea = document.getElementById('thread-content-input');
     if (threadTextarea) {
+        threadTextarea.removeEventListener('input', handleMentionInput);
+        threadTextarea.removeEventListener('keydown', handleMentionKeydown);
         threadTextarea.addEventListener('input', handleMentionInput);
         threadTextarea.addEventListener('keydown', handleMentionKeydown);
     }
 }
-
 function handleMentionInput(event) {
     const input = event.target;
     const text = input.value;
@@ -566,8 +572,13 @@ function handleMentionKeydown(event) {
 function showMentionAutocomplete(query, inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
 
-    if (!Array.isArray(allUsers)) {
-        window.allUsers = [];
+    if (!Array.isArray(allUsers) || allUsers.length === 0) {
+        console.log('🔄 Lista utenti vuota, caricamento in corso...');
+        loadUsersList().then(() => {
+            // Riprova dopo aver caricato gli utenti
+            showMentionAutocomplete(query, inputElement);
+        });
+        return;
     }
 
     const filteredUsers = allUsers.filter(user =>
@@ -581,6 +592,8 @@ function showMentionAutocomplete(query, inputElement) {
         hideMentionAutocomplete();
         return;
     }
+
+    console.log(`🔍 Trovati ${filteredUsers.length} utenti per query "${query}"`);
 
     autocomplete.innerHTML = filteredUsers.map((user, index) => `
         <div class="mention-suggestion ${index === 0 ? 'selected' : ''}" 
@@ -607,6 +620,7 @@ function showMentionAutocomplete(query, inputElement) {
     autocomplete.classList.add('show');
     mentionAutocompleteVisible = true;
 }
+
 
 function positionAutocomplete(inputElement) {
     const autocomplete = document.getElementById('mentionAutocomplete');
@@ -737,8 +751,7 @@ function loadNotifications() {
 // Carica notifiche da Supabase con listener real-time
 async function loadNotificationsFromSupabase() {
     try {
-        // Imposta contesto utente per RLS
-        await supabase.rpc('set_current_user_context', { user_uid: currentUser.uid });
+        console.log('🔄 Caricamento notifiche da Supabase...');
         
         // Carica notifiche iniziali
         const { data, error } = await supabase
@@ -768,11 +781,14 @@ async function loadNotificationsFromSupabase() {
     }
 }
 
+
 // Setup listener real-time per notifiche
 function setupNotificationsRealTimeListener() {
     if (window.notificationsSubscription) {
         window.notificationsSubscription.unsubscribe();
     }
+
+    console.log('🔄 Setup listener real-time notifiche...');
 
     window.notificationsSubscription = supabase
         .channel(`notifications_${currentUser.uid}`)
@@ -818,7 +834,9 @@ function setupNotificationsRealTimeListener() {
                 }
             }
         )
-        .subscribe();
+        .subscribe((status) => {
+            console.log('📡 Stato subscription notifiche:', status);
+        });
 
     console.log('✅ Listener real-time notifiche attivato');
 }
@@ -1210,62 +1228,25 @@ async function handleUserLogin(user) {
     updateUserInterface();
     setupUserPresence();
     
-    // 🆕 AGGIUNTO: Sincronizzare con Supabase
+    // Sincronizzazione con Supabase
     await syncUserWithSupabase(user);
     
-    loadUserProfile();
-    initializeNotifications();
-
-    // 🆕 AGGIUNTO: Inizializza Activity Tracker dopo login
-    setTimeout(async () => {
-        setupAvatarUpload();
-        if (currentUserData && currentUserData.avatarUrl) {
-            updateUserAvatarDisplay(currentUserData.avatarUrl);
-        }
-        
-        // Inizializza Activity Tracker
-        if (window.activityTracker) {
-            await window.ensureSupabaseForActivityTracker();
-            await window.activityTracker.init();
-        }
-    }, 1000);
-
-    if (currentSection === 'home') {
-        setTimeout(() => {
-            loadDashboard();
-        }, 500);
-    }
-}
-// Gestione logout utente
-async function handleUserLogin(user) {
-    document.getElementById('loginModal').style.display = 'none';
+    // Carica profilo
+    await loadUserProfile();
     
-    // Assicurarsi che currentUser sia globale
-    window.currentUser = user;
-    
-    const notificationsBell = document.getElementById('notificationsBell');
-    if (notificationsBell) {
-        notificationsBell.classList.add('user-logged-in');
-    }
+    // Inizializza sistema notifiche DOPO che l'utente è loggato
+    await initializeNotifications();
 
-    updateUserInterface();
-    setupUserPresence();
-    
-    // 🆕 AGGIUNTO: Sincronizzare con Supabase
-    await syncUserWithSupabase(user);
-    
-    loadUserProfile();
-    initializeNotifications();
-
+    // Setup avatar
     setTimeout(() => {
         setupAvatarUpload();
         if (currentUserData && currentUserData.avatarUrl) {
             updateUserAvatarDisplay(currentUserData.avatarUrl);
         }
-        if (window.activityTracker) {
-            window.activityTracker.init();
-        }
-    }, 100);
+    }, 200);
+
+    startBadgeUpdateInterval();
+
 
     if (currentSection === 'home') {
         setTimeout(() => {
@@ -1274,7 +1255,45 @@ async function handleUserLogin(user) {
     }
 }
 
+
+function startBadgeUpdateInterval() {
+    // Ferma l'interval precedente se esiste
+    if (badgeUpdateInterval) {
+        clearInterval(badgeUpdateInterval);
+    }
+    
+    // Avvia nuovo interval per aggiornare i badge ogni 30 secondi
+    badgeUpdateInterval = setInterval(async () => {
+        if (currentUser) {
+            try {
+                await updateSectionBadges();
+                console.log('🔄 Badge aggiornati automaticamente');
+            } catch (error) {
+                console.error('Errore aggiornamento badge automatico:', error);
+            }
+        }
+    }, 30000); // 30 secondi
+    
+    console.log('✅ Interval badge avviato (30s)');
+}
+
+// Funzione per fermare l'interval dei badge
+function stopBadgeUpdateInterval() {
+    if (badgeUpdateInterval) {
+        clearInterval(badgeUpdateInterval);
+        badgeUpdateInterval = null;
+        console.log('🛑 Interval badge fermato');
+    }
+}
+
+
+
+// Gestione logout utente
+
 function handleUserLogout() {
+    // Ferma l'interval dei badge
+    stopBadgeUpdateInterval();
+    
     // Assicurarsi che currentUser sia globale
     window.currentUser = null;
     
@@ -1297,6 +1316,11 @@ function handleUserLogout() {
     if (existingBadge) {
         existingBadge.remove();
     }
+
+    // Rimuovi tutti i badge dalla navigazione
+    document.querySelectorAll('.section-badge').forEach(badge => {
+        badge.remove();
+    });
 
     updateClanSectionsAccess();
     updateAdminSectionsAccess();
@@ -1322,7 +1346,6 @@ function handleUserLogout() {
 
     document.getElementById('loginModal').style.display = 'flex';
 }
-
 // Carica profilo utente
 async function loadUserProfile() {
     if (!currentUser) {
@@ -2198,79 +2221,113 @@ function showLoading(show) {
 }
 
 // Gestione sezioni
-function switchSection(sectionKey) {
-    const section = sectionConfig[sectionKey];
-    if (!section) return;
+const originalSwitchSection = window.switchSection;
 
-    if (!canAccessSection(sectionKey)) {
-        if (sectionKey.startsWith('clan-')) {
-            if (sectionKey === 'clan-moderation' && !isClanModerator()) {
-                alert('Solo i moderatori del clan possono accedere a questa sezione!');
-            } else {
-                alert('Devi appartenere a un clan per accedere a questa sezione!');
-            }
-        } else if (sectionKey.startsWith('admin-')) {
-            alert('Non hai i permessi per accedere a questa sezione!');
-        }
+// Definisci la nuova funzione migliorata
+window.switchSection = function(sectionKey) {
+    // Evita chiamate multiple rapide
+    if (window.switchingSections) {
+        console.log('⚠️ Cambio sezione già in corso, ignoro');
         return;
     }
-
-    // 🆕 AGGIUNTO: Salva sezione precedente per marcarla come visitata
-    const previousSection = currentSection;
-
-    cleanupListeners();
-    cleanupCommentImageUpload();
     
-    // 🆕 AGGIUNTO: Marca sezione precedente come visitata
-    if (previousSection && previousSection !== sectionKey && window.markSectionAsVisited) {
-        setTimeout(async () => {
-            await window.markSectionAsVisited(previousSection);
-        }, 100);
+    window.switchingSections = true;
+    
+    try {
+        const section = sectionConfig[sectionKey];
+        if (!section) {
+            console.error('❌ Sezione non trovata:', sectionKey);
+            return;
+        }
+
+        if (!canAccessSection(sectionKey)) {
+            if (sectionKey.startsWith('clan-')) {
+                if (sectionKey === 'clan-moderation' && !isClanModerator()) {
+                    alert('Solo i moderatori del clan possono accedere a questa sezione!');
+                } else {
+                    alert('Devi appartenere a un clan per accedere a questa sezione!');
+                }
+            } else if (sectionKey.startsWith('admin-')) {
+                alert('Non hai i permessi per accedere a questa sezione!');
+            }
+            return;
+        }
+
+        // Salva sezione precedente per marcarla come visitata
+        const previousSection = currentSection;
+
+        cleanupListeners();
+        cleanupCommentImageUpload();
+        
+        // Marca sezione precedente come visitata (con debounce)
+        if (previousSection && previousSection !== sectionKey) {
+            setTimeout(async () => {
+                await markSectionAsVisited(previousSection);
+            }, 100);
+        }
+
+        currentSection = sectionKey;
+
+        // Aggiorna UI
+        document.getElementById('section-title').textContent = section.title;
+        document.getElementById('section-description').textContent = section.description;
+
+        const forumContent = document.getElementById('forum-content');
+        const chatContent = document.getElementById('chat-content');
+        const threadView = document.getElementById('thread-view');
+        const newThreadBtn = document.getElementById('new-thread-btn');
+
+        if (forumContent) forumContent.style.display = 'none';
+        if (chatContent) chatContent.style.display = 'none';
+        if (threadView) threadView.style.display = 'none';
+        if (newThreadBtn) newThreadBtn.style.display = 'none';
+
+        if (section.type === 'forum') {
+            if (forumContent) forumContent.style.display = 'block';
+            if (newThreadBtn) newThreadBtn.style.display = 'block';
+            loadThreads(sectionKey);
+        } else if (section.type === 'chat') {
+            if (chatContent) chatContent.style.display = 'flex';
+            loadMessages(sectionKey);
+        } else if (section.type === 'admin') {
+            if (forumContent) forumContent.style.display = 'block';
+            loadAdminContent(sectionKey);
+        } else if (section.type === 'clan-admin') {
+            if (forumContent) forumContent.style.display = 'block';
+            loadClanModerationContent();
+        } else if (section.type === 'dashboard') {
+            if (forumContent) forumContent.style.display = 'block';
+            loadDashboard();
+        }
+
+        closeMobileMenu();
+
+        // Aggiorna navigazione
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        const targetNav = document.querySelector(`[data-section="${sectionKey}"]`);
+        if (targetNav) {
+            targetNav.classList.add('active');
+            
+            // Rimuovi badge dalla sezione corrente
+            const badge = targetNav.querySelector('.section-badge');
+            if (badge) {
+                badge.remove();
+            }
+        }
+        
+        console.log(`✅ Sezione cambiata a: ${sectionKey}`);
+        
+    } catch (error) {
+        console.error('❌ Errore cambio sezione:', error);
+    } finally {
+        // Sblocca dopo un piccolo delay
+        setTimeout(() => {
+            window.switchingSections = false;
+        }, 500);
     }
-
-    currentSection = sectionKey;
-
-    document.getElementById('section-title').textContent = section.title;
-    document.getElementById('section-description').textContent = section.description;
-
-    const forumContent = document.getElementById('forum-content');
-    const chatContent = document.getElementById('chat-content');
-    const threadView = document.getElementById('thread-view');
-    const newThreadBtn = document.getElementById('new-thread-btn');
-
-    forumContent.style.display = 'none';
-    chatContent.style.display = 'none';
-    threadView.style.display = 'none';
-    newThreadBtn.style.display = 'none';
-
-    if (section.type === 'forum') {
-        forumContent.style.display = 'block';
-        newThreadBtn.style.display = 'block';
-        loadThreads(sectionKey);
-    } else if (section.type === 'chat') {
-        chatContent.style.display = 'flex';
-        loadMessages(sectionKey);
-    } else if (section.type === 'admin') {
-        forumContent.style.display = 'block';
-        loadAdminContent(sectionKey);
-    } else if (section.type === 'clan-admin') {
-        forumContent.style.display = 'block';
-        loadClanModerationContent();
-    } else if (section.type === 'dashboard') {
-        forumContent.style.display = 'block';
-        loadDashboard();
-    }
-
-    closeMobileMenu();
-
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    const targetNav = document.querySelector(`[data-section="${sectionKey}"]`);
-    if (targetNav) {
-        targetNav.classList.add('active');
-    }
-}
+};
 function toggleMobileMenu() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('mobileOverlay');
@@ -2302,6 +2359,11 @@ function closeMobileMenu() {
 
 function loadAdminContent(sectionKey) {
     const threadList = document.getElementById('thread-list');
+    
+    if (!threadList) {
+        console.error('❌ Elemento thread-list non trovato per admin');
+        return;
+    }
 
     switch (sectionKey) {
         case 'admin-users':
@@ -2313,6 +2375,35 @@ function loadAdminContent(sectionKey) {
         default:
             threadList.innerHTML = '<div style="text-align: center; padding: 40px;">Sezione non trovata</div>';
     }
+}
+
+
+function waitForElement(selector, timeout = 5000) {
+    return new Promise((resolve, reject) => {
+        const element = document.querySelector(selector);
+        if (element) {
+            resolve(element);
+            return;
+        }
+        
+        const observer = new MutationObserver((mutations) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                observer.disconnect();
+                resolve(element);
+            }
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        setTimeout(() => {
+            observer.disconnect();
+            reject(new Error(`Elemento ${selector} non trovato entro ${timeout}ms`));
+        }, timeout);
+    });
 }
 
 function loadClanModerationContent() {
@@ -2546,7 +2637,24 @@ async function createThread() {
         createBtn.textContent = 'Crea Thread';
         progressContainer.style.display = 'none';
     }
-    
+
+    const originalCreateThread = window.createThread;
+    window.createThread = async function() {
+    try {
+        // Esegui la funzione originale
+        await originalCreateThread.call(this);
+        
+        // Aggiorna i badge dopo la creazione del thread
+        setTimeout(async () => {
+            await updateSectionBadges();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Errore nella creazione del thread:', error);
+        throw error;
+    }
+    };
+    // Ricarica i thread nella sezione corrente
     loadThreads(currentSection);
 }
 
@@ -2776,7 +2884,10 @@ async function addComment() {
         return;
     }
 
+    // Rileva menzioni prima di inviare
     const mentions = detectMentions(commentText);
+    console.log('📝 Menzioni rilevate nel commento:', mentions);
+
     const commentBtn = document.getElementById('submit-comment-btn');
     const progressContainer = document.getElementById('comment-upload-progress');
 
@@ -2808,6 +2919,7 @@ async function addComment() {
 
         commentBtn.textContent = 'Salvando commento...';
 
+        // Salva il commento
         if (supabase) {
             const { data, error } = await supabase
                 .from('comments')
@@ -2822,15 +2934,24 @@ async function addComment() {
             saveLocalComment(currentThreadSection, currentThreadId, commentData);
         }
 
+        // Crea notifiche per le menzioni
         for (const mention of mentions) {
-            await createNotification('mention', mention.userId, {
-                message: commentText,
-                section: currentThreadSection,
-                threadId: currentThreadId,
-                threadTitle: currentThread?.title,
-                sectionTitle: sectionConfig[currentThreadSection]?.title || 'Forum'
-            });
+            try {
+                await createNotification('mention', mention.userId, {
+                    message: commentText,
+                    section: currentThreadSection,
+                    threadId: currentThreadId,
+                    threadTitle: currentThread?.title,
+                    sectionTitle: sectionConfig[currentThreadSection]?.title || 'Forum'
+                });
+                console.log(`✅ Notifica menzione inviata a ${mention.username}`);
+            } catch (error) {
+                console.error(`❌ Errore invio notifica menzione a ${mention.username}:`, error);
+            }
         }
+
+        // Ricarica i commenti
+        await loadThreadComments(currentThreadId, currentThreadSection);
 
         document.getElementById('comment-text').value = '';
         removeCommentSelectedImage();
@@ -2847,6 +2968,7 @@ async function addComment() {
         progressContainer.style.display = 'none';
     }
 }
+
 
 async function incrementThreadReplies(threadId, section) {
     if (supabase) {
@@ -3068,7 +3190,9 @@ async function sendMessage() {
 
     if (!message) return;
 
+    // Rileva menzioni prima di inviare
     const mentions = detectMentions(message);
+    console.log('📝 Menzioni rilevate nel messaggio:', mentions);
 
     input.disabled = true;
     sendBtn.disabled = true;
@@ -3087,6 +3211,7 @@ async function sendMessage() {
             return;
         }
 
+        // Invia il messaggio
         if (window.useFirebase && window.firebaseDatabase && firebaseReady && ref && push) {
             const messagesRef = ref(window.firebaseDatabase, dataPath);
             await push(messagesRef, messageData);
@@ -3094,12 +3219,18 @@ async function sendMessage() {
             saveLocalMessage(currentSection, messageData);
         }
 
+        // Crea notifiche per le menzioni
         for (const mention of mentions) {
-            await createNotification('mention', mention.userId, {
-                message: message,
-                section: currentSection,
-                sectionTitle: sectionConfig[currentSection]?.title || 'Chat'
-            });
+            try {
+                await createNotification('mention', mention.userId, {
+                    message: message,
+                    section: currentSection,
+                    sectionTitle: sectionConfig[currentSection]?.title || 'Chat'
+                });
+                console.log(`✅ Notifica menzione inviata a ${mention.username}`);
+            } catch (error) {
+                console.error(`❌ Errore invio notifica menzione a ${mention.username}:`, error);
+            }
         }
 
         input.value = '';
@@ -3118,7 +3249,6 @@ async function sendMessage() {
         input.focus();
     }
 }
-
 function saveLocalMessage(section, messageData) {
     const dataPath = getDataPath(section, 'messages');
     if (!dataPath) return;
@@ -4002,13 +4132,91 @@ function setupEventListeners() {
 // Admin functions (stub implementations)
 async function loadUsersManagement() {
     const threadList = document.getElementById('thread-list');
+    
+    // Controlla se l'elemento esiste
+    if (!threadList) {
+        console.error('❌ Elemento thread-list non trovato');
+        return;
+    }
+    
     threadList.innerHTML = `
         <div class="admin-panel">
             <h3>👥 Gestione Utenti</h3>
-            <p>Funzionalità di gestione utenti disponibile solo in modalità locale per questa demo.</p>
+            <div id="users-loading" style="text-align: center; padding: 20px;">
+                <div>🔄 Caricamento utenti...</div>
+            </div>
+            <div id="users-grid" class="users-grid"></div>
         </div>
     `;
+    
+    try {
+        // Carica utenti aggiornati SENZA chiamare loadUsersManagement
+        await loadUsersList();
+        
+        // Attendi che gli elementi siano nel DOM
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const usersGrid = document.getElementById('users-grid');
+        const loadingDiv = document.getElementById('users-loading');
+        
+        // Controlla se gli elementi esistono
+        if (!usersGrid || !loadingDiv) {
+            console.error('❌ Elementi users-grid o users-loading non trovati');
+            return;
+        }
+        
+        if (window.allUsers.length === 0) {
+            loadingDiv.innerHTML = '<div style="color: #666;">Nessun utente trovato</div>';
+            return;
+        }
+        
+        loadingDiv.style.display = 'none';
+        
+        usersGrid.innerHTML = window.allUsers.map(user => `
+            <div class="user-card">
+                <div class="user-card-header">
+                    <div class="user-card-name">
+                        ${createAvatarHTML(user, 'small')}
+                        ${user.username}
+                        <span class="user-role role-${user.role?.replace('_', '-') || 'user'}">
+                            ${user.role === 'superuser' ? 'SUPER' : user.role === 'clan_mod' ? 'MOD' : 'USER'}
+                        </span>
+                    </div>
+                </div>
+                <div class="user-card-info">
+                    <div><strong>Email:</strong> ${user.email}</div>
+                    <div><strong>Clan:</strong> ${user.clan || 'Nessuno'}</div>
+                    <div><strong>UID:</strong> ${user.uid}</div>
+                    <div><strong>Registrato:</strong> ${user.createdAt ? formatTime(user.createdAt) : 'N/A'}</div>
+                </div>
+                <div class="user-card-actions">
+                    <button class="admin-btn btn-assign-clan" onclick="assignClan('${user.uid}', '${user.username}')">
+                        🏰 Assegna Clan
+                    </button>
+                    <button class="admin-btn btn-change-role" onclick="changeUserRole('${user.uid}', '${user.username}', '${user.role}')">
+                        ⚙️ Cambia Ruolo
+                    </button>
+                    ${user.clan && user.clan !== 'Nessuno' ? `
+                        <button class="admin-btn btn-remove-clan" onclick="removFromClan('${user.uid}', '${user.username}')">
+                            🚫 Rimuovi da Clan
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `).join('');
+        
+        console.log('✅ Pannello gestione utenti caricato');
+        
+    } catch (error) {
+        console.error('Errore caricamento gestione utenti:', error);
+        
+        const loadingDiv = document.getElementById('users-loading');
+        if (loadingDiv) {
+            loadingDiv.innerHTML = '<div style="color: #e74c3c;">Errore caricamento utenti</div>';
+        }
+    }
 }
+
 
 async function loadClansManagement() {
     const threadList = document.getElementById('thread-list');
@@ -4284,29 +4492,814 @@ async function syncUserWithSupabase(firebaseUser, userData = null) {
             }
         }
 
-        // 4. Autenticare anche in Supabase (sessione fittizia)
-        // Questo è un workaround per far funzionare le RLS
-        await createSupabaseSession(firebaseUser);
+        // 4. Aggiorna cache locale
+        const existingUserIndex = allUsers.findIndex(u => u.uid === firebaseUser.uid);
+        const userCacheData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            username: userSupabaseData.username,
+            clan: userSupabaseData.clan,
+            role: userSupabaseData.role,
+            avatarUrl: userSupabaseData.avatar_url,
+            createdAt: userSupabaseData.created_at
+        };
+
+        if (existingUserIndex >= 0) {
+            allUsers[existingUserIndex] = userCacheData;
+        } else {
+            allUsers.push(userCacheData);
+        }
+
+        console.log('✅ Cache utenti aggiornata');
 
     } catch (error) {
         console.error('Errore sincronizzazione Supabase:', error);
     }
 }
 
-/**
- * Crea una sessione fittizia in Supabase per le RLS
- * NOTA: Questo è un workaround temporaneo
- */
-async function createSupabaseSession(firebaseUser) {
+
+
+async function loadUsersList() {
+    console.log('🔄 Caricamento lista utenti...');
+    
     try {
-        // Opzione A: Se hai configurato Supabase Auth
-        // const { error } = await supabase.auth.signInAnonymously();
+        // Reset array utenti
+        window.allUsers = [];
         
-        // Opzione B: Usare una custom function per settare il context
-        // await supabase.rpc('set_current_user_context', { user_uid: firebaseUser.uid });
+        // PRIMA: Prova con Supabase
+        if (supabase) {
+            const { data, error } = await supabase
+                .from('users')
+                .select('uid, email, username, clan, role, avatar_url, created_at')
+                .order('created_at', { ascending: false });
+            
+            if (error) {
+                console.error('Errore caricamento utenti Supabase:', error);
+                throw error;
+            }
+            
+            // Converti i dati Supabase nel formato atteso
+            window.allUsers = data.map(user => ({
+                uid: user.uid,
+                email: user.email,
+                username: user.username,
+                clan: user.clan || 'Nessuno',
+                role: user.role || 'user',
+                avatarUrl: user.avatar_url,
+                createdAt: user.created_at
+            }));
+            
+            console.log('✅ Utenti caricati da Supabase:', window.allUsers.length);
+            
+        } else {
+            // FALLBACK: localStorage
+            loadUsersFromLocalStorage();
+        }
         
-        console.log('⚠️ Sessione Supabase: usando Firebase Auth come principale');
+        // ❌ RIMOSSO: NON chiamare loadUsersManagement qui!
+        // Questo causava il loop infinito
+        
+        return window.allUsers;
+        
     } catch (error) {
-        console.error('Errore creazione sessione Supabase:', error);
+        console.error('Errore caricamento utenti:', error);
+        
+        // Fallback a localStorage
+        loadUsersFromLocalStorage();
+        return window.allUsers;
     }
 }
+
+function loadUsersFromLocalStorage() {
+    console.log('🔄 Caricamento utenti da localStorage...');
+    
+    const users = JSON.parse(localStorage.getItem('hc_local_users') || '{}');
+    window.allUsers = Object.values(users).map(user => ({
+        uid: user.uid,
+        email: user.email,
+        username: user.username,
+        clan: user.clan || 'Nessuno',
+        role: user.role || 'user',
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt
+    }));
+    
+    console.log('✅ Utenti caricati da localStorage:', window.allUsers.length);
+}
+
+function saveLocalNotification(targetUserId, notification) {
+    const storageKey = `hc_notifications_${targetUserId}`;
+    let notifications = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    
+    // Aggiungi ID e timestamp
+    notification.id = 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    notification.created_at = new Date().toISOString();
+    
+    // Aggiungi in cima
+    notifications.unshift(notification);
+    
+    // Mantieni solo le ultime 50
+    if (notifications.length > 50) {
+        notifications = notifications.slice(0, 50);
+    }
+    
+    localStorage.setItem(storageKey, JSON.stringify(notifications));
+    
+    console.log(`✅ Notifica salvata localmente per utente ${targetUserId}`);
+    
+    // Se è per l'utente corrente, aggiorna UI
+    if (targetUserId === currentUser?.uid) {
+        loadNotifications();
+        showMentionToast(notification);
+    }
+}
+
+
+async function createNotification(type, targetUserId, data) {
+    if (!currentUser || targetUserId === currentUser.uid) return;
+    
+    const notification = {
+        type: type,
+        from_user: currentUser.displayName || getUserDisplayName() || 'Utente',
+        from_user_id: currentUser.uid,
+        user_id: targetUserId,
+        read: false,
+        created_at: new Date().toISOString(),
+        ...data
+    };
+    
+    try {
+        console.log(`🔔 Creando notifica tipo "${type}" per utente ${targetUserId}`);
+        
+        // PRIMA: Prova con Supabase
+        if (supabase) {
+            const { data: result, error } = await supabase
+                .from('notifications')
+                .insert([notification])
+                .select()
+                .single();
+            
+            if (error) {
+                console.error('Errore creazione notifica Supabase:', error);
+                throw error;
+            }
+            
+            console.log('✅ Notifica creata su Supabase:', result.id);
+            return result;
+            
+        } else {
+            // FALLBACK: localStorage
+            saveLocalNotification(targetUserId, notification);
+            return notification;
+        }
+        
+    } catch (error) {
+        console.error('Errore creazione notifica:', error);
+        
+        // Fallback locale in caso di errore
+        saveLocalNotification(targetUserId, notification);
+        return notification;
+    }
+}
+
+
+async function loadUserSectionVisits() {
+    if (!currentUser) return;
+    
+    try {
+        if (supabase) {
+            // Prova a caricare da Supabase
+            const { data, error } = await supabase
+                .from('user_section_visits')
+                .select('*')
+                .eq('user_id', currentUser.uid);
+            
+            if (error && error.code !== 'PGRST116') {
+                console.error('Errore caricamento visite sezioni:', error);
+                return;
+            }
+            
+            // Converti in formato oggetto
+            userSectionVisits = {};
+            if (data) {
+                data.forEach(visit => {
+                    userSectionVisits[visit.section] = visit.last_visited;
+                });
+            }
+            
+        } else {
+            // Fallback localStorage
+            const storageKey = `hc_section_visits_${currentUser.uid}`;
+            userSectionVisits = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        }
+        
+        console.log('✅ Visite sezioni caricate:', Object.keys(userSectionVisits).length);
+        
+    } catch (error) {
+        console.error('Errore caricamento visite sezioni:', error);
+        userSectionVisits = {};
+    }
+}
+
+// Salva la visita di una sezione
+async function markSectionAsVisited(sectionKey) {
+    if (!currentUser || !sectionKey) return;
+    
+    const visitTimestamp = new Date().toISOString();
+    userSectionVisits[sectionKey] = visitTimestamp;
+    
+    try {
+        if (supabase) {
+            // USA UPSERT con ON CONFLICT specificato
+            const { error } = await supabase
+                .from('user_section_visits')
+                .upsert({
+                    user_id: currentUser.uid,
+                    section: sectionKey,
+                    last_visited: visitTimestamp
+                }, {
+                    onConflict: 'user_id,section',
+                    ignoreDuplicates: false
+                });
+            
+            if (error) {
+                console.warn('⚠️ Errore upsert, tentativo manuale:', error);
+                
+                // Tentativo manuale: prima DELETE poi INSERT
+                await supabase
+                    .from('user_section_visits')
+                    .delete()
+                    .eq('user_id', currentUser.uid)
+                    .eq('section', sectionKey);
+                
+                const { error: insertError } = await supabase
+                    .from('user_section_visits')
+                    .insert({
+                        user_id: currentUser.uid,
+                        section: sectionKey,
+                        last_visited: visitTimestamp
+                    });
+                
+                if (insertError) {
+                    console.error('❌ Errore anche con insert manuale:', insertError);
+                    throw insertError;
+                }
+            }
+            
+            console.log(`✅ Sezione "${sectionKey}" salvata su Supabase`);
+            
+        } else {
+            // Fallback localStorage
+            const storageKey = `hc_section_visits_${currentUser.uid}`;
+            localStorage.setItem(storageKey, JSON.stringify(userSectionVisits));
+            console.log(`✅ Sezione "${sectionKey}" salvata su localStorage`);
+        }
+        
+        // Aggiorna i badge (con debounce per evitare chiamate eccessive)
+        clearTimeout(window.badgeUpdateTimeout);
+        window.badgeUpdateTimeout = setTimeout(() => {
+            updateSectionBadges();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('❌ Errore salvataggio sezione:', error);
+        
+        // Fallback completo su localStorage
+        try {
+            const storageKey = `hc_section_visits_${currentUser.uid}`;
+            localStorage.setItem(storageKey, JSON.stringify(userSectionVisits));
+            console.log(`✅ Sezione "${sectionKey}" salvata su localStorage (fallback)`);
+        } catch (localError) {
+            console.error('❌ Errore anche su localStorage:', localError);
+        }
+    }
+}
+// Conta i nuovi thread in una sezione
+async function countNewThreadsInSection(sectionKey) {
+    if (!currentUser || !sectionKey) return 0;
+    
+    const lastVisit = userSectionVisits[sectionKey];
+    if (!lastVisit) return 0; // Prima visita, non mostrare badge
+    
+    try {
+        if (supabase) {
+            // Conta threads nuovi da Supabase
+            const { data, error } = await supabase
+                .from('threads')
+                .select('id')
+                .eq('section', sectionKey)
+                .gte('created_at', lastVisit);
+            
+            if (error) {
+                console.error('Errore conteggio nuovi thread:', error);
+                return 0;
+            }
+            
+            return data ? data.length : 0;
+            
+        } else {
+            // Fallback localStorage
+            const dataPath = getDataPath(sectionKey, 'threads');
+            if (!dataPath) return 0;
+            
+            const storageKey = `hc_${dataPath.replace(/\//g, '_')}`;
+            const threads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            
+            const lastVisitTime = new Date(lastVisit).getTime();
+            const newThreads = threads.filter(thread => {
+                const threadTime = thread.created_at ? new Date(thread.created_at).getTime() : thread.createdAt;
+                return threadTime > lastVisitTime;
+            });
+            
+            return newThreads.length;
+        }
+        
+    } catch (error) {
+        console.error('Errore conteggio nuovi thread:', error);
+        return 0;
+    }
+}
+
+// Aggiorna i badge delle sezioni
+async function updateSectionBadges() {
+    if (!currentUser) return;
+    
+    // Lista sezioni da controllare
+    const sectionsToCheck = [
+        'eventi', 'oggetti', 'novita', 'salotto', 'segnalazioni', 'associa-clan',
+        'clan-chat', 'clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'
+    ];
+    
+    for (const sectionKey of sectionsToCheck) {
+        const navItem = document.querySelector(`[data-section="${sectionKey}"]`);
+        if (!navItem) continue;
+        
+        // Controlla se l'utente può accedere alla sezione
+        if (!canAccessSection(sectionKey)) continue;
+        
+        const newCount = await countNewThreadsInSection(sectionKey);
+        
+        // Rimuovi badge esistente
+        const existingBadge = navItem.querySelector('.section-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+        
+        // Aggiungi badge se ci sono nuovi thread
+        if (newCount > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'section-badge';
+            badge.textContent = newCount > 99 ? '99+' : newCount.toString();
+            badge.title = `${newCount} nuovi thread`;
+            navItem.appendChild(badge);
+        }
+    }
+}
+
+
+// 🔧 CORREZIONI CRITICHE PER script.js
+// Inserire queste correzioni nel file script.js esistente
+
+// =====================================================
+// 1. FIX MEMORY LEAKS - Gestione Listener Migliorata
+// =====================================================
+
+// Sostituire la funzione cleanupListeners esistente con questa versione migliorata:
+function cleanupListeners() {
+    console.log('🧹 Pulizia completa listener...');
+    
+    // Cleanup Activity Tracker subscriptions
+    if (window.activityTracker && window.activityTracker.stopTracking) {
+        window.activityTracker.stopTracking();
+    }
+    
+    // Cleanup notifications subscription
+    if (window.notificationsSubscription) {
+        try {
+            window.notificationsSubscription.unsubscribe();
+            window.notificationsSubscription = null;
+            console.log('✅ Subscription notifiche chiusa');
+        } catch (error) {
+            console.warn('⚠️ Errore chiusura subscription notifiche:', error);
+        }
+    }
+
+    // Cleanup Firebase listeners
+    if (window.useFirebase && window.firebaseDatabase && window.getFirebaseReady() && ref && off) {
+        try {
+            // Cleanup message listeners
+            Object.keys(messageListeners).forEach(section => {
+                const listener = messageListeners[section];
+                if (listener && listener.path && listener.callback) {
+                    const messagesRef = ref(window.firebaseDatabase, listener.path);
+                    off(messagesRef, listener.callback);
+                }
+            });
+            messageListeners = {};
+
+            // Cleanup thread listeners
+            Object.keys(threadListeners).forEach(section => {
+                const listener = threadListeners[section];
+                if (listener && listener.path && listener.callback) {
+                    const threadsRef = ref(window.firebaseDatabase, listener.path);
+                    off(threadsRef, listener.callback);
+                }
+            });
+            threadListeners = {};
+
+        } catch (error) {
+            console.error('❌ Errore pulizia listeners Firebase:', error);
+        }
+    }
+    
+    // Cleanup DOM event listeners
+    cleanupDOMListeners();
+    
+    // Cleanup comment image upload
+    cleanupCommentImageUpload();
+    
+    // Cleanup intervals
+    if (badgeUpdateInterval) {
+        clearInterval(badgeUpdateInterval);
+        badgeUpdateInterval = null;
+    }
+    
+    // Cleanup timeouts
+    if (window.badgeUpdateTimeout) {
+        clearTimeout(window.badgeUpdateTimeout);
+        window.badgeUpdateTimeout = null;
+    }
+    
+    console.log('✅ Pulizia listener completata');
+}
+
+// Aggiungere questa nuova funzione per la pulizia DOM
+function cleanupDOMListeners() {
+    // Rimuovi listener globali
+    document.removeEventListener('click', handleClickOutside);
+    
+    // Cleanup mention listeners
+    ['message-input', 'comment-text', 'thread-content-input'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.removeEventListener('input', handleMentionInput);
+            element.removeEventListener('keydown', handleMentionKeydown);
+        }
+    });
+}
+
+// =====================================================
+// 2. FIX RACE CONDITIONS - Sincronizzazione Sicura
+// =====================================================
+
+// Sostituire la funzione syncUserWithSupabase con questa versione thread-safe:
+async function syncUserWithSupabase(firebaseUser, userData = null) {
+    if (!supabase || !firebaseUser) return;
+
+    // Usa un mutex per evitare race conditions
+    const lockKey = `sync_${firebaseUser.uid}`;
+    if (window.syncLocks && window.syncLocks[lockKey]) {
+        console.log('🔒 Sincronizzazione già in corso per utente:', firebaseUser.uid);
+        return;
+    }
+    
+    // Inizializza locks se non esistono
+    if (!window.syncLocks) window.syncLocks = {};
+    window.syncLocks[lockKey] = true;
+
+    try {
+        console.log('🔄 Sincronizzazione thread-safe utente con Supabase...');
+
+        // Usa UPSERT per evitare race conditions
+        const userSupabaseData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            username: userData?.username || firebaseUser.displayName || 'Utente',
+            clan: userData?.clan || 'Nessuno',
+            role: userData?.role || 'user',
+            avatar_url: userData?.avatarUrl || null,
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString() // Verrà ignorato se l'utente esiste già
+        };
+
+        // UPSERT thread-safe
+        const { data: result, error } = await supabase
+            .from('users')
+            .upsert(userSupabaseData, { 
+                onConflict: 'uid',
+                ignoreDuplicates: false 
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        
+        console.log('✅ Utente sincronizzato thread-safe con Supabase');
+
+        // Aggiorna cache locale in modo thread-safe
+        updateUserCache(firebaseUser.uid, userSupabaseData);
+
+    } catch (error) {
+        console.error('❌ Errore sincronizzazione thread-safe:', error);
+        throw error;
+    } finally {
+        // Rilascia sempre il lock
+        delete window.syncLocks[lockKey];
+    }
+}
+
+// Funzione helper per aggiornare cache in modo thread-safe
+function updateUserCache(userId, userData) {
+    if (!window.allUsers) window.allUsers = [];
+    
+    const existingIndex = window.allUsers.findIndex(u => u.uid === userId);
+    const cacheData = {
+        uid: userId,
+        email: userData.email,
+        username: userData.username,
+        clan: userData.clan,
+        role: userData.role,
+        avatarUrl: userData.avatar_url,
+        createdAt: userData.created_at
+    };
+
+    if (existingIndex >= 0) {
+        window.allUsers[existingIndex] = cacheData;
+    } else {
+        window.allUsers.push(cacheData);
+    }
+}
+
+// =====================================================
+// 3. FIX GESTIONE ERRORI - Error Handler Centralizzato
+// =====================================================
+
+// Aggiungere questa classe per gestione errori centralizzata:
+class ErrorHandler {
+    static async handleAsyncOperation(asyncFn, fallbackFn = null, context = 'Operazione') {
+        try {
+            return await asyncFn();
+        } catch (error) {
+            console.error(`❌ Errore ${context}:`, error);
+            
+            // Log dettagliato dell'errore
+            this.logError(error, context);
+            
+            // Prova fallback se disponibile
+            if (fallbackFn) {
+                try {
+                    console.log(`🔄 Tentativo fallback per ${context}...`);
+                    return await fallbackFn();
+                } catch (fallbackError) {
+                    console.error(`❌ Fallback fallito per ${context}:`, fallbackError);
+                    throw fallbackError;
+                }
+            }
+            
+            throw error;
+        }
+    }
+    
+    static logError(error, context) {
+        const errorInfo = {
+            message: error.message,
+            code: error.code,
+            timestamp: new Date().toISOString(),
+            context: context,
+            stack: error.stack
+        };
+        
+        // Log in console per debug
+        console.error('🔍 Dettagli errore:', errorInfo);
+        
+        // Salva in localStorage per debug (max 10 errori)
+        try {
+            const errorLog = JSON.parse(localStorage.getItem('hc_error_log') || '[]');
+            errorLog.unshift(errorInfo);
+            if (errorLog.length > 10) errorLog.pop();
+            localStorage.setItem('hc_error_log', JSON.stringify(errorLog));
+        } catch (e) {
+            console.warn('⚠️ Impossibile salvare log errori:', e);
+        }
+    }
+    
+    static async retryOperation(asyncFn, maxRetries = 3, delay = 1000) {
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                return await asyncFn();
+            } catch (error) {
+                if (i === maxRetries - 1) throw error;
+                
+                console.log(`🔄 Retry ${i + 1}/${maxRetries} in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Exponential backoff
+            }
+        }
+    }
+}
+
+// =====================================================
+// 4. FIX PERFORMANCE - Debouncing e Batching
+// =====================================================
+
+// Utility per debouncing
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Sostituire updateSectionBadges con versione debounced:
+const updateSectionBadgesDebounced = debounce(async function() {
+    if (!currentUser) return;
+    
+    console.log('🔄 Aggiornamento badge (debounced)...');
+    
+    // Batch update per migliori performance
+    const sectionsToCheck = [
+        'eventi', 'oggetti', 'novita', 'salotto', 'segnalazioni', 'associa-clan',
+        'clan-chat', 'clan-war', 'clan-premi', 'clan-consigli', 'clan-bacheca'
+    ];
+    
+    const badgeUpdates = [];
+    
+    for (const sectionKey of sectionsToCheck) {
+        const navItem = document.querySelector(`[data-section="${sectionKey}"]`);
+        if (!navItem || !canAccessSection(sectionKey)) continue;
+        
+        try {
+            const newCount = await countNewThreadsInSection(sectionKey);
+            badgeUpdates.push({ sectionKey, navItem, newCount });
+        } catch (error) {
+            console.error(`❌ Errore conteggio per ${sectionKey}:`, error);
+        }
+    }
+    
+    // Applica tutti gli aggiornamenti in batch
+    badgeUpdates.forEach(({ sectionKey, navItem, newCount }) => {
+        const existingBadge = navItem.querySelector('.section-badge');
+        if (existingBadge) existingBadge.remove();
+        
+        if (newCount > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'section-badge';
+            badge.textContent = newCount > 99 ? '99+' : newCount.toString();
+            badge.title = `${newCount} nuovi thread`;
+            navItem.appendChild(badge);
+        }
+    });
+    
+    console.log('✅ Badge aggiornati (batch)');
+}, 2000); // Debounce di 2 secondi
+
+// Sostituire la chiamata originale con quella debounced:
+window.updateSectionBadges = updateSectionBadgesDebounced;
+
+// =====================================================
+// 5. FIX INTERVAL - Gestione Migliore degli Intervalli
+// =====================================================
+
+// Sostituire startBadgeUpdateInterval con versione più efficiente:
+function startBadgeUpdateInterval() {
+    // Ferma l'interval precedente
+    if (badgeUpdateInterval) {
+        clearInterval(badgeUpdateInterval);
+    }
+    
+    // Interval meno frequente e più intelligente
+    badgeUpdateInterval = setInterval(async () => {
+        if (currentUser && document.visibilityState === 'visible') {
+            try {
+                await updateSectionBadgesDebounced();
+                console.log('🔄 Badge aggiornati automaticamente');
+            } catch (error) {
+                console.error('❌ Errore aggiornamento badge automatico:', error);
+            }
+        }
+    }, 60000); // Ridotto a 1 minuto, solo se la tab è visibile
+    
+    console.log('✅ Interval badge avviato (60s, visibility-aware)');
+}
+
+// =====================================================
+// 6. FIX BATCH OPERATIONS - Operazioni Database Ottimizzate
+// =====================================================
+
+// Sostituire loadUsersList con versione più efficiente:
+async function loadUsersList() {
+    console.log('🔄 Caricamento batch lista utenti...');
+    
+    return await ErrorHandler.handleAsyncOperation(
+        async () => {
+            // Reset array utenti
+            window.allUsers = [];
+            
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from('users')
+                    .select('uid, email, username, clan, role, avatar_url, created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(100); // Limite per performance
+                
+                if (error) throw error;
+                
+                // Batch conversion
+                window.allUsers = data.map(user => ({
+                    uid: user.uid,
+                    email: user.email,
+                    username: user.username,
+                    clan: user.clan || 'Nessuno',
+                    role: user.role || 'user',
+                    avatarUrl: user.avatar_url,
+                    createdAt: user.created_at
+                }));
+                
+                console.log('✅ Utenti caricati batch da Supabase:', window.allUsers.length);
+                return window.allUsers;
+            } else {
+                throw new Error('Supabase non disponibile');
+            }
+        },
+        () => {
+            // Fallback localStorage
+            loadUsersFromLocalStorage();
+            return window.allUsers;
+        },
+        'Caricamento utenti'
+    );
+}
+
+// =====================================================
+// 7. UTILITY - Funzioni Helper per Debug
+// =====================================================
+
+// Aggiungere queste funzioni utility per debugging:
+window.debugUtils = {
+    getErrorLog() {
+        return JSON.parse(localStorage.getItem('hc_error_log') || '[]');
+    },
+    
+    clearErrorLog() {
+        localStorage.removeItem('hc_error_log');
+        console.log('🧹 Log errori pulito');
+    },
+    
+    getActiveListeners() {
+        return {
+            messageListeners: Object.keys(messageListeners).length,
+            threadListeners: Object.keys(threadListeners).length,
+            notificationsSubscription: !!window.notificationsSubscription,
+            badgeUpdateInterval: !!badgeUpdateInterval,
+            syncLocks: window.syncLocks ? Object.keys(window.syncLocks).length : 0
+        };
+    },
+    
+    forceCleanup() {
+        cleanupListeners();
+        console.log('🧹 Pulizia forzata completata');
+    }
+};
+
+// =====================================================
+// 8. INIZIALIZZAZIONE - Setup Migliorato
+// =====================================================
+
+// Sostituire la parte di inizializzazione con gestione errori:
+async function initializeAppSafe() {
+    console.log('🔥 Inizializzazione sicura applicazione...');
+    
+    try {
+        // Inizializza Supabase con retry
+        await ErrorHandler.retryOperation(
+            () => initializeSupabase(),
+            3,
+            1000
+        );
+        
+        // Resto dell'inizializzazione...
+        await initializeApp();
+        
+        console.log('✅ Applicazione inizializzata con successo');
+        
+    } catch (error) {
+        console.error('❌ Errore critico inizializzazione:', error);
+        
+        // Fallback mode
+        alert('⚠️ Errore di inizializzazione. L\'app funzionerà in modalità ridotta.');
+        
+        // Inizializza almeno le funzioni base
+        setupEventListeners();
+        handleUserLogout();
+    }
+}
+
+// Sostituire la chiamata window.addEventListener('load', initializeApp) con:
+window.addEventListener('load', initializeAppSafe);
+
+console.log('🔧 Correzioni critiche applicate a script.js');

@@ -511,20 +511,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Cleanup quando si cambia sezione
-const originalSwitchSection = window.switchSection;
-window.switchSection = function(sectionKey) {
-    // Chiudi modal di selezione se aperto
-    closeSectionSelectionModal();
-    
-    // Pulisci dashboard manager se stiamo uscendo dalla home
-    if (currentSection === 'home' && window.dashboardManager) {
-        window.dashboardManager.cleanup();
-    }
-    
-    // Esegui switch normale
-    return originalSwitchSection.call(this, sectionKey);
-};
+
 
 // ===============================================
 // INIZIALIZZAZIONE

@@ -69,6 +69,16 @@ body::before {
    2. LAYOUT PRINCIPALE
    ======================================== */
 
+.refresh-badges-btn,
+#refresh-badges-btn,
+.refresh-section,
+#thread-refresh-container {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 /* SIDEBAR */
 .sidebar {
     width: 280px;
